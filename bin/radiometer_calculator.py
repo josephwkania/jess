@@ -7,9 +7,13 @@ Caculated from raw sampling time to 2**max_boxcar_width
 import argparse
 import logging
 import cupy as cp
+import matplotlib.pyplot as plt
 import numpy as np
+from rich import box
+from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import track
+from rich.table import Table
 from scipy import signal, stats
 import sys
 from your import Your
@@ -37,15 +41,18 @@ def get_timeseries(input_file, block_size=2 ** 14):
     return timeseries
 
 
-def get_stds(input_file, max_boxcar_width):
+def get_stds(input_file, max_boxcar_width, headless):
     """
     Computes the Standard Deviations of the 0DM timeseries
 
     args:
     input_file - the search mode file to calculate the standard diviations
     max_boxcar_width - largest boxcar will be 2**max_boxvar_width
+    headless - if True, don't print to terminmal or show plot
     """
     timeseries = get_timeseries(input_file)
+    #timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
+    # can use the above to test
 
     if len(timeseries) < 2 ** max_boxcar_width:
         logging.error(
@@ -59,10 +66,31 @@ def get_stds(input_file, max_boxcar_width):
     for j, k in enumerate(powers_of_two):
         kernal = cp.array(signal.boxcar(2 ** k) / 2 ** k)
         stds[j + 1] = cp.std(cp.convolve(timeseries, kernal, "valid"))
+
+    widths = 2**np.insert(powers_of_two,[0],0)
     stds = stds.get()  # Don't need cupy
 
-    logging.debug(f"Boxcar widths: {2**np.insert(powers_of_two,[0],0)}")
-    logging.debug(f"STDs: {stds}")
+    stds_dic =  {J: K  for J , K in zip(widths, stds)}
+    logging.debug(f"Boxcarwidths: stad dev {stds_dic}")
+
+    if not headless:
+        console = Console()
+        table = Table(show_header=True, header_style="bold red", box=box.DOUBLE_EDGE)
+        table.add_column("Boxcar Width", justify="right")
+        table.add_column("Stand. Dev")
+        for w, s in zip(widths, stds):
+            table.add_row(f"{w}", f"{s:.4f}")
+        console.print(table)
+
+        plt.title("Observed Vs Ideal Radiometer Noise")
+        plt.plot(widths, stds, label="Observed")
+        plt.plot(widths, stds[0]/np.sqrt(widths), label="Guass Noise")
+        plt.xlabel("Boxcar Width")
+        plt.ylabel("Stand. Dev.")
+        plt.legend()
+        plt.show()
+
+    return stds_dic
 
 
 if __name__ == "__main__":
@@ -84,6 +112,12 @@ if __name__ == "__main__":
         type=int,
         default=8,
     )
+    
+    parser.add_argument(
+        "--headless",
+        help="Don't print info to console or show images",
+        action="store_true",
+    )
     parser.add_argument("-v", "--verbose", help="Be verbose", action="store_true")
 
     values = parser.parse_args()
@@ -103,4 +137,4 @@ if __name__ == "__main__":
             format=logging_format,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
-    get_stds(values.files, values.max_boxcar_width)
+    get_stds(values.files, values.max_boxcar_width, values.headless)
