@@ -144,6 +144,7 @@ class Paint(Frame):
         ax1 = plt.subplot(self.gs[0, 0])
         ax2 = plt.subplot(self.gs[1, 0])
         self.ax3 = plt.subplot(self.gs[0, 1])
+        self.ax3.xaxis.tick_top()
         self.ax3.yaxis.tick_right()
         ax4 = plt.subplot(self.gs[1, 1])
         #ax3.axis("off")
