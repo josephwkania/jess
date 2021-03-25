@@ -8,6 +8,7 @@ from tkinter import filedialog
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import stats
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from rich.logging import RichHandler
 from rich.console import Console
@@ -139,15 +140,22 @@ class Paint(Frame):
 
         # create three plots, for ax1=time_series, ax2=dynamic spectra, ax4=bandpass
         self.gs = gridspec.GridSpec(
-            2, 2, width_ratios=[4, 1], height_ratios=[1, 4], wspace=0.02, hspace=0.03
+            3,
+            3,
+            width_ratios=[1, 4, 1],
+            height_ratios=[1, 4, 1],
+            wspace=0.02,
+            hspace=0.03,
         )
-        ax1 = plt.subplot(self.gs[0, 0])
-        ax2 = plt.subplot(self.gs[1, 0])
-        self.ax3 = plt.subplot(self.gs[0, 1])
+        ax1 = plt.subplot(self.gs[0, 1])  # timeseries
+        ax2 = plt.subplot(self.gs[1, 1])  #  dynamic spectra
+        self.ax3 = plt.subplot(self.gs[0, 2])  # histogram
         self.ax3.xaxis.tick_top()
         self.ax3.yaxis.tick_right()
-        ax4 = plt.subplot(self.gs[1, 1])
-        #ax3.axis("off")
+        ax4 = plt.subplot(self.gs[1, 2])  # bandpass
+        ax5 = plt.subplot(self.gs[1, 0])  # verticle test
+        ax6 = plt.subplot(self.gs[2, 1])
+        ax2.axis("off")
         ax1.set_xticks([])
         ax4.set_yticks([])
 
@@ -177,29 +185,41 @@ class Paint(Frame):
         ax4.set_xlabel("Avg. Arb. Flux")
 
         # make time series
-        ax4.set_xlabel("Avg. Arb. Flux")
-        (self.im_time,) = ax1.plot(self.time_series)
+        ax4.set_xlabel("<Arb. Flux>")
+        (self.im_time,) = ax1.plot(self.time_series, label="Timeseries")
         ax1.set_xlim(-1, len(self.time_series + 1))
-        ax1.set_ylabel("Avg. Arb. Flux")
+        ax1.set_ylabel("<Arb. Flux>")
 
-        plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
+        # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
-        ax = self.im_ft.axes
-        ax.set_xlabel("Time [sec]")
-        ax.set_ylabel("Frequency [MHz]")
-        ax.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
+        # ax = self.im_ft.axes
+        ax6.set_xlabel("Time [sec]")
+        ax5.set_ylabel("Frequency [MHz]")
+        ax5.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
         yticks = [
             str(int(j))
-            for j in np.linspace(
-                self.your_obj.chan_freqs[0], self.your_obj.chan_freqs[-1], 8
+            for j in np.flip(
+                np.linspace(
+                    self.your_obj.chan_freqs[0], self.your_obj.chan_freqs[-1], 8
+                )
             )
         ]
-        ax.set_yticklabels(yticks)
+        ax5.set_yticklabels(yticks)
         self.set_x_axis()
-        
+
         # Make histogram
-        #(self.hist,) = ax3.plot(self.data.ravel())
-        self.ax3.hist(self.data.ravel(), bins=52)
+        # (self.hist,) = ax3.plot(self.data.ravel())
+        self.ax3.hist(self.data.ravel(), bins=52, density=True)
+
+        (self.im_test_vert,) = ax5.plot(
+            stats.kurtosis(self.data, axis=1), bp_y, label="Chan Test"
+        )
+        ax5.set_ylim([-1, len(self.bandpass) + 1])
+
+        (self.im_test_hor,) = ax6.plot(
+            stats.kurtosis(self.data, axis=0), label="Time Test"
+        )
+        ax6.set_xlim([-1, len(self.time_series) + 1])
 
         # a tk.DrawingArea
         self.canvas = FigureCanvasTkAgg(self.im_ft.figure, master=root)
@@ -240,8 +260,8 @@ class Paint(Frame):
         self.set_x_axis()
         self.im_ft.set_data(self.data)
         self.im_bandpass.set_xdata(self.bandpass)
-        self.ax3.cla() # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
-        self.ax3.hist(self.data.ravel(), bins=52)
+        self.ax3.cla()  # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
+        self.ax3.hist(self.data.ravel(), bins=52, density=True)
         if self.chan_std:
             self.fill_bp()
         self.im_bandpass.axes.set_xlim(
@@ -251,6 +271,19 @@ class Paint(Frame):
         self.im_time.axes.set_ylim(
             np.min(self.time_series) * 0.97, np.max(self.time_series) * 1.03
         )
+
+        vert_test = stats.kurtosis(self.data, axis=1)
+        self.im_test_vert.set_xdata(vert_test)
+        self.im_test_vert.axes.set_xlim(
+            -0.07 * (np.max(vert_test) - np.min(vert_test)), np.max(vert_test) * 1.03
+        )
+
+        hor_test = stats.kurtosis(self.data, axis=0)
+        self.im_test_hor.set_ydata(hor_test)
+        self.im_test_hor.axes.set_ylim(
+            -0.07 * (np.max(hor_test) - np.min(hor_test)), np.max(hor_test) * 1.03
+        )
+
         self.canvas.draw()
 
     def fill_bp(self):
