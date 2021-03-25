@@ -143,9 +143,10 @@ class Paint(Frame):
         )
         ax1 = plt.subplot(self.gs[0, 0])
         ax2 = plt.subplot(self.gs[1, 0])
-        ax3 = plt.subplot(self.gs[0, 1])
+        self.ax3 = plt.subplot(self.gs[0, 1])
+        self.ax3.yaxis.tick_right()
         ax4 = plt.subplot(self.gs[1, 1])
-        ax3.axis("off")
+        #ax3.axis("off")
         ax1.set_xticks([])
         ax4.set_yticks([])
 
@@ -195,7 +196,10 @@ class Paint(Frame):
         ax.set_yticklabels(yticks)
         self.set_x_axis()
         
-        (self.hist,) = ax3.plot()
+        # Make histogram
+        #(self.hist,) = ax3.plot(self.data.ravel())
+        self.ax3.hist(self.data.ravel(), bins=52)
+
         # a tk.DrawingArea
         self.canvas = FigureCanvasTkAgg(self.im_ft.figure, master=root)
         self.canvas.draw()
@@ -235,6 +239,8 @@ class Paint(Frame):
         self.set_x_axis()
         self.im_ft.set_data(self.data)
         self.im_bandpass.set_xdata(self.bandpass)
+        self.ax3.cla() # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
+        self.ax3.hist(self.data.ravel(), bins=52)
         if self.chan_std:
             self.fill_bp()
         self.im_bandpass.axes.set_xlim(
