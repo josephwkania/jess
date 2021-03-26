@@ -86,6 +86,14 @@ class Paint(Frame):
         self.prev["command"] = self.save_figure
         self.prev.grid(row=0, column=4)
 
+        # Stat test to use
+        self.tests = ["Kurtosis", "Stand. Dev."]
+        self.which_test = StringVar(self)
+        self.test = OptionMenu(self, self.which_test, *self.tests)
+        self.which_test.set(self.tests[0])
+        self.test.grid(row=0, column=5)
+        
+
     def table_print(self, dic):
         """
         Prints out data using rich.Table
