@@ -164,7 +164,8 @@ class Paint(Frame):
                 )
         self.read_data()
 
-        # create three plots, for ax1=time_series, ax2=dynamic spectra, ax4=bandpass
+        # create 6 plots, for ax1=time_series, ax2=dynamic spectra, ax3= histogram,
+        # ax4=bandpass, ax5 = verticle test, ax6 = hortizontal test
         self.gs = gridspec.GridSpec(
             3,
             3,
@@ -233,7 +234,6 @@ class Paint(Frame):
             )
         ]
         self.ax5.set_yticklabels(yticks)
-        self.set_x_axis()
 
         # Make histogram
         self.ax3.hist(self.data.ravel(), bins=52, density=True)
@@ -251,6 +251,8 @@ class Paint(Frame):
         )
         self.ax6.set_xlim([-1, len(self.time_series) + 1])
         self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
+        self.set_x_axis()
 
         # a tk.DrawingArea
         self.canvas = FigureCanvasTkAgg(self.im_ft.figure, master=root)
@@ -312,7 +314,7 @@ class Paint(Frame):
             - 0.03 * (np.max(self.ver_test) - np.min(self.ver_test)),
             np.max(self.ver_test) * 1.03,
         )
-        # print(self.im_test_ver.label)
+
         self.im_test_ver.set_label(f"{self.which_test.get()}")
         self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
@@ -368,7 +370,7 @@ class Paint(Frame):
         """
         sets x axis labels in the correct location
         """
-        ax = self.im_ft.axes
+        ax = self.im_test_hor.axes
         xticks = ax.get_xticks()
         logging.debug(f"x-axis ticks are {xticks}")
         xtick_labels = (xticks + self.start_samp) * self.your_obj.your_header.tsamp
