@@ -92,7 +92,8 @@ class Paint(Frame):
         self.test = OptionMenu(self, self.which_test, *self.tests)
         self.which_test.set(self.tests[0])
         self.test.grid(row=0, column=5)
-        
+
+        self.which_test.trace("w", self.update_plot)
 
     def table_print(self, dic):
         """
@@ -216,17 +217,14 @@ class Paint(Frame):
         self.set_x_axis()
 
         # Make histogram
-        # (self.hist,) = ax3.plot(self.data.ravel())
         self.ax3.hist(self.data.ravel(), bins=52, density=True)
 
-        (self.im_test_vert,) = ax5.plot(
-            stats.kurtosis(self.data, axis=1), bp_y, label="Chan Test"
-        )
+        # show stat tests
+        self.stat_test()
+        (self.im_test_ver,) = ax5.plot(self.ver_test, bp_y, label="Chan Test")
         ax5.set_ylim([-1, len(self.bandpass) + 1])
 
-        (self.im_test_hor,) = ax6.plot(
-            stats.kurtosis(self.data, axis=0), label="Time Test"
-        )
+        (self.im_test_hor,) = ax6.plot(self.hor_test, label="Time Test")
         ax6.set_xlim([-1, len(self.time_series) + 1])
 
         # a tk.DrawingArea
@@ -263,7 +261,7 @@ class Paint(Frame):
             self.start_samp -= self.gulp_size
         self.update_plot()
 
-    def update_plot(self):
+    def update_plot(self, *args):
         self.read_data()
         self.set_x_axis()
         self.im_ft.set_data(self.data)
@@ -280,18 +278,21 @@ class Paint(Frame):
             np.min(self.time_series) * 0.97, np.max(self.time_series) * 1.03
         )
 
-        vert_test = stats.kurtosis(self.data, axis=1)
-        self.im_test_vert.set_xdata(vert_test)
-        self.im_test_vert.axes.set_xlim(
-            -0.07 * (np.max(vert_test) - np.min(vert_test)), np.max(vert_test) * 1.03
+        self.stat_test()
+        self.im_test_ver.set_xdata(self.ver_test)
+        self.im_test_ver.axes.set_xlim(
+            np.min(self.ver_test)
+            - 0.03 * (np.max(self.ver_test) - np.min(self.ver_test)),
+            np.max(self.ver_test) * 1.03,
         )
-
-        hor_test = stats.kurtosis(self.data, axis=0)
-        self.im_test_hor.set_ydata(hor_test)
+        # self.im_test_ver.axes.autoscale(axis='y')
+        self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.set_ylim(
-            -0.07 * (np.max(hor_test) - np.min(hor_test)), np.max(hor_test) * 1.03
+            np.min(self.hor_test)
+            - 0.03 * (np.max(self.hor_test) - np.min(self.hor_test)),
+            np.max(self.hor_test) * 1.03,
         )
-
+        # self.im_test_ver.axes.autoscale(axis='y')
         self.canvas.draw()
 
     def fill_bp(self):
@@ -345,6 +346,17 @@ class Paint(Frame):
         logging.info(f"Saving figure: {img_name}")
         self.im_ft.figure.savefig(img_name, dpi=300)
         logging.info(f"Saved figure: {img_name}")
+
+    def stat_test(self):
+        """
+        Runs the statistical tests
+        """
+        if self.which_test.get() == "Kurtosis":
+            self.ver_test = stats.kurtosis(self.data, axis=1)
+            self.hor_test = stats.kurtosis(self.data, axis=0)
+        elif self.which_test.get() == "Stand. Dev.":
+            self.ver_test = np.std(self.data, axis=1)
+            self.hor_test = np.std(self.data, axis=0)
 
 
 if __name__ == "__main__":
