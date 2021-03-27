@@ -49,7 +49,7 @@ class Paint(Frame):
         menu = Menu(self.master)
         self.master.config(menu=menu)
 
-        self.dm = 0
+        self.dm = dm
         # create the file object)
         file = Menu(menu)
 
@@ -157,6 +157,10 @@ class Paint(Frame):
                     f"Maximum dispersion delay for DM ({self.dm}) = {max_delay:.2f}s is greater than "
                     f"the input gulp size {self.gulp_size*self.your_obj.your_header.native_tsamp}s. Pulses may not be "
                     f"dedispersed completely."
+                )
+                logging.warning(
+                    f"Use gulp size of {int(max_delay//self.your_obj.your_header.native_tsamp):0d} to "
+                    f"dedisperse completely."
                 )
         self.read_data()
 
