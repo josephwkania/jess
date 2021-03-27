@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import textwrap
 from tkinter import *
 from tkinter import filedialog
 
@@ -10,13 +11,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from rich.logging import RichHandler
-from rich.console import Console
-from rich.table import Table
 from rich import box
-import textwrap
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.table import Table
 
 from your import Your
+from your.utils.astro import dedisperse, calc_dispersion_delays
 from your.utils.misc import YourArgparseFormatter
 
 
@@ -29,7 +30,7 @@ class Paint(Frame):
     """
 
     # Define settings upon initialization. Here you can specify
-    def __init__(self, master=None):
+    def __init__(self, master=None, dm=0):
 
         # parameters that you want to send through the Frame class.
         Frame.__init__(self, master)
@@ -48,6 +49,7 @@ class Paint(Frame):
         menu = Menu(self.master)
         self.master.config(menu=menu)
 
+        self.dm = 0
         # create the file object)
         file = Menu(menu)
 
@@ -87,10 +89,10 @@ class Paint(Frame):
         self.prev.grid(row=0, column=4)
 
         # Stat test to use
-        self.tests = ["Kurtosis", "Stand. Dev."]
+        self.tests = ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
-        self.which_test.set(self.tests[0])
+        self.which_test.set("IQR")
         self.test.grid(row=0, column=5)
 
         self.which_test.trace("w", self.update_plot)
@@ -145,6 +147,17 @@ class Paint(Frame):
         self.master.title(self.your_obj.your_header.basename)
         logging.info(f"Printing Header parameters")
         self.get_header()
+        if self.dm != 0:
+            self.dispersion_delays = calc_dispersion_delays(
+                self.dm, self.your_obj.chan_freqs
+            )
+            max_delay = np.max(np.abs(self.dispersion_delays))
+            if max_delay > self.gulp_size * self.your_obj.your_header.native_tsamp:
+                logging.warning(
+                    f"Maximum dispersion delay for DM ({self.dm}) = {max_delay:.2f}s is greater than "
+                    f"the input gulp size {self.gulp_size*self.your_obj.your_header.native_tsamp}s. Pulses may not be "
+                    f"dedispersed completely."
+                )
         self.read_data()
 
         # create three plots, for ax1=time_series, ax2=dynamic spectra, ax4=bandpass
@@ -162,8 +175,10 @@ class Paint(Frame):
         self.ax3.xaxis.tick_top()
         self.ax3.yaxis.tick_right()
         ax4 = plt.subplot(self.gs[1, 2])  # bandpass
-        ax5 = plt.subplot(self.gs[1, 0])  # verticle test
-        ax6 = plt.subplot(self.gs[2, 1])
+        self.ax5 = plt.subplot(
+            self.gs[1, 0]
+        )  # verticle test.  Needs to be self. so I can self.ax6.legend()
+        self.ax6 = plt.subplot(self.gs[2, 1])
         ax2.axis("off")
         ax1.set_xticks([])
         ax4.set_yticks([])
@@ -202,9 +217,9 @@ class Paint(Frame):
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
         # ax = self.im_ft.axes
-        ax6.set_xlabel("Time [sec]")
-        ax5.set_ylabel("Frequency [MHz]")
-        ax5.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
+        self.ax6.set_xlabel("Time [sec]")
+        self.ax5.set_ylabel("Frequency [MHz]")
+        self.ax5.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
         yticks = [
             str(int(j))
             for j in np.flip(
@@ -213,7 +228,7 @@ class Paint(Frame):
                 )
             )
         ]
-        ax5.set_yticklabels(yticks)
+        self.ax5.set_yticklabels(yticks)
         self.set_x_axis()
 
         # Make histogram
@@ -221,11 +236,17 @@ class Paint(Frame):
 
         # show stat tests
         self.stat_test()
-        (self.im_test_ver,) = ax5.plot(self.ver_test, bp_y, label="Chan Test")
-        ax5.set_ylim([-1, len(self.bandpass) + 1])
+        (self.im_test_ver,) = self.ax5.plot(
+            self.ver_test, bp_y, label=f"{self.which_test.get()}"
+        )
+        self.ax5.set_ylim([-1, len(self.bandpass) + 1])
+        self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
-        (self.im_test_hor,) = ax6.plot(self.hor_test, label="Time Test")
-        ax6.set_xlim([-1, len(self.time_series) + 1])
+        (self.im_test_hor,) = self.ax6.plot(
+            self.hor_test, label=f"{self.which_test.get()}"
+        )
+        self.ax6.set_xlim([-1, len(self.time_series) + 1])
+        self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # a tk.DrawingArea
         self.canvas = FigureCanvasTkAgg(self.im_ft.figure, master=root)
@@ -261,7 +282,9 @@ class Paint(Frame):
             self.start_samp -= self.gulp_size
         self.update_plot()
 
-    def update_plot(self, *args):
+    def update_plot(
+        self, *args
+    ):  # added *args to make self.which_test.trace("w", self.update_plot) happy
         self.read_data()
         self.set_x_axis()
         self.im_ft.set_data(self.data)
@@ -285,14 +308,19 @@ class Paint(Frame):
             - 0.03 * (np.max(self.ver_test) - np.min(self.ver_test)),
             np.max(self.ver_test) * 1.03,
         )
-        # self.im_test_ver.axes.autoscale(axis='y')
+        # print(self.im_test_ver.label)
+        self.im_test_ver.set_label(f"{self.which_test.get()}")
+        self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.set_ylim(
             np.min(self.hor_test)
             - 0.03 * (np.max(self.hor_test) - np.min(self.hor_test)),
             np.max(self.hor_test) * 1.03,
         )
-        # self.im_test_ver.axes.autoscale(axis='y')
+        self.im_test_hor.set_label(f"{self.which_test.get()}")
+        self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
         self.canvas.draw()
 
     def fill_bp(self):
@@ -317,6 +345,14 @@ class Paint(Frame):
         ts = self.start_samp * self.your_obj.your_header.tsamp
         te = (self.start_samp + self.gulp_size) * self.your_obj.your_header.tsamp
         self.data = self.your_obj.get_data(self.start_samp, self.gulp_size).T
+        if self.dm != 0:
+            logging.info(f"Dedispersing data at DM: {self.dm}")
+            self.data = dedisperse(
+                self.data.copy(),
+                self.dm,
+                self.your_obj.native_tsamp,
+                delays=self.dispersion_delays,
+            )
         self.bandpass = np.mean(self.data, axis=1)
         self.time_series = np.mean(self.data, axis=0)
         logging.info(
@@ -350,10 +386,24 @@ class Paint(Frame):
     def stat_test(self):
         """
         Runs the statistical tests
+        ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         """
-        if self.which_test.get() == "Kurtosis":
+        if self.which_test.get() == "D'Angostino":
+            self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
+            self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
+            # TODO plot p values
+        elif self.which_test.get() == "IQR":
+            self.ver_test = stats.iqr(self.data, axis=1)
+            self.hor_test = stats.iqr(self.data, axis=0)
+        elif self.which_test.get() == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
             self.hor_test = stats.kurtosis(self.data, axis=0)
+        elif self.which_test.get() == "MAD":
+            self.ver_test = stats.median_abs_deviation(self.data, axis=1)
+            self.hor_test = stats.median_abs_deviation(self.data, axis=0)
+        elif self.which_test.get() == "Skew":
+            self.ver_test = stats.skew(self.data, axis=1)
+            self.hor_test = stats.skew(self.data, axis=0)
         elif self.which_test.get() == "Stand. Dev.":
             self.ver_test = np.std(self.data, axis=1)
             self.hor_test = np.std(self.data, axis=0)
@@ -407,6 +457,14 @@ if __name__ == "__main__":
         metavar=("width", "height"),
         default=[1920, 1080],
     )
+    parser.add_argument(
+        "-dm",
+        "--dm",
+        help="DM to dedisperse the data",
+        type=float,
+        required=False,
+        default=0,
+    )
     parser.add_argument("-v", "--verbose", help="Be verbose", action="store_true")
     values = parser.parse_args()
 
@@ -430,7 +488,7 @@ if __name__ == "__main__":
     root = Tk()
     root.geometry(f"{values.display[0]}x{values.display[1]}")
     # creation of an instance
-    app = Paint(root)
+    app = Paint(root, dm=values.dm)
     app.load_file(
         values.files, values.start, values.gulp, values.chan_std
     )  # load file with user params
