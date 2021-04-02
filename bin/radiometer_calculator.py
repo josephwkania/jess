@@ -38,7 +38,7 @@ def get_timeseries(input_file, block_size=2 ** 14):
             axis=1
         )
 
-    return timeseries
+    return timeseries, yr.your_header.native_tsamp
 
 
 def get_stds(input_file, max_boxcar_width, headless):
@@ -50,8 +50,8 @@ def get_stds(input_file, max_boxcar_width, headless):
     max_boxcar_width - largest boxcar will be 2**max_boxvar_width
     headless - if True, don't print to terminmal or show plot
     """
-    timeseries = get_timeseries(input_file)
-    #timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
+    timeseries, tsamp = get_timeseries(input_file)
+    # timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
     # can use the above to test
 
     if len(timeseries) < 2 ** max_boxcar_width:
@@ -60,17 +60,17 @@ def get_stds(input_file, max_boxcar_width, headless):
         )
         sys.exit()
 
-    powers_of_two = np.arange(1, max_boxcar_width, 1)
+    powers_of_two = np.arange(1, max_boxcar_width + 1, 1)
     stds = cp.zeros(len(powers_of_two) + 1, dtype=np.float64)
     stds[0] = cp.std(timeseries)
     for j, k in enumerate(powers_of_two):
         kernal = cp.array(signal.boxcar(2 ** k) / 2 ** k)
         stds[j + 1] = cp.std(cp.convolve(timeseries, kernal, "valid"))
 
-    widths = 2**np.insert(powers_of_two,[0],0)
+    widths = 2 ** np.insert(powers_of_two, [0], 0)
     stds = stds.get()  # Don't need cupy
 
-    stds_dic =  {J: K  for J , K in zip(widths, stds)}
+    stds_dic = {J: K for J, K in zip(widths, stds)}
     logging.debug(f"Boxcarwidths: stad dev {stds_dic}")
 
     if not headless:
@@ -82,12 +82,22 @@ def get_stds(input_file, max_boxcar_width, headless):
             table.add_row(f"{w}", f"{s:.4f}")
         console.print(table)
 
-        plt.title("Observed Vs Ideal Radiometer Noise")
-        plt.plot(widths, stds, label="Observed")
-        plt.plot(widths, stds[0]/np.sqrt(widths), label="Guass Noise")
-        plt.xlabel("Boxcar Width")
-        plt.ylabel("Stand. Dev.")
-        plt.legend()
+        fig, axs = plt.subplots(2, constrained_layout=True)
+        fig.suptitle("Observed Vs Ideal Radiometer Noise")
+        axs[0].plot(widths * tsamp, stds, label="Observed")
+        # axs[0].xaxis.tick_top()
+        axs[0].plot(widths * tsamp, stds[0] / np.sqrt(widths), label="Guass Noise")
+        axs[0].set_ylabel("Stand. Dev.")
+        axs[0].set_xlabel("Boxcar Width [Second]")
+        axs[0].legend()
+
+        axs[1].set_xscale("log", basex=2)
+        axs[1].set_yscale("log", basey=2)
+        axs[1].plot(widths, stds, label="Observed")
+        axs[1].plot(widths, stds[0] / np.sqrt(widths), label="Guass Noise")
+        axs[1].set_ylabel("Stand. Dev.")
+        axs[1].set_xlabel("Boxcar Width [Sample]")
+
         plt.show()
 
     return stds_dic
@@ -112,7 +122,6 @@ if __name__ == "__main__":
         type=int,
         default=8,
     )
-    
     parser.add_argument(
         "--headless",
         help="Don't print info to console or show images",
