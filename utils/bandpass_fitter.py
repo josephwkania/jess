@@ -7,7 +7,7 @@ from scipy import stats
 logger = logging.getLogger()
 
 
-def bandpass_fiter(channels, bandpass, poly_order=20, mask_sigma=6):
+def bandpass_fitter(channels, bandpass, poly_order=20, mask_sigma=6):
 
     fit_values = np.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = np.poly1d(fit_values)  # get the values of the fitted bandpass
