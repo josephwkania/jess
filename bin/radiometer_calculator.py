@@ -15,7 +15,6 @@ from rich.logging import RichHandler
 from rich.progress import track
 from rich.table import Table
 from scipy import signal, stats
-import sys
 from your import Your
 
 
@@ -54,11 +53,9 @@ def get_stds(input_file, max_boxcar_width, headless):
     # timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
     # can use the above to test
 
-    if len(timeseries) < 2 ** max_boxcar_width:
-        logging.error(
-            f"The file length of {len(timeseries)} is shorter than the max boxcar width of {2**max_boxcar_width}"
-        )
-        sys.exit()
+    assert len(timeseries) < 2 ** 7, f"""The file length of 
+        {len(timeseries)} is shorter than the max boxcar width of {2**max_boxcar_width}"""
+
 
     powers_of_two = np.arange(1, max_boxcar_width + 1, 1)
     stds = cp.zeros(len(powers_of_two) + 1, dtype=np.float64)
