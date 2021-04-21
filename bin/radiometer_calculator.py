@@ -6,6 +6,8 @@ Caculated from raw sampling time to 2**max_boxcar_width
 
 import argparse
 import logging
+import sys
+
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +17,6 @@ from rich.logging import RichHandler
 from rich.progress import track
 from rich.table import Table
 from scipy import signal, stats
-import sys
 from your import Your
 
 

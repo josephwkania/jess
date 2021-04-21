@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 
 import logging
+
 import cupy as cp
 import numpy as np
+from scipy import stats
+
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 logger = logging.getLogger()
 
 
-def bandpass_fitter_gpu(bandpass, poly_order=20, mask_sigma=6):
-    xp = cp.get_array_module(bandpass)
+def bandpass_fitter(
+    channels: int, bandpass: float, poly_order: int = 20, mask_sigma: float = 6
+) -> float:
+    # xp = cp.get_array_module(bandpass)
     channels = np.arange(0, len(bandpass))
     fit_values = np.polyfit(channels, bandpass.get(), poly_order)  # fit a polynomial
     poly = np.poly1d(fit_values)  # get the values of the fitted bandpass

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
+import logging
+from typing import Union
+
 import numpy as np
 from scipy import stats
 from scipy.signal import savgol_filter as sg
-from jess.utils.bandpass_fitter import bandpass_fitter
+
+from jess.bandpass_fitter import bandpass_fitter
 
 
 def tkurtosis(gulp, frame=128, return_mask=False):
@@ -66,18 +70,22 @@ def tmad(gulp, frame=256, sigma=10):
     return gulp.as_type(data_type)
 
 
-def spectral_mad(gulp, frame=256, sigma=3, poly_order=5):
+def spectral_mad(
+    gulp: Union[int, float], frame: int = 256, sigma: float = 3, poly_order: int = 5
+) -> Union[int, float]:
     """
-    Calculates Median Absolute Deviations along the spectral axis (i.e. for each time sample across all channels)
+    Calculates Median Absolute Deviations along the spectral axis
+    (i.e. for each time sample across all channels)
 
     Args:
-       gulp: a dynamic with time on the vertical axis, and freq on the horizonal
+       gulp: a dynamic with time on the vertical axis,
+       and freq on the horizonal
 
-       frame (int): number of frequency samples to calculate the MAD
+       frame (int): number of frequency samples to calculate MAD
 
        sigma (float): cutoff sigma
 
-       poly_order (int): polynomial order to fit for the bandpass
+       poly_order (int): polynomial order to fit the bandpass
 
     Returns:
 
@@ -101,9 +109,9 @@ def spectral_mad(gulp, frame=256, sigma=3, poly_order=5):
         # threash_bottom = np.tile(medians-cut, ( frame, 1)).T
         # mask = (threash_bottom < diff) & (diff < threash_top) #mask is where data is good
 
-        threash = cp.tile(cut, (frame, 1)).T
-        medians = cp.tile(medians, (frame, 1)).T
-        mask = cp.abs(diff - medians) < threash
+        threash = np.tile(cut, (frame, 1)).T
+        medians = np.tile(medians, (frame, 1)).T
+        mask = np.abs(diff - medians) < threash
 
         logging.info(f"mask: {mask.sum()}")
 
@@ -113,7 +121,7 @@ def spectral_mad(gulp, frame=256, sigma=3, poly_order=5):
                 poly_order=poly_order,
             )
         except Exception:
-            logger.warning(
+            logging.warning(
                 f"Failed to fit with Exception: {Exception}, using original fit"
             )
             fit_clean = fit
@@ -145,7 +153,7 @@ def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
     """
     frame = int(frame)
     data_type = gulp.dtype
-    savgol_array = sg(gulp, window, 2, axis=0)
+    # savgol_array = sg(gulp, window, 2, axis=0)
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
         savgol_sub_array = sg(gulp[j : j + frame, :], window, 2, axis=0)
@@ -185,7 +193,7 @@ def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
        frame: number of time samples to calculate the SAD
 
        sigma: cutoff sigma
-
+    
     Returns:
      
        Dynamic Spectrum with values clipped

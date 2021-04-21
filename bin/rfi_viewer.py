@@ -3,25 +3,33 @@ import argparse
 import logging
 import os
 import textwrap
-from tkinter import *
-from tkinter import filedialog
+from tkinter import (
+    BOTH,
+    TOP,
+    Button,
+    Frame,
+    Menu,
+    OptionMenu,
+    StringVar,
+    Tk,
+    filedialog,
+)
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import stats
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
-
+from scipy import stats
 from your import Your
-from your.utils.astro import dedisperse, calc_dispersion_delays
+from your.utils.astro import calc_dispersion_delays, dedisperse
 from your.utils.misc import YourArgparseFormatter
 
-
-# based on https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
+# based on
+# https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
 
 
 class Paint(Frame):
@@ -38,6 +46,10 @@ class Paint(Frame):
         # reference to the master widget, which is the tk window
         self.master = master
 
+        # Bind left and right keys to move data chunk
+        self.master.bind('<Left>', lambda event: self.prev_gulp())
+        self.master.bind('<Right>', lambda event: self.next_gulp())
+        
         # Creation of init_window
         # set widget title
         self.master.title("your_viewer")
@@ -70,30 +82,30 @@ class Paint(Frame):
         self.browse["command"] = self.load_file
         self.browse.grid(row=0, column=0)
 
-        # move image foward to next gulp of data
-        self.next = Button(self)
-        self.next["text"] = "Next Gulp"
-        self.next["command"] = self.next_gulp
-        self.next.grid(row=0, column=1)
+        # save figure
+        self.prev = Button(self)
+        self.prev["text"] = "Save Fig"
+        self.prev["command"] = self.save_figure
+        self.prev.grid(row=0, column=1)
 
         # move image back to previous gulp of data
         self.prev = Button(self)
         self.prev["text"] = "Prevous Gulp"
         self.prev["command"] = self.prev_gulp
-        self.prev.grid(row=0, column=3)
+        self.prev.grid(row=0, column=2)
 
-        # save figure
-        self.prev = Button(self)
-        self.prev["text"] = "Save Fig"
-        self.prev["command"] = self.save_figure
-        self.prev.grid(row=0, column=4)
+        # move image foward to next gulp of data
+        self.next = Button(self)
+        self.next["text"] = "Next Gulp"
+        self.next["command"] = self.next_gulp
+        self.next.grid(row=0, column=3)
 
         # Stat test to use
         self.tests = ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
         self.which_test.set("IQR")
-        self.test.grid(row=0, column=5)
+        self.test.grid(row=0, column=4)
 
         self.which_test.trace("w", self.update_plot)
 
@@ -124,7 +136,7 @@ class Paint(Frame):
         dic["nspectra"] = self.your_obj.your_header.nspectra
         self.table_print(dic)
 
-    def load_file(self, file_name=[""], start_samp=0, gulp_size=1024, chan_std=False):
+    def load_file(self, file_name=[""], start_samp=0, gulp_size=4096, chan_std=False):
         """
         Loads data from a file:
 
@@ -136,8 +148,9 @@ class Paint(Frame):
         self.start_samp = start_samp
         self.gulp_size = gulp_size
         self.chan_std = chan_std
-
-        if len(file_name) == 0:
+        
+        if file_name == [""]:
+            print("in if")
             file_name = filedialog.askopenfilename(
                 filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
             )
@@ -295,7 +308,8 @@ class Paint(Frame):
         self.set_x_axis()
         self.im_ft.set_data(self.data)
         self.im_bandpass.set_xdata(self.bandpass)
-        self.ax3.cla()  # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
+        self.ax3.cla()
+        # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
         self.ax3.hist(self.data.ravel(), bins=52, density=True)
         if self.chan_std:
             self.fill_bp()
@@ -427,7 +441,8 @@ if __name__ == "__main__":
         formatter_class=YourArgparseFormatter,
         epilog=textwrap.dedent(
             """\
-            This script can be used to visualize the data (Frequency-Time, bandpass and time series). It also reports some basic statistics of the data. 
+            This script can be used to visualize the data (Frequency-Time, bandpass and time series). 
+            It also reports some basic statistics of the data. 
             """
         ),
     )

@@ -1,7 +1,8 @@
-version = "0.0.1"
-
 import glob
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
+
+version = "0.0.1"
 
 with open("requirements.txt") as f:
     required = f.read().splitlines()

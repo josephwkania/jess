@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 
-import numpy as np
+import logging
+from typing import Union
+
 import cupy as cp
+import numpy as np
+
 from jess.scipy_cupy.stats import median_abs_deviation
 from jess.utils.bandpass_fitter_gpu import bandpass_fitter
 
 
-def spectral_mad_gpu(gulp, frame=256, sigma=3, poly_order=5):
+def spectral_mad(
+    gulp: Union[int, float], frame: int = 256, sigma: float = 3, poly_order: int = 5
+) -> Union[int, float]:
     """
-    Calculates Median Absolute Deviations along the spectral axis (i.e. for each time sample across all channels)
+    Calculates Median Absolute Deviations along the spectral axis
+    (i.e. for each time sample across all channels)
 
     Args:
        gulp: a dynamic with time on the vertical axis, and freq on the horizonal
@@ -58,7 +65,7 @@ def spectral_mad_gpu(gulp, frame=256, sigma=3, poly_order=5):
             )
             # cp.nanmedian exists in cupy 9.0, should update this when released
         except Exception:
-            logger.warning(
+            logging.warning(
                 f"Failed to fit with Exception: {Exception}, using original fit"
             )
             fit_clean = fit

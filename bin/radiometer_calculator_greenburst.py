@@ -6,9 +6,10 @@ Caculated from raw sampling time to 2**max_boxcar_width
 
 import argparse
 import logging
+import sys
+
 import numpy as np
 from scipy import signal, stats
-import sys
 from your import Your
 
 
