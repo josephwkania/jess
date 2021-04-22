@@ -6,10 +6,9 @@ Caculated from raw sampling time to 2**max_boxcar_width
 
 import argparse
 import logging
-import sys
 
 import numpy as np
-from scipy import signal, stats
+from scipy import signal
 from your import Your
 
 
@@ -48,11 +47,10 @@ def get_stds(input_file, headless):
     # timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
     # can use the above to test
 
-    if len(timeseries) < 2 ** 7:
-        logging.error(
-            f"The file length of {len(timeseries)} is shorter than the max boxcar width of {2**max_boxcar_width}"
-        )
-        sys.exit()
+    assert (
+        len(timeseries) < 2 ** 7
+    ), f"""The file length of 
+	{len(timeseries)} is shorter than the max boxcar width of {2**7}"""
 
     # powers_of_two = [2, 4, 7] # get boxcars for 2^0, 2^2, 2^4, 2^7
     powers_of_two = np.arange(1, 7, 1)  # get boxcars for 2**[0,1, ... , 7]
