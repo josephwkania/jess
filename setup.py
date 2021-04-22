@@ -10,6 +10,7 @@ with open("requirements.txt") as f:
 setup(
     name="jess",
     version=version,
+    packages=find_packages(),
     author="Joseph W Kania",
     scripts=glob.glob("bin/*"),
     install_requirements=required,

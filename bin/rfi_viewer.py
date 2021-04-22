@@ -1,4 +1,30 @@
 #!/usr/bin/env python3
+"""
+Takes from Dynamic Spectra from filterbank/fits files
+and displays in a GUI.
+Shows time series above spectra and bandpass to the right.
+Shows user defined statistical test
+    on the left: per channel
+    on the bottom: per time sample
+
+Arguments:
+    --files: files to get data
+
+    --start: first sample to show
+
+    --gulp: How many saples to show
+
+    --chan_std: show 1 std for each channel
+
+    --display: display size of GUI
+
+    --dm: dispersion measure to dedisperse
+
+Binds:
+    Left Arrow: Move the prevous gulp
+
+    Right Arrow: Move the the next gulp
+"""
 import argparse
 import logging
 import os
@@ -47,9 +73,9 @@ class Paint(Frame):
         self.master = master
 
         # Bind left and right keys to move data chunk
-        self.master.bind('<Left>', lambda event: self.prev_gulp())
-        self.master.bind('<Right>', lambda event: self.next_gulp())
-        
+        self.master.bind("<Left>", lambda event: self.prev_gulp())
+        self.master.bind("<Right>", lambda event: self.next_gulp())
+
         # Creation of init_window
         # set widget title
         self.master.title("your_viewer")
@@ -127,7 +153,8 @@ class Paint(Frame):
 
     def get_header(self):
         """
-        Gets meta data from data file and give the data to nice_print() to print to user
+        Gets meta data from data file and give the data to nice_print()
+        to print to user
         """
         dic = vars(self.your_obj.your_header)
         dic["tsamp"] = self.your_obj.your_header.tsamp
@@ -141,14 +168,16 @@ class Paint(Frame):
         Loads data from a file:
 
         Inputs:
-        file_name -- name or list of files to load, if none given user must use gui to give file
-        start_samp -- sample number where to start show the file, defaults to the beginning of the file
+        file_name -- name or list of files to load,
+                    if none given user must use gui to give file
+        start_samp -- sample number where to start show the file,
+                      defaults to the beginning of the file
         gulp_size -- amount of data to show at a given time
         """
         self.start_samp = start_samp
         self.gulp_size = gulp_size
         self.chan_std = chan_std
-        
+
         if file_name == [""]:
             print("in if")
             file_name = filedialog.askopenfilename(
@@ -158,7 +187,7 @@ class Paint(Frame):
         logging.info(f"Reading file {file_name}.")
         self.your_obj = Your(file_name)
         self.master.title(self.your_obj.your_header.basename)
-        logging.info(f"Printing Header parameters")
+        logging.info("Printing Header parameters")
         self.get_header()
         if self.dm != 0:
             self.dispersion_delays = calc_dispersion_delays(
@@ -188,7 +217,7 @@ class Paint(Frame):
             hspace=0.03,
         )
         ax1 = plt.subplot(self.gs[0, 1])  # timeseries
-        ax2 = plt.subplot(self.gs[1, 1])  #  dynamic spectra
+        ax2 = plt.subplot(self.gs[1, 1])  # dynamic spectra
         self.ax3 = plt.subplot(self.gs[0, 2])  # histogram
         self.ax3.xaxis.tick_top()
         self.ax3.yaxis.tick_right()
@@ -301,9 +330,8 @@ class Paint(Frame):
             self.start_samp -= self.gulp_size
         self.update_plot()
 
-    def update_plot(
-        self, *args
-    ):  # added *args to make self.which_test.trace("w", self.update_plot) happy
+    def update_plot(self, *args):
+        # added *args to make self.which_test.trace("w", self.update_plot) happy
         self.read_data()
         self.set_x_axis()
         self.im_ft.set_data(self.data)
@@ -440,9 +468,9 @@ if __name__ == "__main__":
         description="Read psrfits/filterbank files and show the data",
         formatter_class=YourArgparseFormatter,
         epilog=textwrap.dedent(
-            """\
-            This script can be used to visualize the data (Frequency-Time, bandpass and time series). 
-            It also reports some basic statistics of the data. 
+            """
+            This script can be used to visualize the data (Frequency-Time, bandpass and time series).
+            It also reports some basic statistics of the data.
             """
         ),
     )
