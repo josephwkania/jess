@@ -52,6 +52,7 @@ from rich.table import Table
 from scipy import stats
 from your import Your
 from your.utils.astro import calc_dispersion_delays, dedisperse
+from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
 
 # based on
@@ -163,7 +164,14 @@ class Paint(Frame):
         dic["nspectra"] = self.your_obj.your_header.nspectra
         self.table_print(dic)
 
-    def load_file(self, file_name=[""], start_samp=0, gulp_size=4096, chan_std=False):
+    def load_file(
+        self,
+        file_name=[""],
+        start_samp=0,
+        gulp_size=4096,
+        chan_std=False,
+        bandpass_subtract=False,
+    ):
         """
         Loads data from a file:
 
@@ -173,6 +181,8 @@ class Paint(Frame):
         start_samp -- sample number where to start show the file,
                       defaults to the beginning of the file
         gulp_size -- amount of data to show at a given time
+
+        bandpass_subtract -- subtract a polynomial fit of the bandpass
         """
         self.start_samp = start_samp
         self.gulp_size = gulp_size
@@ -187,6 +197,14 @@ class Paint(Frame):
         logging.info(f"Reading file {file_name}.")
         self.your_obj = Your(file_name)
         self.master.title(self.your_obj.your_header.basename)
+        if bandpass_subtract:
+            iinfo = np.iinfo(self.your_obj.your_header.dtype)
+            self.min = iinfo.min
+            self.max = iinfo.max
+            self.subtract = True
+        else:
+            self.subtract = False
+
         logging.info("Printing Header parameters")
         self.get_header()
         if self.dm != 0:
@@ -331,6 +349,9 @@ class Paint(Frame):
         self.update_plot()
 
     def update_plot(self, *args):
+        """
+        Redraws the plots when something is changed
+        """
         # added *args to make self.which_test.trace("w", self.update_plot) happy
         self.read_data()
         self.set_x_axis()
@@ -372,6 +393,9 @@ class Paint(Frame):
         self.canvas.draw()
 
     def fill_bp(self):
+        """
+        Adds each channel's standard deviations to bandpass plot
+        """
         self.im_bp_fill.remove()
         bp_std = np.std(self.data, axis=1)
         bp_y = self.im_bandpass.get_ydata()
@@ -401,6 +425,18 @@ class Paint(Frame):
                 self.your_obj.native_tsamp,
                 delays=self.dispersion_delays,
             )
+        if self.subtract:
+            bandpass = bandpass_fitter(np.median(self.data, axis=1))
+            # fit data to median bandpass
+            np.clip(bandpass, self.min, self.max, out=bandpass)
+            # make sure the fit is nummerically possable
+            self.data = self.data - bandpass[:, None]
+
+            # attempt to return the correct data type, most values are close to zero
+            # add get clipped, causeing dynamic range problems
+            # diff = np.clip(self.data - bandpass[:, None], self.min, self.max)
+            # self.data = diff #diff.astype(self.your_obj.your_header.dtype)
+
         self.bandpass = np.mean(self.data, axis=1)
         self.time_series = np.mean(self.data, axis=0)
         logging.info(
@@ -514,6 +550,14 @@ if __name__ == "__main__":
         required=False,
         default=0,
     )
+    parser.add_argument(
+        "-subtract",
+        "--bandpass_subtract",
+        help="subtract a polynomial fitted bandpass",
+        required=False,
+        default=False,
+        action="store_true",
+    )
     parser.add_argument("-v", "--verbose", help="Be verbose", action="store_true")
     values = parser.parse_args()
 
@@ -539,6 +583,10 @@ if __name__ == "__main__":
     # creation of an instance
     app = Paint(root, dm=values.dm)
     app.load_file(
-        values.files, values.start, values.gulp, values.chan_std
+        values.files,
+        values.start,
+        values.gulp,
+        values.chan_std,
+        values.bandpass_subtract,
     )  # load file with user params
     root.mainloop()

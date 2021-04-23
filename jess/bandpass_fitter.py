@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+A somewhat robust way to fit bandpasses
+"""
 
 import logging
 
@@ -9,9 +12,23 @@ logger = logging.getLogger()
 
 
 def bandpass_fitter(
-    channels: int, bandpass: float, poly_order: int = 20, mask_sigma: float = 6
+    bandpass: float, poly_order: int = 20, mask_sigma: float = 6
 ) -> float:
+    """
+    Fits bandpasses by polyfitting the bandpass, looking for channels that
+    are far from this fit, exluding these channels and refitting the bandpass
 
+    Args:
+        bandpass: the bandpass to fit
+
+        polyorder: order of polynomial to fit
+
+        mask_sigma: standard deviation at which to mask outlying channels
+
+    Returns:
+        Fit to bandpass
+    """
+    channels = np.arange(0, len(bandpass))
     fit_values = np.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = np.poly1d(fit_values)  # get the values of the fitted bandpass
     diff = bandpass - poly(

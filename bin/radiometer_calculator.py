@@ -21,7 +21,7 @@ from your import Your
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
-def get_timeseries(input_file, block_size=2 ** 14):
+def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):
     """
     Makes a zero DM timeseries for a given file
     args:
@@ -33,9 +33,19 @@ def get_timeseries(input_file, block_size=2 ** 14):
     yr = Your(input_file)
     timeseries = cp.zeros(yr.your_header.nspectra, dtype=np.float64)
 
-    for j in track(np.arange(0, yr.your_header.nspectra, block_size)):
-        if j + block_size > yr.your_header.nspectra:
-            block_size = yr.your_header.nspectra - j
+    if nspectra == -1:
+        end = yr.your_header.nspectra
+    else:
+        end = 2 ** nspectra
+
+    assert (
+        2 ** max_boxcar_width < 2 * end
+    ), f"""2*number samples to be processed:
+        {2*end} is shorter than the max boxcar width of {2**max_boxcar_width}"""
+
+    for j in track(np.arange(0, end, block_size)):
+        if j + block_size > end:
+            block_size = end - j
         timeseries[j : j + block_size] = cp.array(
             signal.detrend(yr.get_data(j, block_size)).mean(axis=1)
         )
@@ -46,7 +56,7 @@ def get_timeseries(input_file, block_size=2 ** 14):
 def get_stds(
     input_file: str,
     max_boxcar_width: int = 8,
-    number_samples: int = 14,
+    number_spectra: int = 14,
     headless: bool = False,
 ) -> dict:
     """
@@ -57,14 +67,11 @@ def get_stds(
     max_boxcar_width - largest boxcar will be 2**max_boxvar_width
     headless - if True, don't print to terminmal or show plot
     """
-    timeseries, tsamp = get_timeseries(input_file)
+    timeseries, tsamp = get_timeseries(
+        input_file, nspectra=number_spectra, max_boxcar_width=max_boxcar_width
+    )
     # timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
     # can use the above to test
-
-    assert (
-        len(timeseries) < 2 ** 7
-    ), f"""The file length of
-        {len(timeseries)} is shorter than the max boxcar width of {2**max_boxcar_width}"""
 
     powers_of_two = np.arange(1, max_boxcar_width + 1, 1)
     stds = cp.zeros(len(powers_of_two) + 1, dtype=np.float64)
@@ -83,7 +90,7 @@ def get_stds(
     stds = stds.get()  # Don't need cupy
     mads = mads.get()
 
-    stds_dic = {J: [W, K] for J, W, K in zip(widths, stds, mads)}
+    stds_dic = {j: [w, k] for j, w, k in zip(widths, stds, mads)}
     logging.debug(f"Boxcarwidths: std-dev mad{stds_dic}")
 
     if not headless:
@@ -93,7 +100,7 @@ def get_stds(
         table.add_column("Stand. Dev")
         table.add_column("Median Abs Dev")
         for w, s, i in zip(widths, stds, mads):
-            table.add_row(f"{w}", f"{s:.4e}", f"{i:.ef}")
+            table.add_row(f"{w}", f"{s:.4e}", f"{i:.4e}")
         console.print(table)
 
         fig, axs = plt.subplots(2, constrained_layout=True)
@@ -140,11 +147,11 @@ if __name__ == "__main__":
         default=8,
     )
     parser.add_argument(
-        "-nsamp",
-        "--number_samples",
-        help="Log2 of the number of samples to process",
+        "-nspectra",
+        "--number_spectra",
+        help="Log2 of the number of samples to process. [Default = -1 = entrire file]",
         type=int,
-        default=14,
+        default=-1,
     )
     parser.add_argument(
         "--headless",
@@ -171,5 +178,5 @@ if __name__ == "__main__":
             handlers=[RichHandler(rich_tracebacks=True)],
         )
     get_stds(
-        values.files, values.max_boxcar_width, values.number_samples, values.headless
+        values.files, values.max_boxcar_width, values.number_spectra, values.headless
     )
