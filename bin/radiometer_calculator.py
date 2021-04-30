@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Calcualtes radiometer noise for a give search mode data file
-Caculated from raw sampling time to 2**max_boxcar_width
+Calculates radiometer noise for a give search mode data file
+Calculated from raw sampling time to 2**max_boxcar_width
 """
 
 import argparse
@@ -63,7 +63,7 @@ def get_stds(
     Computes the Standard Deviations of the 0DM timeseries
 
     args:
-    input_file - the search mode file to calculate the standard diviations
+    input_file - the search mode file to calculate the standard deviations
     max_boxcar_width - largest boxcar will be 2**max_boxvar_width
     headless - if True, don't print to terminmal or show plot
     """
@@ -106,18 +106,18 @@ def get_stds(
         fig, axs = plt.subplots(2, constrained_layout=True)
         times = widths * tsamp
         fig.suptitle("Observed Vs Ideal Radiometer Noise")
-        axs[0].plot(times, stds, label="Stand Dev")
-        axs[0].plot(times, mads, label="Median Abs Dev")
+        axs[0].plot(times, stds, "-.", label="Stand Dev")
+        axs[0].plot(times, mads, "*", label="Median Abs Dev")
         # axs[0].xaxis.tick_top()
-        axs[0].plot(widths * tsamp, mads[0] / np.sqrt(widths), label="Guass Noise")
+        axs[0].plot(widths * tsamp, mads[0] / np.sqrt(widths), label="Gauss Noise")
         axs[0].set_ylabel("Stand. Dev.")
         axs[0].set_xlabel("Boxcar Width [Second]")
         axs[0].legend()
 
         axs[1].set_xscale("log", basex=2)
         axs[1].set_yscale("log", basey=2)
-        axs[1].plot(widths, stds, label="Stand Dev")
-        axs[1].plot(widths, mads, label="Median Abs Dev")
+        axs[1].plot(widths, stds, "-.", label="Stand Dev")
+        axs[1].plot(widths, mads, "*sle", label="Median Abs Dev")
         axs[1].plot(widths, mads[0] / np.sqrt(widths), label="Guass Noise")
         axs[1].set_ylabel("Stand. Dev.")
         axs[1].set_xlabel("Boxcar Width [Sample]")
@@ -131,6 +131,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="your_header.py",
         description="Read header from psrfits/filterbank files and print the unified header",
+        epilog=__doc__,
     )
     parser.add_argument(
         "-f",
@@ -149,7 +150,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-nspectra",
         "--number_spectra",
-        help="Log2 of the number of samples to process. [Default = -1 = entrire file]",
+        help="Log2 of the number of samples to process. [Default = -1 = entire file]",
         type=int,
         default=-1,
     )

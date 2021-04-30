@@ -71,8 +71,8 @@ def tmad(gulp, frame=256, sigma=10):
 
 
 def spectral_mad(
-    gulp: Union[int, float], frame: int = 256, sigma: float = 3, poly_order: int = 5
-) -> Union[int, float]:
+    gulp: np.ndarray, frame: int = 256, sigma: float = 3, poly_order: int = 5
+) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
     (i.e. for each time sample across all channels)

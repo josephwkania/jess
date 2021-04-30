@@ -20,15 +20,16 @@ Arguments:
 
     --dm: dispersion measure to dedisperse
 
-Binds:
-    Left Arrow: Move the prevous gulp
+    -subtract/--bandpass_subtract: subtract a polynomial bandpass fit
+
+Key Binds:
+    Left Arrow: Move the previous gulp
 
     Right Arrow: Move the the next gulp
 """
 import argparse
 import logging
 import os
-import textwrap
 from tkinter import (
     BOTH,
     TOP,
@@ -225,7 +226,7 @@ class Paint(Frame):
         self.read_data()
 
         # create 6 plots, for ax1=time_series, ax2=dynamic spectra, ax3= histogram,
-        # ax4=bandpass, ax5 = verticle test, ax6 = hortizontal test
+        # ax4=bandpass, ax5 = vertical test, ax6 = horizontal test
         self.gs = gridspec.GridSpec(
             3,
             3,
@@ -410,7 +411,7 @@ class Paint(Frame):
 
     def read_data(self):
         """
-        Read data from the psr seach data file
+        Read data from the psr search data file
         Returns:
         data -- a 2D array of frequency time plts
         """
@@ -503,12 +504,7 @@ if __name__ == "__main__":
         prog="your_viewer.py",
         description="Read psrfits/filterbank files and show the data",
         formatter_class=YourArgparseFormatter,
-        epilog=textwrap.dedent(
-            """
-            This script can be used to visualize the data (Frequency-Time, bandpass and time series).
-            It also reports some basic statistics of the data.
-            """
-        ),
+        epilog=__doc__,
     )
     parser.add_argument(
         "-f",
@@ -527,7 +523,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-e",
         "--chan_std",
-        help="Show 1 standard devation per channel in bandpass",
+        help="Show 1 standard deviation per channel in bandpass",
         required=False,
         default=False,
         action="store_true",
