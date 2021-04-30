@@ -271,14 +271,19 @@ class Paint(Frame):
                 label="1 STD",
             )
             ax4.legend()
+        else:
+            ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         ax4.set_ylim([-1, len(self.bandpass) + 1])
         ax4.set_xlabel("Avg. Arb. Flux")
+        # ax4.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
 
         # make time series
         ax4.set_xlabel("<Arb. Flux>")
         (self.im_time,) = ax1.plot(self.time_series, label="Timeseries")
         ax1.set_xlim(-1, len(self.time_series + 1))
         ax1.set_ylabel("<Arb. Flux>")
+        # ax1.set_title("Time Series", y=1.0, pad=-14)
+        ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
