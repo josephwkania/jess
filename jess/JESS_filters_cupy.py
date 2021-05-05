@@ -6,8 +6,8 @@ from typing import Union
 import cupy as cp
 import numpy as np
 
-from jess.scipy_cupy.stats import median_abs_deviation
-from jess.utils.bandpass_fitter_gpu import bandpass_fitter
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
+from jess.bandpass_fitter_cupy import bandpass_fitter
 
 
 def spectral_mad(
@@ -18,7 +18,7 @@ def spectral_mad(
     (i.e. for each time sample across all channels)
 
     Args:
-       gulp: a dynamic with time on the vertical axis, and freq on the horizonal
+       gulp: a dynamic with time on the vertical axis, and freq on the horizontal
 
        frame (int): number of frequency samples to calculate the MAD
 
@@ -29,6 +29,11 @@ def spectral_mad(
     Returns:
 
        Dynamic Spectrum with values clipped
+
+    Note:
+        This version differs from the cpu version.
+        This uses nans, while cpu version uses np.ma mask,
+        performance is about the same
     """
     frame = int(frame)
     data_type = gulp.dtype
@@ -38,8 +43,9 @@ def spectral_mad(
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
         fit = cp.array(
-            bandpass_fitter_gpu(cp.median(gulp[:, j : j + frame], axis=0), poly_order=5)
-        )  # .astype(data_type)
+            bandpass_fitter(cp.median(gulp[:, j : j + frame], axis=0), poly_order=5)
+        )
+        # .astype(data_type)
         # fit = cp.array(bandpass_fitter(cp.median(gulp[:,j:j+frame],axis=0).get(), poly_order=5))
         diff = gulp[:, j : j + frame] - fit
         cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
@@ -55,7 +61,7 @@ def spectral_mad(
         logging.info(f"mask: {mask.sum()}")
 
         try:  # sometimes this fails to converge, if happens use origial fit
-            fit_clean = bandpass_fitter_gpu(
+            fit_clean = bandpass_fitter(
                 cp.array(
                     np.nanmedian(
                         cp.where(mask, gulp[:, j : j + frame], np.nan).get(), axis=0

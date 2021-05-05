@@ -44,7 +44,8 @@ def bandpass_fitter(
     if std_diff > 0.0:
         # if there is no variability in the channel, don't try to mask
         mask = cp.abs(diff - cp.median(diff)) < mask_sigma * std_diff  # .get()
-
+        # cupy doesn't have ma analoge, above line might
+        # cause warning, probably will not have a big effect
         fit_values_clean = cp.polyfit(
             channels[mask], bandpass[mask], poly_order
         )  # refit masking the outliers

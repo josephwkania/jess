@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#cython: language_level=3
+# cython: language_level=3
 """
 A somewhat robust way to fit bandpasses
 """
@@ -39,7 +39,7 @@ def bandpass_fitter(
     logging.info(f"Standard Deviation of fit: {std_diff:.4}")
     if std_diff > 0.0:
         # if there is no variability in the channel, don't try to mask
-        mask = np.abs(diff - np.median(diff)) < mask_sigma * std_diff
+        mask = np.abs(diff - np.ma.median(diff)) < mask_sigma * std_diff
 
         fit_values_clean = np.polyfit(
             channels[mask], bandpass[mask], poly_order

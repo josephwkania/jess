@@ -370,22 +370,22 @@ class Paint(Frame):
         if self.chan_std:
             self.fill_bp()
         self.im_bandpass.axes.relim()
-        self.im_bandpass.axes.autoscale(axis='x')
+        self.im_bandpass.axes.autoscale(axis="x")
         self.im_time.set_ydata(np.mean(self.data, axis=0))
         self.im_time.axes.relim()
-        self.im_time.axes.autoscale(axis='y')
+        self.im_time.axes.autoscale(axis="y")
 
         self.stat_test()
         self.im_test_ver.set_xdata(self.ver_test)
         self.im_test_ver.axes.relim()
-        self.im_test_ver.axes.autoscale(axis='x')
+        self.im_test_ver.axes.autoscale(axis="x")
 
         self.im_test_ver.set_label(f"{self.which_test.get()}")
         self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.relim()
-        self.im_test_hor.axes.autoscale(axis='y')
+        self.im_test_hor.axes.autoscale(axis="y")
         self.im_test_hor.set_label(f"{self.which_test.get()}")
         self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 

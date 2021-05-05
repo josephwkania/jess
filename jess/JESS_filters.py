@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Union
 
 import numpy as np
 from scipy import stats
@@ -111,19 +110,18 @@ def spectral_mad(
 
         thresh = np.tile(cut, (frame, 1)).T
         medians = np.tile(medians, (frame, 1)).T
-        mask = np.abs(diff - medians) < thresh
+        mask = np.abs(diff - medians) > thresh
 
         logging.info(f"mask: {mask.sum()}")
 
-        try:  # sometimes this fails to converge, if happens use origial fit
+        try:  # sometimes this fails to converge, if happens use original fit
+            masked_arr = np.ma.masked_array(gulp[:, j : j + frame], mask=mask)
             fit_clean = bandpass_fitter(
-                np.nanmedian(np.where(mask, gulp[:, j : j + frame], np.nan), axis=0),
+                np.ma.median(masked_arr, axis=0),
                 poly_order=poly_order,
             )
         except Exception as e:
-            logging.warning(
-                f"Failed to fit with Exception: {e}, using original fit"
-            )
+            logging.warning(f"Failed to fit with Exception: {e}, using original fit")
             fit_clean = fit
 
         np.clip(
@@ -131,7 +129,7 @@ def spectral_mad(
         )  # clip the values so they don't wrap when converted to ints
         fit_clean = fit_clean.astype(data_type)  # convert to dtype of the original
         gulp[:, j : j + frame] = np.where(
-            mask, gulp[:, j : j + frame], np.tile(fit_clean, (len(gulp), 1))
+            mask, np.tile(fit_clean, (len(gulp), 1)), gulp[:, j : j + frame]
         )
 
     return gulp.astype(data_type)
@@ -148,7 +146,7 @@ def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
        sigma: cutoff sigma
 
     Returns:
-     
+
        Dynamic Spectrum with values clipped
     """
     frame = int(frame)
@@ -193,9 +191,9 @@ def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
        frame: number of time samples to calculate the SAD
 
        sigma: cutoff sigma
-    
+
     Returns:
-     
+
        Dynamic Spectrum with values clipped
     """
     frame = int(frame)

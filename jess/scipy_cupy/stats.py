@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-import logging
-import numpy as np
-import cupy as cp
+# import logging
 import warnings
+
+import cupy as cp
+import numpy as np
 
 
 def _mad_1d_gpu(x, center, nan_policy):
