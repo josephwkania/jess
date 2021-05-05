@@ -272,7 +272,8 @@ class Paint(Frame):
             )
             ax4.legend()
         else:
-            ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+            pass
+            # ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         ax4.set_ylim([-1, len(self.bandpass) + 1])
         ax4.set_xlabel("Avg. Arb. Flux")
         # ax4.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
@@ -283,7 +284,7 @@ class Paint(Frame):
         ax1.set_xlim(-1, len(self.time_series + 1))
         ax1.set_ylabel("<Arb. Flux>")
         # ax1.set_title("Time Series", y=1.0, pad=-14)
-        ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        # ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
@@ -368,31 +369,23 @@ class Paint(Frame):
         self.ax3.hist(self.data.ravel(), bins=52, density=True)
         if self.chan_std:
             self.fill_bp()
-        self.im_bandpass.axes.set_xlim(
-            np.min(self.bandpass) * 0.97, np.max(self.bandpass) * 1.03
-        )
+        self.im_bandpass.axes.relim()
+        self.im_bandpass.axes.autoscale(axis='x')
         self.im_time.set_ydata(np.mean(self.data, axis=0))
-        self.im_time.axes.set_ylim(
-            np.min(self.time_series) * 0.97, np.max(self.time_series) * 1.03
-        )
+        self.im_time.axes.relim()
+        self.im_time.axes.autoscale(axis='y')
 
         self.stat_test()
         self.im_test_ver.set_xdata(self.ver_test)
-        self.im_test_ver.axes.set_xlim(
-            np.min(self.ver_test)
-            - 0.03 * (np.max(self.ver_test) - np.min(self.ver_test)),
-            np.max(self.ver_test) * 1.03,
-        )
+        self.im_test_ver.axes.relim()
+        self.im_test_ver.axes.autoscale(axis='x')
 
         self.im_test_ver.set_label(f"{self.which_test.get()}")
         self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
-        self.im_test_hor.axes.set_ylim(
-            np.min(self.hor_test)
-            - 0.03 * (np.max(self.hor_test) - np.min(self.hor_test)),
-            np.max(self.hor_test) * 1.03,
-        )
+        self.im_test_hor.axes.relim()
+        self.im_test_hor.axes.autoscale(axis='y')
         self.im_test_hor.set_label(f"{self.which_test.get()}")
         self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 

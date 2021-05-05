@@ -79,7 +79,7 @@ def spectral_mad(
 
     Args:
        gulp: a dynamic with time on the vertical axis,
-       and freq on the horizonal
+       and freq on the horizontal
 
        frame (int): number of frequency samples to calculate MAD
 
@@ -105,13 +105,13 @@ def spectral_mad(
         cut = sigma * stats.median_abs_deviation(diff, axis=1, scale="Normal")
         medians = np.median(diff, axis=1)
 
-        # threash_top = np.tile(cut+medians, ( frame, 1)).T
-        # threash_bottom = np.tile(medians-cut, ( frame, 1)).T
-        # mask = (threash_bottom < diff) & (diff < threash_top) #mask is where data is good
+        # thresh_top = np.tile(cut+medians, ( frame, 1)).T
+        # thresh_bottom = np.tile(medians-cut, ( frame, 1)).T
+        # mask = (thresh_bottom < diff) & (diff < thresh_top) #mask is where data is good
 
-        threash = np.tile(cut, (frame, 1)).T
+        thresh = np.tile(cut, (frame, 1)).T
         medians = np.tile(medians, (frame, 1)).T
-        mask = np.abs(diff - medians) < threash
+        mask = np.abs(diff - medians) < thresh
 
         logging.info(f"mask: {mask.sum()}")
 
@@ -120,9 +120,9 @@ def spectral_mad(
                 np.nanmedian(np.where(mask, gulp[:, j : j + frame], np.nan), axis=0),
                 poly_order=poly_order,
             )
-        except Exception:
+        except Exception as e:
             logging.warning(
-                f"Failed to fit with Exception: {Exception}, using original fit"
+                f"Failed to fit with Exception: {e}, using original fit"
             )
             fit_clean = fit
 

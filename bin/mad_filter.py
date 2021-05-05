@@ -11,6 +11,8 @@ import os
 import textwrap
 
 import numpy as np
+from jess.dispersion import dedisperse, delay_lost
+from jess.JESS_filters import spectral_mad
 
 # import psutil
 from rich.logging import RichHandler
@@ -20,9 +22,6 @@ from your.formats.filwriter import make_sigproc_object
 
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
-
-from jess.dispersion import dedisperse, delay_lost
-from jess.JESS_filters import spectral_mad
 
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
@@ -279,7 +278,7 @@ def mad_cleaner(
     else:
         raise ValueError(f"Tried file extention {file_ext}, which I can't write")
     """
-    print(f"gulp: {gulp}")
+
     if not out_file:
         # if no out file is given, create the string
         path, file_ext = os.path.splitext(file)
@@ -291,15 +290,14 @@ def mad_cleaner(
         if file_ext:
             assert file_ext == ".fil", f"I can only write .fil, you gave {file_ext}!"
         else:
-            out_file + ".fil"
+            out_file += ".fil"
 
     yr = Your(file)
     samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.tsamp)
-    print(samples_lost)
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
-        source_name=yr.source_name,# .decode("utf-8"),
+        source_name=yr.your_header.source_name,
         nchans=yr.nchans,
         foff=yr.foff,  # MHz
         fch1=yr.fch1,  # MHz
@@ -328,8 +326,7 @@ def mad_cleaner(
 
     # loop through all the data we can dedisperse
     for j in track(range(0, yr.your_header.nspectra, gulp)):
-        print(j)
-        
+
         if 2 * samples_lost + j + gulp < yr.your_header.nspectra:
             data = yr.get_data(j, 2 * samples_lost + gulp)
         else:
@@ -338,7 +335,6 @@ def mad_cleaner(
         dedisp[0:-samples_lost, :] = spectral_mad(
             dedisp[0:-samples_lost, :], frame=channels_per_subband, sigma=sigma
         )
-        print( dedisp[0:-samples_lost, :].shape)
         redisip = dedisperse(dedisp, -dispersion_measure, yr.tsamp, yr.chan_freqs)
         redisip = redisip.astype(np.int8)
         sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
