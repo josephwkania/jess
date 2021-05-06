@@ -6,7 +6,7 @@ import numpy as np
 from scipy import stats
 from scipy.signal import savgol_filter as sg
 
-from jess.bandpass_fitter import bandpass_fitter
+from jess.fitters import poly_fitter
 
 
 def tkurtosis(gulp, frame=128, return_mask=False):
@@ -97,7 +97,7 @@ def spectral_mad(
     max_value = iinfo.max
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        fit = bandpass_fitter(
+        fit = ploy_fitter(
             np.median(gulp[:, j : j + frame], axis=0), poly_order=5
         )  # .astype(data_type)
         diff = gulp[:, j : j + frame] - fit
@@ -116,7 +116,7 @@ def spectral_mad(
 
         try:  # sometimes this fails to converge, if happens use original fit
             masked_arr = np.ma.masked_array(gulp[:, j : j + frame], mask=mask)
-            fit_clean = bandpass_fitter(
+            fit_clean = poly_fitter(
                 np.ma.median(masked_arr, axis=0),
                 poly_order=poly_order,
             )
