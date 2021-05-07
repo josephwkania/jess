@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-
+"""
+The repository fro all my filters
+"""
 import logging
 
 import numpy as np
@@ -9,13 +11,19 @@ from scipy.signal import savgol_filter as sg
 from jess.fitters import poly_fitter
 
 
-def tkurtosis(gulp, frame=128, return_mask=False):
+def time_kurtosis_thresh(
+    gulp: np.ndarray,
+    threshhold: float = 20,
+    frame: int = 128,
+    return_mask: bool = False,
+) -> np.ndarray:
     """
     Calculates the spectral Kurtosis along the time axis
 
     Args:
-
         gulp: the dynamic spectum to be analyzed
+
+    `   threshhold: abs threashold to filter kurtosis values
 
         frame: number of time samples to calculate the kurtosis
 
@@ -27,19 +35,56 @@ def tkurtosis(gulp, frame=128, return_mask=False):
        optional: masked values
     """
     frame = int(frame)
-    sigma_sk = 2.0 / np.sqrt(frame)
     kvalues = np.zeros_like(gulp)
     mask = np.zeros_like(gulp)
     for j in np.arange(0, len(gulp) - frame + 1, frame):
         kurtosis_vec = stats.kurtosis(gulp[j : j + frame], axis=0)
         kvalues[j : j + frame, :] = kurtosis_vec
 
-    mask = kvalues > 1 + frame * sigma_sk
+    mask = kvalues < threshhold
 
     if return_mask:
-        return np.where(~mask, gulp, 0), mask
-    else:
-        return np.where(~mask, gulp, 0)
+        return np.where(mask, gulp, 0), mask
+
+    return np.where(mask, gulp, 0)
+
+
+def time_kurtosis_dynamic(
+    gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_mask: bool = False
+) -> np.ndarray:
+    """
+    Calculates the spectral Kurtosis along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+    `   sigma on to cut kurtosis values
+
+        frame: number of time samples to calculate the kurtosis
+
+        return_mask: bool
+    Returns:
+
+       Dynamic Spectrum with bad Kurtosis values removed
+
+       optional: masked values
+    """
+    frame = int(frame)
+    kvalues = np.zeros_like(gulp)
+    mask = np.zeros_like(gulp)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        kurtosis_vec = stats.kurtosis(gulp[j : j + frame], axis=0)
+        kvalues[j : j + frame, :] = kurtosis_vec
+
+    stds_kurt = np.std(kvalues, axis=0)
+    meds_kurt = np.median(kvalues, axis=0)
+
+    mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
+
+    if return_mask:
+        return np.where(mask, gulp, 0), mask
+
+    return np.where(mask, gulp, 0)
 
 
 def tmad(gulp, frame=256, sigma=10):
@@ -97,7 +142,7 @@ def spectral_mad(
     max_value = iinfo.max
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        fit = ploy_fitter(
+        fit = poly_fitter(
             np.median(gulp[:, j : j + frame], axis=0), poly_order=5
         )  # .astype(data_type)
         diff = gulp[:, j : j + frame] - fit
@@ -136,7 +181,6 @@ def spectral_mad(
 
 
 def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
-    gulp = gulp.copy()
     """
     Calculates Savgol Absolute Deviations along the time axis
 
@@ -149,6 +193,7 @@ def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
 
        Dynamic Spectrum with values clipped
     """
+    gulp = gulp.copy()
     frame = int(frame)
     data_type = gulp.dtype
     # savgol_array = sg(gulp, window, 2, axis=0)
@@ -183,7 +228,6 @@ def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
 
 
 def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
-    gulp = gulp.copy()
     """
     Calculates Savgol Absolute Deviations along the spectral axis
 
@@ -196,6 +240,7 @@ def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
 
        Dynamic Spectrum with values clipped
     """
+    gulp = gulp.copy()
     frame = int(frame)
     data_type = gulp.dtype
     savgol_array = sg(gulp, window, 2, axis=1)
