@@ -190,7 +190,6 @@ class Paint(Frame):
         self.chan_std = chan_std
 
         if file_name == [""]:
-            print("in if")
             file_name = filedialog.askopenfilename(
                 filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
             )

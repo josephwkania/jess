@@ -22,7 +22,7 @@ from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
 from jess.dispersion import dedisperse, delay_lost
-from jess.JESS_filters import spectral_mad
+from jess.JESS_filters import mad_spectra
 
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
@@ -333,7 +333,7 @@ def mad_cleaner(
         else:
             data = yr.get_data(j, yr.your_header.nspectra - j)
         dedisp = dedisperse(data, dispersion_measure, yr.tsamp, yr.chan_freqs)
-        dedisp[0:-samples_lost, :] = spectral_mad(
+        dedisp[0:-samples_lost, :] = mad_spectra(
             dedisp[0:-samples_lost, :], frame=channels_per_subband, sigma=sigma
         )
         redisip = dedisperse(dedisp, -dispersion_measure, yr.tsamp, yr.chan_freqs)

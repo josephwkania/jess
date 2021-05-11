@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 """
 Takes from Dynamic Spectra from filterbank/fits files
 and displays in a GUI.
@@ -55,6 +55,7 @@ from your import Your
 from your.utils.astro import calc_dispersion_delays, dedisperse
 from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
+from jess.JESS_filters import iqr_time
 
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
@@ -190,7 +191,6 @@ class Paint(Frame):
         self.chan_std = chan_std
 
         if file_name == [""]:
-            print("in if")
             file_name = filedialog.askopenfilename(
                 filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
             )
@@ -230,24 +230,24 @@ class Paint(Frame):
         self.gs = gridspec.GridSpec(
             3,
             3,
-            width_ratios=[1, 4, 1],
-            height_ratios=[1, 4, 1],
+            width_ratios=[1, 4, 4],
+            height_ratios=[1, 4, 4],
             wspace=0.02,
             hspace=0.03,
         )
         ax1 = plt.subplot(self.gs[0, 1])  # timeseries
         ax2 = plt.subplot(self.gs[1, 1])  # dynamic spectra
-        self.ax3 = plt.subplot(self.gs[0, 2])  # histogram
-        self.ax3.xaxis.tick_top()
-        self.ax3.yaxis.tick_right()
-        ax4 = plt.subplot(self.gs[1, 2])  # bandpass
+        #self.ax3 = plt.subplot(self.gs[0, 2])  # histogram
+        #self.ax3.xaxis.tick_top()
+        #self.ax3.yaxis.tick_right()
+        #ax4 = plt.subplot(self.gs[1, 2])  # bandpass
         self.ax5 = plt.subplot(
             self.gs[1, 0]
-        )  # verticle test.  Needs to be self. so I can self.ax6.legend()
+        )  # bandpass
         self.ax6 = plt.subplot(self.gs[2, 1])
         ax2.axis("off")
         ax1.set_xticks([])
-        ax4.set_yticks([])
+        #ax4.set_yticks([])
 
         # get the min and max image values to that we can see the typical values well
         self.vmax = min(np.max(self.data), np.median(self.data) + 5 * np.std(self.data))
@@ -259,9 +259,9 @@ class Paint(Frame):
         # make bandpass
         bp_std = np.std(self.data, axis=1)
         bp_y = np.linspace(self.your_obj.your_header.nchans, 0, len(self.bandpass))
-        (self.im_bandpass,) = ax4.plot(self.bandpass, bp_y, label="Bandpass")
+        (self.im_bandpass,) = self.ax5.plot(self.bandpass, bp_y, label="Bandpass")
         if self.chan_std:
-            self.im_bp_fill = ax4.fill_betweenx(
+            self.im_bp_fill = self.ax5.fill_betweenx(
                 x1=self.bandpass - bp_std,
                 x2=self.bandpass + bp_std,
                 y=bp_y,
@@ -274,12 +274,12 @@ class Paint(Frame):
         else:
             pass
             # ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
-        ax4.set_ylim([-1, len(self.bandpass) + 1])
-        ax4.set_xlabel("Avg. Arb. Flux")
+        self.ax5.set_ylim([-1, len(self.bandpass) + 1])
+        self.ax5.set_xlabel("Avg. Arb. Flux")
         # ax4.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
 
         # make time series
-        ax4.set_xlabel("<Arb. Flux>")
+        #ax4.set_xlabel("<Arb. Flux>")
         (self.im_time,) = ax1.plot(self.time_series, label="Timeseries")
         ax1.set_xlim(-1, len(self.time_series + 1))
         ax1.set_ylabel("<Arb. Flux>")
@@ -303,19 +303,21 @@ class Paint(Frame):
         self.ax5.set_yticklabels(yticks)
 
         # Make histogram
-        self.ax3.hist(self.data.ravel(), bins=52, density=True)
+        #self.ax3.hist(self.data.ravel(), bins=52, density=True)
 
         # show stat tests
         self.stat_test()
-        (self.im_test_ver,) = self.ax5.plot(
-            self.ver_test, bp_y, label=f"{self.which_test.get()}"
-        )
+        #(self.im_test_ver,) = self.ax5.plot(
+        #    self.ver_test, bp_y, label=f"{self.which_test.get()}"
+        #)
         self.ax5.set_ylim([-1, len(self.bandpass) + 1])
         self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
-        (self.im_test_hor,) = self.ax6.plot(
-            self.hor_test, label=f"{self.which_test.get()}"
+        print(self.test_values.shape)
+        self.im_test_values = self.ax6.imshow(
+            self.test_values, aspect="auto", label=f"{self.which_test.get()}"
         )
+
         self.ax6.set_xlim([-1, len(self.time_series) + 1])
         self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
@@ -447,7 +449,7 @@ class Paint(Frame):
         """
         sets x axis labels in the correct location
         """
-        ax = self.im_test_hor.axes
+        ax = self.im_test_values.axes
         xticks = ax.get_xticks()
         logging.debug(f"x-axis ticks are {xticks}")
         xtick_labels = (xticks + self.start_samp) * self.your_obj.your_header.tsamp
@@ -476,8 +478,8 @@ class Paint(Frame):
             self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
             # TODO plot p values
         elif self.which_test.get() == "IQR":
-            self.ver_test = stats.iqr(self.data, axis=1)
-            self.hor_test = stats.iqr(self.data, axis=0)
+            mask, test_values  = iqr_time(self.data.T, return_values=True)
+            self.mask, self.test_values = mask.T, test_values.T
         elif self.which_test.get() == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
             self.hor_test = stats.kurtosis(self.data, axis=0)

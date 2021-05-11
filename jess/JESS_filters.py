@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-The repository fro all my filters
+The repository for all my filters
 """
 import logging
 
@@ -11,7 +11,46 @@ from scipy.signal import savgol_filter as sg
 from jess.fitters import poly_fitter
 
 
-def time_kurtosis_thresh(
+def iqr_time(
+    gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_values: bool = False
+) -> np.ndarray:
+    """
+    Calculates the spectral Kurtosis along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+    `   sigma on to cut kurtosis values
+
+        frame: number of time samples to calculate the kurtosis
+
+        apply_mask: Apply the mask to the data, replacing bad values with zeros
+
+    Returns:
+
+       Mask based on bad iqr sections
+
+       optional: apply mask as replace with zeros
+    """
+    frame = int(frame)
+    iqr_values = np.zeros_like(gulp, dtype=np.float)
+    mask = np.full_like(gulp, True, dtype=bool)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        iqr_vec = stats.iqr(gulp[j : j + frame], axis=0)
+        iqr_values[j : j + frame, :] = iqr_vec
+
+    stds_iqr = np.std(iqr_values, axis=0)
+    meds_iqr = np.median(iqr_values, axis=0)
+
+    mask = np.abs(iqr_values - meds_iqr) < sigma * stds_iqr
+
+    if return_values:
+        return mask, iqr_values
+
+    return mask
+
+
+def kurtosis_time_thresh(
     gulp: np.ndarray,
     threshhold: float = 20,
     frame: int = 128,
@@ -49,7 +88,7 @@ def time_kurtosis_thresh(
     return np.where(mask, gulp, 0)
 
 
-def time_kurtosis_dynamic(
+def kurtosis_time_dynamic(
     gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_mask: bool = False
 ) -> np.ndarray:
     """
@@ -87,34 +126,7 @@ def time_kurtosis_dynamic(
     return np.where(mask, gulp, 0)
 
 
-def tmad(gulp, frame=256, sigma=10):
-    """
-    Calculates Median Absolute Deviations along the time axis
-
-    Args:
-       frame: number of time samples to calculate the kurtosis
-
-       sigma: cutoff sigma
-
-    Returns:
-
-       Dynamic Spectrum with values clipped
-    """
-    frame = int(frame)
-    data_type = gulp.dtype
-    for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        cut = (
-            1.4826
-            * sigma
-            * stats.median_absolute_deviation(gulp[j : j + frame, :], axis=0)
-        )
-        cut = np.transpose(cut)
-        medians = np.median(gulp[j : j + frame, :], axis=0)
-        np.clip(gulp[j : j + frame, :], None, medians + cut, gulp[j : j + frame, :])
-    return gulp.as_type(data_type)
-
-
-def spectral_mad(
+def mad_spectra(
     gulp: np.ndarray, frame: int = 256, sigma: float = 3, poly_order: int = 5
 ) -> np.ndarray:
     """
@@ -180,7 +192,7 @@ def spectral_mad(
     return gulp.astype(data_type)
 
 
-def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
+def sad_time(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
     """
     Calculates Savgol Absolute Deviations along the time axis
 
@@ -227,7 +239,7 @@ def time_sad(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
     return gulp.astype(data_type)
 
 
-def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
+def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     """
     Calculates Savgol Absolute Deviations along the spectral axis
 
@@ -272,3 +284,30 @@ def spec_sad(gulp, frame=128, window=65, sigma=3, clip=True):
                 0,
             )
     return gulp.astype(data_type)
+
+
+def mad_time(gulp, frame=256, sigma=10):
+    """
+    Calculates Median Absolute Deviations along the time axis
+
+    Args:
+       frame: number of time samples to calculate the kurtosis
+
+       sigma: cutoff sigma
+
+    Returns:
+
+       Dynamic Spectrum with values clipped
+    """
+    frame = int(frame)
+    data_type = gulp.dtype
+    for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
+        cut = (
+            1.4826
+            * sigma
+            * stats.median_absolute_deviation(gulp[j : j + frame, :], axis=0)
+        )
+        cut = np.transpose(cut)
+        medians = np.median(gulp[j : j + frame, :], axis=0)
+        np.clip(gulp[j : j + frame, :], None, medians + cut, gulp[j : j + frame, :])
+    return gulp.as_type(data_type)
