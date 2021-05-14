@@ -1,4 +1,4 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Takes from Dynamic Spectra from filterbank/fits files
 and displays in a GUI.
@@ -215,53 +215,88 @@ class Paint(Frame):
             max_delay = np.max(np.abs(self.dispersion_delays))
             if max_delay > self.gulp_size * self.your_obj.your_header.native_tsamp:
                 logging.warning(
-                    f"Maximum dispersion delay for DM ({self.dm}) = {max_delay:.2f}s is greater than "
-                    f"the input gulp size {self.gulp_size*self.your_obj.your_header.native_tsamp}s. Pulses may not be "
-                    f"dedispersed completely."
+                    f"Maximum dispersion delay for DM ({self.dm}) ="
+                    f" {max_delay:.2f}s is greater than the input gulp size "
+                    f"{self.gulp_size*self.your_obj.your_header.native_tsamp}"
+                    f"s. Pulses may not be dedispersed completely."
                 )
                 logging.warning(
-                    f"Use gulp size of {int(max_delay//self.your_obj.your_header.native_tsamp):0d} to "
-                    f"dedisperse completely."
+                    f"Use gulp size of "
+                    f"{int(max_delay//self.your_obj.your_header.native_tsamp):0d}"
+                    f" to dedisperse completely."
                 )
         self.read_data()
 
-        # create 6 plots, for ax1=time_series, ax2=dynamic spectra, ax3= histogram,
-        # ax4=bandpass, ax5 = vertical test, ax6 = horizontal test
-        self.gs = gridspec.GridSpec(
-            3,
-            3,
-            width_ratios=[1, 4, 4],
-            height_ratios=[1, 4, 4],
+        # create a 4x4 grid
+        #  4 images in the center, surronoded by parimeter plots
+        # ax12=masl, ax10 = vertical test, ax21 = horizontal test
+        gs = gridspec.GridSpec(
+            4,
+            4,
+            width_ratios=[1, 4, 4, 1],
+            height_ratios=[1, 4, 4, 1],
             wspace=0.02,
             hspace=0.03,
         )
-        ax1 = plt.subplot(self.gs[0, 1])  # timeseries
-        ax2 = plt.subplot(self.gs[1, 1])  # dynamic spectra
-        #self.ax3 = plt.subplot(self.gs[0, 2])  # histogram
-        #self.ax3.xaxis.tick_top()
-        #self.ax3.yaxis.tick_right()
-        #ax4 = plt.subplot(self.gs[1, 2])  # bandpass
-        self.ax5 = plt.subplot(
-            self.gs[1, 0]
-        )  # bandpass
-        self.ax6 = plt.subplot(self.gs[2, 1])
-        ax2.axis("off")
-        ax1.set_xticks([])
-        #ax4.set_yticks([])
+        #plt.rcParams['axes.titley'] = 1.0
+        #plt.rcParams['axes.titlepad'] = -14 
+        ax01 = plt.subplot(gs[0, 1])  # timeseries
+        ax01.set_title("Time Series", position=(0.5, 0.3))
+        ax02 = plt.subplot(gs[0, 2])  # time mask fraction
 
-        # get the min and max image values to that we can see the typical values well
-        self.vmax = min(np.max(self.data), np.median(self.data) + 5 * np.std(self.data))
-        self.vmin = max(np.min(self.data), np.median(self.data) - 5 * np.std(self.data))
-        self.im_ft = ax2.imshow(
+        self.ax10 = plt.subplot(gs[1, 0])  # bandpass
+        ax11 = plt.subplot(gs[1, 1])  # dynamic spectra
+        ax12 = plt.subplot(gs[1, 2])  # mask
+        ax13 = plt.subplot(gs[1, 3])  # channel mask fraction
+
+        ax20 = plt.subplot(gs[2, 0])  # channel test values
+        self.ax21 = plt.subplot(gs[2, 1])  # 2D test values
+        ax22 = plt.subplot(gs[2, 2])  # data with mask
+        ax23 = plt.subplot(gs[2, 3])  # cleaned bandpass
+
+        ax31 = plt.subplot(gs[3, 1])  # time test vales
+        ax32 = plt.subplot(gs[3, 2])  # cleaned time series
+
+        # self.ax22.xaxis.tick_top()
+        # self.ax22.yaxis.tick_right()
+
+        ax01.set_xticks([])
+        ax02.get_xaxis().set_visible(False)
+        ax02.yaxis.tick_right()  # set up plot labels
+
+        self.ax10.xaxis.tick_top()
+        ax11.get_xaxis().set_visible(False)
+        ax11.get_yaxis().set_visible(False)
+        ax12.get_xaxis().set_visible(False)
+        ax12.get_yaxis().set_visible(False)
+        ax13.xaxis.tick_top()
+        ax13.get_yaxis().set_visible(False)
+
+        self.ax21.get_xaxis().set_visible(False)
+        self.ax21.get_yaxis().set_visible(False)
+        ax22.get_xaxis().set_visible(False)
+        ax22.get_yaxis().set_visible(False)
+        ax23.yaxis.tick_right()
+        ax23.get_yaxis().set_visible(False)
+        
+        ax32.yaxis.tick_right()
+
+        # get the min and max image values so that
+        # we can see the typical values well
+        median = np.median(self.data)
+        std = np.std(self.data)
+        self.vmax = min(np.max(self.data), median + 4 * std)
+        self.vmin = max(np.min(self.data), median - 4 * std)
+        self.im_ft = ax11.imshow(
             self.data, aspect="auto", vmin=self.vmin, vmax=self.vmax
         )
 
         # make bandpass
         bp_std = np.std(self.data, axis=1)
         bp_y = np.linspace(self.your_obj.your_header.nchans, 0, len(self.bandpass))
-        (self.im_bandpass,) = self.ax5.plot(self.bandpass, bp_y, label="Bandpass")
+        (self.im_bandpass,) = self.ax10.plot(self.bandpass, bp_y, label="Bandpass")
         if self.chan_std:
-            self.im_bp_fill = self.ax5.fill_betweenx(
+            self.im_bp_fill = self.ax10.fill_betweenx(
                 x1=self.bandpass - bp_std,
                 x2=self.bandpass + bp_std,
                 y=bp_y,
@@ -270,28 +305,28 @@ class Paint(Frame):
                 color="r",
                 label="1 STD",
             )
-            ax4.legend()
+            ax12.legend()
         else:
             pass
-            # ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
-        self.ax5.set_ylim([-1, len(self.bandpass) + 1])
-        self.ax5.set_xlabel("Avg. Arb. Flux")
-        # ax4.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
+            # ax12.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax10.set_ylim([-1, len(self.bandpass) + 1])
+        #self.ax10.set_xlabel("Avg. Arb. Flux")
+        # ax12.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
 
         # make time series
-        #ax4.set_xlabel("<Arb. Flux>")
-        (self.im_time,) = ax1.plot(self.time_series, label="Timeseries")
-        ax1.set_xlim(-1, len(self.time_series + 1))
-        ax1.set_ylabel("<Arb. Flux>")
-        # ax1.set_title("Time Series", y=1.0, pad=-14)
-        # ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        # ax12.set_xlabel("<Arb. Flux>")
+        (self.im_time,) = ax01.plot(self.time_series, label="Timeseries")
+        ax01.set_xlim(-1, len(self.time_series + 1))
+        #ax01.set_ylabel("<Arb. Flux>")
+        # ax01.set_title("Time Series", y=1.0, pad=-14)
+        # ax01.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
         # ax = self.im_ft.axes
-        self.ax6.set_xlabel("Time [sec]")
-        self.ax5.set_ylabel("Frequency [MHz]")
-        self.ax5.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
+        self.ax21.set_xlabel("Time [sec]")
+        self.ax10.set_ylabel("Frequency [MHz]")
+        self.ax10.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
         yticks = [
             str(int(j))
             for j in np.flip(
@@ -300,26 +335,31 @@ class Paint(Frame):
                 )
             )
         ]
-        self.ax5.set_yticklabels(yticks)
+        ax31.set_yticklabels(yticks)
 
         # Make histogram
-        #self.ax3.hist(self.data.ravel(), bins=52, density=True)
+        # self.ax22.hist(self.data.ravel(), bins=52, density=True)
 
         # show stat tests
         self.stat_test()
-        #(self.im_test_ver,) = self.ax5.plot(
+        # (self.im_test_ver,) = self.ax10.plot(
         #    self.ver_test, bp_y, label=f"{self.which_test.get()}"
-        #)
-        self.ax5.set_ylim([-1, len(self.bandpass) + 1])
-        self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        # )
+        self.im_mask = ax22.imshow(
+            self.data_masked, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
+        )
+        self.im_mask = ax12.imshow(
+            self.mask, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
+        )
+        self.ax10.set_ylim([-1, len(self.bandpass) + 1])
+        self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
-        print(self.test_values.shape)
-        self.im_test_values = self.ax6.imshow(
+        self.im_test_values = self.ax21.imshow(
             self.test_values, aspect="auto", label=f"{self.which_test.get()}"
         )
 
-        self.ax6.set_xlim([-1, len(self.time_series) + 1])
-        self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax21.set_xlim([-1, len(self.time_series) + 1])
+        self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.set_x_axis()
 
@@ -366,9 +406,9 @@ class Paint(Frame):
         self.set_x_axis()
         self.im_ft.set_data(self.data)
         self.im_bandpass.set_xdata(self.bandpass)
-        self.ax3.cla()
+        self.ax22.cla()
         # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
-        self.ax3.hist(self.data.ravel(), bins=52, density=True)
+        self.ax22.hist(self.data.ravel(), bins=52, density=True)
         if self.chan_std:
             self.fill_bp()
         self.im_bandpass.axes.relim()
@@ -383,13 +423,13 @@ class Paint(Frame):
         self.im_test_ver.axes.autoscale(axis="x")
 
         self.im_test_ver.set_label(f"{self.which_test.get()}")
-        self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.relim()
         self.im_test_hor.axes.autoscale(axis="y")
         self.im_test_hor.set_label(f"{self.which_test.get()}")
-        self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.canvas.draw()
 
@@ -433,7 +473,8 @@ class Paint(Frame):
             # make sure the fit is nummerically possable
             self.data = self.data - bandpass[:, None]
 
-            # attempt to return the correct data type, most values are close to zero
+            # attempt to return the correct data type,
+            # most values are close to zero
             # add get clipped, causeing dynamic range problems
             # diff = np.clip(self.data - bandpass[:, None], self.min, self.max)
             # self.data = diff #diff.astype(self.your_obj.your_header.dtype)
@@ -441,7 +482,8 @@ class Paint(Frame):
         self.bandpass = np.mean(self.data, axis=1)
         self.time_series = np.mean(self.data, axis=0)
         logging.info(
-            f"Displaying {self.gulp_size} samples from sample {self.start_samp} i.e {ts:.2f}-{te:.2f}s - gulp mean: "
+            f"Displaying {self.gulp_size} samples from sample "
+            f"{self.start_samp} i.e {ts:.2f}-{te:.2f}s - gulp mean: "
             f"{np.mean(self.data):.3f}, std: {np.std(self.data):.3f}"
         )
 
@@ -478,8 +520,9 @@ class Paint(Frame):
             self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
             # TODO plot p values
         elif self.which_test.get() == "IQR":
-            mask, test_values  = iqr_time(self.data.T, return_values=True)
+            mask, test_values = iqr_time(self.data.T, return_values=True)
             self.mask, self.test_values = mask.T, test_values.T
+            self.data_masked = np.ma.array(self.data, mask=~self.mask)
         elif self.which_test.get() == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
             self.hor_test = stats.kurtosis(self.data, axis=0)
