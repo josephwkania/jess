@@ -331,7 +331,6 @@ class Paint(Frame):
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
         # ax = self.im_ft.axes
-        # self.ax31.set_xlabel("Time [sec]")
         self.ax10.set_ylabel("Frequency [MHz]")
         self.ax10.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
         yticks_freq = [
@@ -452,8 +451,11 @@ class Paint(Frame):
         (self.im_time_clean,) = ax32.plot(
             self.data_masked.mean(axis=0), label="Timeseries"
         )
+        self.ax31.set_xlabel("Time [sec]")
+
         ax32.set_xlim(-1, len(self.time_series + 1))
         ax32.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        ax32.set_xlabel("Sample")
 
         self.set_x_axis()
 
@@ -495,7 +497,8 @@ class Paint(Frame):
         """
         Redraws the plots when something is changed
         """
-        # added *args to make self.which_test.trace("w", self.update_plot) happy
+        # added *args to make self.which_test.trace("w", self.update_plot)
+        # happy
         self.read_data()
         self.set_x_axis()
         self.im_ft.set_data(self.data)
@@ -512,14 +515,27 @@ class Paint(Frame):
         self.im_time.axes.autoscale(axis="y")
 
         self.stat_test()
+        which_test = self.which_test.get()
         self.im_test_values.set_data(self.test_values)
 
         test_median = np.median(self.test_values)
         test_std = np.std(self.test_values)
         self.test_vmax = min(np.max(self.test_values), test_median + 4 * test_std)
         self.test_vmin = max(np.min(self.test_values), test_median - 4 * test_std)
-
         self.im_test_values.set_clim(vmin=self.test_vmin, vmax=self.test_vmax)
+        self.ax21.texts[-1].set_text(f"{which_test}")
+        # self.ax21.text(
+        #    0.05,
+        #    0.95,
+        #    f"{which_test}",
+        #    verticalalignment="top",
+        #    bbox={
+        #        "facecolor": "white",
+        #        "edgecolor": "white",
+        #        "boxstyle": "round,pad=0.1",
+        #        "alpha": 0.4,
+        #    },
+        # )
         self.im_mask.set_data(self.mask)
         self.im_ft_masked.set_data(self.data_masked)
 
@@ -542,13 +558,13 @@ class Paint(Frame):
         self.im_test_ver.axes.relim()
         self.im_test_ver.axes.autoscale(axis="x")
 
-        self.im_test_ver.set_label(f"{self.which_test.get()}")
+        self.im_test_ver.set_label(f"{which_test}")
         self.ax20.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.relim()
         self.im_test_hor.axes.autoscale(axis="y")
-        self.im_test_hor.set_label(f"{self.which_test.get()}")
+        self.im_test_hor.set_label(f"{which_test}")
         self.ax31.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.canvas.draw()
@@ -611,12 +627,17 @@ class Paint(Frame):
         """
         sets x axis labels in the correct location
         """
-        ax = self.im_test_hor.axes
-        xticks = ax.get_xticks()
-        logging.debug(f"x-axis ticks are {xticks}")
-        xtick_labels = (xticks + self.start_samp) * self.your_obj.your_header.tsamp
-        logging.debug(f"Setting x-axis tick labels to {xtick_labels}")
-        ax.set_xticklabels([f"{j:.2f}" for j in xtick_labels])
+        ax_left = self.im_test_hor.axes
+        ax_right = self.im_time_clean.axes
+        xticks_left = ax_left.get_xticks()
+        logging.debug(f"x-axis ticks are {xticks_left}")
+        xtick_labels_left = (
+            xticks_left + self.start_samp
+        ) * self.your_obj.your_header.tsamp
+        xtick_labels_right = xticks_left + self.start_samp
+        logging.debug(f"Setting x-axis tick labels to {xtick_labels_left}")
+        ax_left.set_xticklabels([f"{j:.2f}" for j in xtick_labels_left])
+        ax_right.set_xticklabels([f"{int(j)}" for j in xtick_labels_right])
 
     def save_figure(self):
         """
