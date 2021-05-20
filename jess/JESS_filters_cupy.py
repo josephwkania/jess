@@ -5,9 +5,8 @@ from typing import Union
 
 import cupy as cp
 import numpy as np
-
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
 from jess.bandpass_fitter_cupy import bandpass_fitter
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def spectral_mad(

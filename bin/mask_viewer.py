@@ -50,12 +50,18 @@ from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
-from scipy import stats
 from your import Your
 from your.utils.astro import calc_dispersion_delays, dedisperse
 from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
-from jess.JESS_filters import iqr_time
+
+from jess.JESS_filters import (
+    dagostino_time,
+    iqr_time,
+    kurtosis_time,
+    mad_time,
+    skew_time,
+)
 
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
@@ -228,7 +234,7 @@ class Paint(Frame):
         self.read_data()
 
         # create a 4x4 grid
-        #  4 images in the center, surronoded by parimeter plots
+        #  4 images in the center, surrounded by parameter plots
         # ax12=masl, ax10 = vertical test, ax21 = horizontal test
         gs = gridspec.GridSpec(
             4,
@@ -238,10 +244,10 @@ class Paint(Frame):
             wspace=0.02,
             hspace=0.03,
         )
-        #plt.rcParams['axes.titley'] = 1.0
-        #plt.rcParams['axes.titlepad'] = -14 
+        # plt.rcParams['axes.titley'] = 1.0
+        # plt.rcParams['axes.titlepad'] = -14
         ax01 = plt.subplot(gs[0, 1])  # timeseries
-        ax01.set_title("Time Series", position=(0.5, 0.3))
+        # ax01.set_title("Time Series", position=(0.5, 0.3))
         ax02 = plt.subplot(gs[0, 2])  # time mask fraction
 
         self.ax10 = plt.subplot(gs[1, 0])  # bandpass
@@ -249,12 +255,12 @@ class Paint(Frame):
         ax12 = plt.subplot(gs[1, 2])  # mask
         ax13 = plt.subplot(gs[1, 3])  # channel mask fraction
 
-        ax20 = plt.subplot(gs[2, 0])  # channel test values
+        self.ax20 = plt.subplot(gs[2, 0])  # channel test values
         self.ax21 = plt.subplot(gs[2, 1])  # 2D test values
         ax22 = plt.subplot(gs[2, 2])  # data with mask
         ax23 = plt.subplot(gs[2, 3])  # cleaned bandpass
 
-        ax31 = plt.subplot(gs[3, 1])  # time test vales
+        self.ax31 = plt.subplot(gs[3, 1])  # time test vales
         ax32 = plt.subplot(gs[3, 2])  # cleaned time series
 
         # self.ax22.xaxis.tick_top()
@@ -278,7 +284,7 @@ class Paint(Frame):
         ax22.get_yaxis().set_visible(False)
         ax23.yaxis.tick_right()
         ax23.get_yaxis().set_visible(False)
-        
+
         ax32.yaxis.tick_right()
 
         # get the min and max image values so that
@@ -310,24 +316,25 @@ class Paint(Frame):
             pass
             # ax12.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         self.ax10.set_ylim([-1, len(self.bandpass) + 1])
-        #self.ax10.set_xlabel("Avg. Arb. Flux")
+        # self.ax10.set_xlabel("Avg. Arb. Flux")
         # ax12.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
 
         # make time series
         # ax12.set_xlabel("<Arb. Flux>")
         (self.im_time,) = ax01.plot(self.time_series, label="Timeseries")
         ax01.set_xlim(-1, len(self.time_series + 1))
-        #ax01.set_ylabel("<Arb. Flux>")
+        ax01.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        # ax01.set_ylabel("<Arb. Flux>")
         # ax01.set_title("Time Series", y=1.0, pad=-14)
         # ax01.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # plt.colorbar(self.im_ft, orientation="vertical", pad=0.01, aspect=30)
 
         # ax = self.im_ft.axes
-        self.ax21.set_xlabel("Time [sec]")
+        # self.ax31.set_xlabel("Time [sec]")
         self.ax10.set_ylabel("Frequency [MHz]")
         self.ax10.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
-        yticks = [
+        yticks_freq = [
             str(int(j))
             for j in np.flip(
                 np.linspace(
@@ -335,8 +342,8 @@ class Paint(Frame):
                 )
             )
         ]
-        ax31.set_yticklabels(yticks)
-
+        self.ax10.set_yticklabels(yticks_freq)
+        which_test = self.which_test.get()
         # Make histogram
         # self.ax22.hist(self.data.ravel(), bins=52, density=True)
 
@@ -345,21 +352,108 @@ class Paint(Frame):
         # (self.im_test_ver,) = self.ax10.plot(
         #    self.ver_test, bp_y, label=f"{self.which_test.get()}"
         # )
-        self.im_mask = ax22.imshow(
-            self.data_masked, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
-        )
+        (self.im_mask_time_frac,) = ax02.plot(self.mask.mean(axis=0), label="Frac.")
+        ax02.set_xlim([0, gulp_size])
+        ax02.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
+        self.ax10.set_ylim([-1, len(self.bandpass) + 1])
+        self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         self.im_mask = ax12.imshow(
             self.mask, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
         )
-        self.ax10.set_ylim([-1, len(self.bandpass) + 1])
-        self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        ax12.text(
+            0.05,
+            0.95,
+            "Mask",
+            verticalalignment="top",
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "white",
+                "boxstyle": "round,pad=0.1",
+                "alpha": 0.4,
+            },
+        )
+        (self.im_mask_chan_frac,) = ax13.plot(
+            self.mask.mean(axis=1), bp_y, label="Frac."
+        )
+        # ax13.set_title("Mask Fraction")
+        # # puts in the wrong place
+        ax13.set_ylim([0, self.your_obj.your_header.nchans])
+        ax13.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
+        test_median = np.median(self.test_values)
+        test_std = np.std(self.test_values)
+        self.test_vmax = min(np.max(self.test_values), test_median + 4 * test_std)
+        self.test_vmin = max(np.min(self.test_values), test_median - 4 * test_std)
 
         self.im_test_values = self.ax21.imshow(
-            self.test_values, aspect="auto", label=f"{self.which_test.get()}"
+            self.test_values, vmin=self.test_vmin, vmax=self.test_vmax, aspect="auto"
         )
+        self.ax21.text(
+            0.05,
+            0.95,
+            f"{which_test}",
+            verticalalignment="top",
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "white",
+                "boxstyle": "round,pad=0.1",
+                "alpha": 0.4,
+            },
+        )
+        # self.ax21.set_bbox(dic(handletextpad=0, handlelength=0, framealpha=0.4))
+
+        (self.im_test_ver,) = self.ax20.plot(
+            self.test_values.mean(axis=1), bp_y, label=f"{which_test}"
+        )
+        self.ax20.set_ylim([0, self.your_obj.your_header.nchans])
+        self.ax20.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax20.set_yticks(np.linspace(0, self.your_obj.your_header.nchans, 8))
+        yticks_freq = [
+            str(int(j)) for j in np.linspace(self.your_obj.your_header.nchans, 0, 8)
+        ]
+        self.ax20.set_yticklabels(yticks_freq)
+        self.ax20.set_ylabel("Channel")
 
         self.ax21.set_xlim([-1, len(self.time_series) + 1])
-        self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        # self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.im_ft_masked = ax22.imshow(
+            self.data_masked,
+            aspect="auto",
+            vmin=self.vmin,
+            vmax=self.vmax,
+            interpolation="none",
+        )
+        # interpolation="none" stops large amount of white space from being shown
+        ax22.text(
+            0.05,
+            0.95,
+            "Cleaned",
+            verticalalignment="top",
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "white",
+                "boxstyle": "round,pad=0.1",
+                "alpha": 0.4,
+            },
+        )
+        (self.im_bandpass_clean,) = ax23.plot(
+            np.ma.mean(self.data_masked, axis=1), bp_y, label="Bandpass"
+        )
+        ax23.set_ylim([-1, len(self.bandpass) + 1])
+        ax23.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
+        (self.im_test_hor,) = self.ax31.plot(
+            self.test_values.mean(axis=0), label=f"{which_test}"
+        )
+        self.ax31.set_xlim([0, self.gulp_size])
+        self.ax31.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+
+        (self.im_time_clean,) = ax32.plot(
+            self.data_masked.mean(axis=0), label="Timeseries"
+        )
+        ax32.set_xlim(-1, len(self.time_series + 1))
+        ax32.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.set_x_axis()
 
@@ -406,9 +500,9 @@ class Paint(Frame):
         self.set_x_axis()
         self.im_ft.set_data(self.data)
         self.im_bandpass.set_xdata(self.bandpass)
-        self.ax22.cla()
+        # self.ax22.cla()
         # https://stackoverflow.com/questions/53258160/update-an-embedded-matplotlib-plot-in-a-pyqt5-gui-with-toolbar
-        self.ax22.hist(self.data.ravel(), bins=52, density=True)
+        # self.ax22.hist(self.data.ravel(), bins=52, density=True)
         if self.chan_std:
             self.fill_bp()
         self.im_bandpass.axes.relim()
@@ -418,18 +512,44 @@ class Paint(Frame):
         self.im_time.axes.autoscale(axis="y")
 
         self.stat_test()
+        self.im_test_values.set_data(self.test_values)
+
+        test_median = np.median(self.test_values)
+        test_std = np.std(self.test_values)
+        self.test_vmax = min(np.max(self.test_values), test_median + 4 * test_std)
+        self.test_vmin = max(np.min(self.test_values), test_median - 4 * test_std)
+
+        self.im_test_values.set_clim(vmin=self.test_vmin, vmax=self.test_vmax)
+        self.im_mask.set_data(self.mask)
+        self.im_ft_masked.set_data(self.data_masked)
+
+        self.im_bandpass_clean.set_xdata(self.data_masked.mean(axis=1))
+        self.im_bandpass_clean.axes.relim()
+        self.im_bandpass_clean.axes.autoscale(axis="x")
+        self.im_time_clean.set_ydata(self.data_masked.mean(axis=0))
+        self.im_time_clean.axes.relim()
+        self.im_time_clean.axes.autoscale(axis="y")
+
+        self.im_mask_chan_frac.set_xdata(self.mask.mean(axis=1))
+        self.im_mask_chan_frac.axes.relim()
+        self.im_mask_chan_frac.axes.autoscale(axis="x")
+
+        self.im_mask_time_frac.set_ydata(self.mask.mean(axis=0))
+        self.im_mask_time_frac.axes.relim()
+        self.im_mask_time_frac.axes.autoscale(axis="y")
+
         self.im_test_ver.set_xdata(self.ver_test)
         self.im_test_ver.axes.relim()
         self.im_test_ver.axes.autoscale(axis="x")
 
         self.im_test_ver.set_label(f"{self.which_test.get()}")
-        self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax20.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.relim()
         self.im_test_hor.axes.autoscale(axis="y")
         self.im_test_hor.set_label(f"{self.which_test.get()}")
-        self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        self.ax31.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.canvas.draw()
 
@@ -491,7 +611,7 @@ class Paint(Frame):
         """
         sets x axis labels in the correct location
         """
-        ax = self.im_test_values.axes
+        ax = self.im_test_hor.axes
         xticks = ax.get_xticks()
         logging.debug(f"x-axis ticks are {xticks}")
         xtick_labels = (xticks + self.start_samp) * self.your_obj.your_header.tsamp
@@ -516,25 +636,32 @@ class Paint(Frame):
         ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         """
         if self.which_test.get() == "D'Angostino":
-            self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
-            self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
+            # self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
+            # self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
+            mask, test_values = dagostino_time(self.data.T, return_values=True)
             # TODO plot p values
         elif self.which_test.get() == "IQR":
             mask, test_values = iqr_time(self.data.T, return_values=True)
-            self.mask, self.test_values = mask.T, test_values.T
-            self.data_masked = np.ma.array(self.data, mask=~self.mask)
         elif self.which_test.get() == "Kurtosis":
-            self.ver_test = stats.kurtosis(self.data, axis=1)
-            self.hor_test = stats.kurtosis(self.data, axis=0)
+            # self.ver_test = stats.kurtosis(self.data, axis=1)
+            # self.hor_test = stats.kurtosis(self.data, axis=0)
+            mask, test_values = kurtosis_time(self.data.T, return_values=True)
+
         elif self.which_test.get() == "MAD":
-            self.ver_test = stats.median_abs_deviation(self.data, axis=1)
-            self.hor_test = stats.median_abs_deviation(self.data, axis=0)
+            # self.ver_test = stats.median_abs_deviation(self.data, axis=1)
+            # self.hor_test = stats.median_abs_deviation(self.data, axis=0)
+            mask, test_values = mad_time(self.data.T, return_values=True)
         elif self.which_test.get() == "Skew":
-            self.ver_test = stats.skew(self.data, axis=1)
-            self.hor_test = stats.skew(self.data, axis=0)
+            # self.ver_test = stats.skew(self.data, axis=1)
+            # self.hor_test = stats.skew(self.data, axis=0)
+            mask, test_values = skew_time(self.data.T, return_values=True)
         elif self.which_test.get() == "Stand. Dev.":
             self.ver_test = np.std(self.data, axis=1)
             self.hor_test = np.std(self.data, axis=0)
+        self.mask, self.test_values = mask.T, test_values.T
+        self.data_masked = np.ma.array(self.data, mask=self.mask)
+        self.ver_test = self.test_values.mean(axis=1)
+        self.hor_test = self.test_values.mean(axis=0)
 
 
 if __name__ == "__main__":
@@ -590,13 +717,15 @@ if __name__ == "__main__":
         default=0,
     )
     parser.add_argument(
-        "-subtract",
-        "--bandpass_subtract",
-        help="subtract a polynomial fitted bandpass",
+        "-no_ubtract",
+        "--no_bandpass_subtract",
+        help="Don't subtract a polynomial fitted bandpass",
         required=False,
-        default=False,
+        default=True,
         action="store_true",
     )
+    # bandpass subtraction help the time series not go wild
+    # when block are removed
     parser.add_argument("-v", "--verbose", help="Be verbose", action="store_true")
     values = parser.parse_args()
 
@@ -626,6 +755,6 @@ if __name__ == "__main__":
         values.start,
         values.gulp,
         values.chan_std,
-        values.bandpass_subtract,
+        values.no_bandpass_subtract,
     )  # load file with user params
     root.mainloop()

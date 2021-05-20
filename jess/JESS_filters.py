@@ -11,6 +11,47 @@ from scipy.signal import savgol_filter as sg
 from jess.fitters import poly_fitter
 
 
+def dagostino_time(
+    gulp: np.ndarray,
+    p_cut: float = 0.001,
+    frame: int = 128,
+    return_values: bool = False,
+) -> np.ndarray:
+    """
+    Calculates the D’Agostino test along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+        p_cut: blocks with a pvalue below this number get cut
+
+        frame: number of time samples to calculate the kurtosis
+
+        rerturn_values: return the test values
+
+    Returns:
+
+       Mask based on bad iqr sections
+
+       optional: return the test values for each block
+    """
+    frame = int(frame)
+    test_values = np.zeros_like(gulp, dtype=np.float)
+    p_values = np.zeros_like(gulp, dtype=np.float)
+    mask = np.full_like(gulp, True, dtype=bool)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        test_vec, p_vec = stats.normaltest(gulp[j : j + frame], axis=0)
+        test_values[j : j + frame, :] = test_vec
+        p_values[j : j + frame, :] = p_vec
+
+    mask = p_values < p_cut
+
+    if return_values:
+        return mask, p_values
+
+    return mask
+
+
 def iqr_time(
     gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_values: bool = False
 ) -> np.ndarray:
@@ -39,10 +80,13 @@ def iqr_time(
         iqr_vec = stats.iqr(gulp[j : j + frame], axis=0)
         iqr_values[j : j + frame, :] = iqr_vec
 
-    stds_iqr = np.std(iqr_values, axis=0)
-    meds_iqr = np.median(iqr_values, axis=0)
+    # iqr_bandpass =
+    iqr_fit = poly_fitter(iqr_values.mean(axis=0))
+    iqr_flat = iqr_values - iqr_fit
+    stds_iqr = stats.median_abs_deviation(iqr_flat, scale="normal")
+    meds_iqr = np.median(iqr_flat)
 
-    mask = np.abs(iqr_values - meds_iqr) < sigma * stds_iqr
+    mask = iqr_flat - meds_iqr < sigma * stds_iqr
 
     if return_values:
         return mask, iqr_values
@@ -54,7 +98,7 @@ def kurtosis_time_thresh(
     gulp: np.ndarray,
     threshhold: float = 20,
     frame: int = 128,
-    return_mask: bool = False,
+    return_values: bool = False,
 ) -> np.ndarray:
     """
     Calculates the spectral Kurtosis along the time axis
@@ -82,14 +126,17 @@ def kurtosis_time_thresh(
 
     mask = kvalues < threshhold
 
-    if return_mask:
-        return np.where(mask, gulp, 0), mask
+    if return_values:
+        return mask, kvalues
 
-    return np.where(mask, gulp, 0)
+    return mask
 
 
-def kurtosis_time_dynamic(
-    gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_mask: bool = False
+def kurtosis_time(
+    gulp: np.ndarray,
+    p_cut: float = 0.001,
+    frame: int = 128,
+    return_values: bool = False,
 ) -> np.ndarray:
     """
     Calculates the spectral Kurtosis along the time axis
@@ -97,33 +144,37 @@ def kurtosis_time_dynamic(
     Args:
         gulp: the dynamic spectum to be analyzed
 
-    `   sigma on to cut kurtosis values
+        p_cut: blocks with a pvalue below this number get cut
 
         frame: number of time samples to calculate the kurtosis
 
         return_mask: bool
     Returns:
 
-       Dynamic Spectrum with bad Kurtosis values removed
+       mask
 
-       optional: masked values
+       optional: pvalues for each of the blocks
     """
     frame = int(frame)
-    kvalues = np.zeros_like(gulp)
-    mask = np.zeros_like(gulp)
+    kvalues = np.zeros_like(gulp, dtype=np.float)
+    mask = np.zeros_like(gulp, dtype=bool)
+    p_values = np.zeros_like(gulp, dtype=np.float)
     for j in np.arange(0, len(gulp) - frame + 1, frame):
-        kurtosis_vec = stats.kurtosis(gulp[j : j + frame], axis=0)
+        kurtosis_vec, p_vec = stats.kurtosistest(gulp[j : j + frame], axis=0)
         kvalues[j : j + frame, :] = kurtosis_vec
+        p_values[j : j + frame, :] = p_vec
 
-    stds_kurt = np.std(kvalues, axis=0)
-    meds_kurt = np.median(kvalues, axis=0)
+    mask = p_values < p_cut
 
-    mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
+    # stds_kurt = np.std(kvalues, axis=0)
+    # meds_kurt = np.median(kvalues, axis=0)
 
-    if return_mask:
-        return np.where(mask, gulp, 0), mask
+    # mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
 
-    return np.where(mask, gulp, 0)
+    if return_values:
+        return mask, p_values
+
+    return mask
 
 
 def mad_spectra(
@@ -163,7 +214,8 @@ def mad_spectra(
 
         # thresh_top = np.tile(cut+medians, ( frame, 1)).T
         # thresh_bottom = np.tile(medians-cut, ( frame, 1)).T
-        # mask = (thresh_bottom < diff) & (diff < thresh_top) #mask is where data is good
+        # mask = (thresh_bottom < diff) & (diff < thresh_top)
+        # mask is where data is good
 
         thresh = np.tile(cut, (frame, 1)).T
         medians = np.tile(medians, (frame, 1)).T
@@ -178,18 +230,66 @@ def mad_spectra(
                 poly_order=poly_order,
             )
         except Exception as e:
-            logging.warning(f"Failed to fit with Exception: {e}, using original fit")
+            logging.warning(f"Failed to fit with Exception: {e}"
+                            ", using original fit")
             fit_clean = fit
 
         np.clip(
             fit_clean, min_value, max_value, out=fit_clean
-        )  # clip the values so they don't wrap when converted to ints
-        fit_clean = fit_clean.astype(data_type)  # convert to dtype of the original
+        )
+        # clip the values so they don't wrap
+        # when converted to ints
+        fit_clean = fit_clean.astype(data_type)
+        # convert to dtype of the original
         gulp[:, j : j + frame] = np.where(
             mask, np.tile(fit_clean, (len(gulp), 1)), gulp[:, j : j + frame]
         )
 
     return gulp.astype(data_type)
+
+
+def mad_time(
+    gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_values: bool = False
+) -> np.ndarray:
+    """
+    Calculates the spectral Kurtosis along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+    `   sigma on to cut kurtosis values
+
+        frame: number of time samples to calculate the kurtosis
+
+        apply_mask: Apply the mask to the data, replacing bad values with zeros
+
+    Returns:
+
+       Mask based on bad iqr sections
+
+       optional: apply mask as replace with zeros
+    """
+    frame = int(frame)
+    test_values = np.zeros_like(gulp, dtype=np.float)
+    mask = np.full_like(gulp, True, dtype=bool)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        test_vec = stats.median_abs_deviation(
+            gulp[j : j + frame], axis=0, scale="normal"
+        )
+        test_values[j : j + frame, :] = test_vec
+
+    # iqr_bandpass =
+    # iqr_fit = poly_fitter(iqr_values.mean(axis=0))
+    # iqr_flat = iqr_values - iqr_fit
+    stds_test = stats.median_abs_deviation(test_values, scale="normal")
+    meds_test = np.median(test_values) 
+
+    mask = test_values - meds_test < sigma * stds_test
+
+    if return_values:
+        return mask, test_values
+
+    return mask
 
 
 def sad_time(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
@@ -286,7 +386,7 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
-def mad_time(gulp, frame=256, sigma=10):
+def mad_time_cutter(gulp, frame=256, sigma=10):
     """
     Calculates Median Absolute Deviations along the time axis
 
@@ -311,3 +411,48 @@ def mad_time(gulp, frame=256, sigma=10):
         medians = np.median(gulp[j : j + frame, :], axis=0)
         np.clip(gulp[j : j + frame, :], None, medians + cut, gulp[j : j + frame, :])
     return gulp.as_type(data_type)
+
+
+def skew_time(
+    gulp: np.ndarray,
+    p_cut: float = 0.001,
+    frame: int = 128,
+    return_values: bool = False,
+) -> np.ndarray:
+    """
+    Calculates the spectral Skew on blocks along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+        p_cut: blocks with a pvalue below this number get cut
+
+        frame: number of time samples to calculate the kurtosis
+
+        return_mask: bool
+    Returns:
+
+       mask
+
+       optional: pvalues for each of the blocks
+    """
+    frame = int(frame)
+    kvalues = np.zeros_like(gulp, dtype=np.float)
+    mask = np.zeros_like(gulp, dtype=bool)
+    p_values = np.zeros_like(gulp, dtype=np.float)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        kurtosis_vec, p_vec = stats.skewtest(gulp[j : j + frame], axis=0)
+        kvalues[j : j + frame, :] = kurtosis_vec
+        p_values[j : j + frame, :] = p_vec
+
+    mask = p_values < p_cut
+
+    # stds_kurt = np.std(kvalues, axis=0)
+    # meds_kurt = np.median(kvalues, axis=0)
+
+    # mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
+
+    if return_values:
+        return mask, p_values
+
+    return mask

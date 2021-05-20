@@ -11,6 +11,8 @@ import os
 import textwrap
 
 import numpy as np
+from jess.dispersion import dedisperse, delay_lost
+from jess.JESS_filters import mad_spectra
 
 # import psutil
 from rich.logging import RichHandler
@@ -20,9 +22,6 @@ from your.formats.filwriter import make_sigproc_object
 
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
-
-from jess.dispersion import dedisperse, delay_lost
-from jess.JESS_filters import mad_spectra
 
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer

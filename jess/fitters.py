@@ -22,9 +22,7 @@ from sklearn.pipeline import make_pipeline
 logger = logging.getLogger()
 
 
-def poly_fitter(
-    bandpass: list, poly_order: int = 20, mask_sigma: float = 6
-) -> float:
+def poly_fitter(bandpass: list, poly_order: int = 20, mask_sigma: float = 6) -> float:
     """
     Fits bandpasses by polyfitting the bandpass, looking for channels that
     are far from this fit, excluding these channels and refitting the bandpass
