@@ -172,66 +172,11 @@ class Paint(Frame):
         dic["nspectra"] = self.your_obj.your_header.nspectra
         self.table_print(dic)
 
-    def load_file(
-        self,
-        file_name=[""],
-        start_samp=0,
-        gulp_size=4096,
-        chan_std=False,
-        bandpass_subtract=False,
-    ):
+    def make_canvas(self):
         """
-        Loads data from a file:
-
-        Inputs:
-        file_name -- name or list of files to load,
-                    if none given user must use gui to give file
-        start_samp -- sample number where to start show the file,
-                      defaults to the beginning of the file
-        gulp_size -- amount of data to show at a given time
-
-        bandpass_subtract -- subtract a polynomial fit of the bandpass
+        Makes the canvas, sets the axes, populates
+        the plots with the inital images.
         """
-        self.start_samp = start_samp
-        self.gulp_size = gulp_size
-        self.chan_std = chan_std
-
-        if file_name == [""]:
-            file_name = filedialog.askopenfilename(
-                filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
-            )
-
-        logging.info(f"Reading file {file_name}.")
-        self.your_obj = Your(file_name)
-        self.master.title(self.your_obj.your_header.basename)
-        if bandpass_subtract:
-            iinfo = np.iinfo(self.your_obj.your_header.dtype)
-            self.min = iinfo.min
-            self.max = iinfo.max
-            self.subtract = True
-        else:
-            self.subtract = False
-
-        logging.info("Printing Header parameters")
-        self.get_header()
-        if self.dm != 0:
-            self.dispersion_delays = calc_dispersion_delays(
-                self.dm, self.your_obj.chan_freqs
-            )
-            max_delay = np.max(np.abs(self.dispersion_delays))
-            if max_delay > self.gulp_size * self.your_obj.your_header.native_tsamp:
-                logging.warning(
-                    f"Maximum dispersion delay for DM ({self.dm}) ="
-                    f" {max_delay:.2f}s is greater than the input gulp size "
-                    f"{self.gulp_size*self.your_obj.your_header.native_tsamp}"
-                    f"s. Pulses may not be dedispersed completely."
-                )
-                logging.warning(
-                    f"Use gulp size of "
-                    f"{int(max_delay//self.your_obj.your_header.native_tsamp):0d}"
-                    f" to dedisperse completely."
-                )
-        self.read_data()
 
         # create a 4x4 grid
         #  4 images in the center, surrounded by parameter plots
@@ -352,7 +297,7 @@ class Paint(Frame):
         #    self.ver_test, bp_y, label=f"{self.which_test.get()}"
         # )
         (self.im_mask_time_frac,) = ax02.plot(self.mask.mean(axis=0), label="Frac.")
-        ax02.set_xlim([0, gulp_size])
+        ax02.set_xlim([0, self.gulp_size])
         ax02.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.ax10.set_ylim([-1, len(self.bandpass) + 1])
@@ -458,6 +403,69 @@ class Paint(Frame):
         ax32.set_xlabel("Sample")
 
         self.set_x_axis()
+
+    def load_file(
+        self,
+        file_name=[""],
+        start_samp=0,
+        gulp_size=4096,
+        chan_std=False,
+        bandpass_subtract=False,
+    ):
+        """
+        Loads data from a file:
+
+        Inputs:
+        file_name -- name or list of files to load,
+                    if none given user must use gui to give file
+        start_samp -- sample number where to start show the file,
+                      defaults to the beginning of the file
+        gulp_size -- amount of data to show at a given time
+
+        bandpass_subtract -- subtract a polynomial fit of the bandpass
+        """
+        self.start_samp = start_samp
+        self.gulp_size = gulp_size
+        self.chan_std = chan_std
+
+        if file_name == [""]:
+            file_name = filedialog.askopenfilename(
+                filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
+            )
+
+        logging.info(f"Reading file {file_name}.")
+        self.your_obj = Your(file_name)
+        self.master.title(self.your_obj.your_header.basename)
+        if bandpass_subtract:
+            iinfo = np.iinfo(self.your_obj.your_header.dtype)
+            self.min = iinfo.min
+            self.max = iinfo.max
+            self.subtract = True
+        else:
+            self.subtract = False
+
+        logging.info("Printing Header parameters")
+        self.get_header()
+        if self.dm != 0:
+            self.dispersion_delays = calc_dispersion_delays(
+                self.dm, self.your_obj.chan_freqs
+            )
+            max_delay = np.max(np.abs(self.dispersion_delays))
+            if max_delay > self.gulp_size * self.your_obj.your_header.native_tsamp:
+                logging.warning(
+                    f"Maximum dispersion delay for DM ({self.dm}) ="
+                    f" {max_delay:.2f}s is greater than the input gulp size "
+                    f"{self.gulp_size*self.your_obj.your_header.native_tsamp}"
+                    f"s. Pulses may not be dedispersed completely."
+                )
+                logging.warning(
+                    f"Use gulp size of "
+                    f"{int(max_delay//self.your_obj.your_header.native_tsamp):0d}"
+                    f" to dedisperse completely."
+                )
+        self.read_data()
+
+        self.make_canvas()
 
         # a tk.DrawingArea
         self.canvas = FigureCanvasTkAgg(self.im_ft.figure, master=root)
