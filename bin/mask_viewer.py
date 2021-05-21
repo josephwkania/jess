@@ -193,20 +193,19 @@ class Paint(Frame):
         # plt.rcParams['axes.titlepad'] = -14
         ax01 = plt.subplot(gs[0, 1])  # timeseries
         # ax01.set_title("Time Series", position=(0.5, 0.3))
-        ax02 = plt.subplot(gs[0, 2])  # time mask fraction
-
+        ax02 = plt.subplot(gs[0, 2])  # cleaned Time Series
         self.ax10 = plt.subplot(gs[1, 0])  # bandpass
         ax11 = plt.subplot(gs[1, 1])  # dynamic spectra
-        ax12 = plt.subplot(gs[1, 2])  # mask
-        ax13 = plt.subplot(gs[1, 3])  # channel mask fraction
+        ax12 = plt.subplot(gs[1, 2])  # cleaned dynamic spectra
+        ax13 = plt.subplot(gs[1, 3])  # cleaned bandpass
 
         self.ax20 = plt.subplot(gs[2, 0])  # channel test values
         self.ax21 = plt.subplot(gs[2, 1])  # 2D test values
-        ax22 = plt.subplot(gs[2, 2])  # data with mask
-        ax23 = plt.subplot(gs[2, 3])  # cleaned bandpass
+        ax22 = plt.subplot(gs[2, 2])  # mask
+        ax23 = plt.subplot(gs[2, 3])  # channel mask percentage
 
         self.ax31 = plt.subplot(gs[3, 1])  # time test vales
-        ax32 = plt.subplot(gs[3, 2])  # cleaned time series
+        ax32 = plt.subplot(gs[3, 2])  # masked percentage
 
         # self.ax22.xaxis.tick_top()
         # self.ax22.yaxis.tick_right()
@@ -256,7 +255,7 @@ class Paint(Frame):
                 color="r",
                 label="1 STD",
             )
-            ax12.legend()
+            self.ax10.legend()
         else:
             pass
             # ax12.legend(handletextpad=0, handlelength=0, framealpha=0.4)
@@ -296,19 +295,27 @@ class Paint(Frame):
         # (self.im_test_ver,) = self.ax10.plot(
         #    self.ver_test, bp_y, label=f"{self.which_test.get()}"
         # )
-        (self.im_mask_time_frac,) = ax02.plot(self.mask.mean(axis=0), label="Frac.")
+        (self.im_time_clean,) = ax02.plot(
+            self.data_masked.mean(axis=0), label="Timeseries"
+        )
         ax02.set_xlim([0, self.gulp_size])
         ax02.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.ax10.set_ylim([-1, len(self.bandpass) + 1])
         self.ax10.legend(handletextpad=0, handlelength=0, framealpha=0.4)
-        self.im_mask = ax12.imshow(
-            self.mask, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
+        self.im_ft_masked = ax12.imshow(
+            self.data_masked,
+            aspect="auto",
+            vmin=self.vmin,
+            vmax=self.vmax,
+            interpolation="none",
         )
+        # interpolation="none" stops large amount
+        # of white space from being shown
         ax12.text(
             0.05,
             0.95,
-            "Mask",
+            "Cleaned",
             verticalalignment="top",
             bbox={
                 "facecolor": "white",
@@ -317,12 +324,10 @@ class Paint(Frame):
                 "alpha": 0.4,
             },
         )
-        (self.im_mask_chan_frac,) = ax13.plot(
-            self.mask.mean(axis=1), bp_y, label="Frac."
+        (self.im_bandpass_clean,) = ax13.plot(
+            np.ma.mean(self.data_masked, axis=1), bp_y, label="Bandpass"
         )
-        # ax13.set_title("Mask Fraction")
-        # # puts in the wrong place
-        ax13.set_ylim([0, self.your_obj.your_header.nchans])
+        ax13.set_ylim([-1, len(self.bandpass) + 1])
         ax13.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         test_median = np.median(self.test_values)
@@ -361,18 +366,14 @@ class Paint(Frame):
 
         self.ax21.set_xlim([-1, len(self.time_series) + 1])
         # self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
-        self.im_ft_masked = ax22.imshow(
-            self.data_masked,
-            aspect="auto",
-            vmin=self.vmin,
-            vmax=self.vmax,
-            interpolation="none",
+
+        self.im_mask = ax22.imshow(
+            self.mask, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
         )
-        # interpolation="none" stops large amount of white space from being shown
         ax22.text(
             0.05,
             0.95,
-            "Cleaned",
+            "Mask",
             verticalalignment="top",
             bbox={
                 "facecolor": "white",
@@ -381,10 +382,12 @@ class Paint(Frame):
                 "alpha": 0.4,
             },
         )
-        (self.im_bandpass_clean,) = ax23.plot(
-            np.ma.mean(self.data_masked, axis=1), bp_y, label="Bandpass"
+        (self.im_mask_chan_frac,) = ax23.plot(
+            self.mask.mean(axis=1), bp_y, label="Frac."
         )
-        ax23.set_ylim([-1, len(self.bandpass) + 1])
+        # ax13.set_title("Mask Fraction")
+        # # puts in the wrong place
+        ax23.set_ylim([0, self.your_obj.your_header.nchans])
         ax23.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         (self.im_test_hor,) = self.ax31.plot(
@@ -393,9 +396,7 @@ class Paint(Frame):
         self.ax31.set_xlim([0, self.gulp_size])
         self.ax31.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
-        (self.im_time_clean,) = ax32.plot(
-            self.data_masked.mean(axis=0), label="Timeseries"
-        )
+        (self.im_mask_time_frac,) = ax32.plot(self.mask.mean(axis=0), label="Frac.")
         self.ax31.set_xlabel("Time [sec]")
 
         ax32.set_xlim(-1, len(self.time_series + 1))
@@ -532,18 +533,7 @@ class Paint(Frame):
         self.test_vmin = max(np.min(self.test_values), test_median - 4 * test_std)
         self.im_test_values.set_clim(vmin=self.test_vmin, vmax=self.test_vmax)
         self.ax21.texts[-1].set_text(f"{which_test}")
-        # self.ax21.text(
-        #    0.05,
-        #    0.95,
-        #    f"{which_test}",
-        #    verticalalignment="top",
-        #    bbox={
-        #        "facecolor": "white",
-        #        "edgecolor": "white",
-        #        "boxstyle": "round,pad=0.1",
-        #        "alpha": 0.4,
-        #    },
-        # )
+
         self.im_mask.set_data(self.mask)
         self.im_ft_masked.set_data(self.data_masked)
 
