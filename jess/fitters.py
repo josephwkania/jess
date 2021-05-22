@@ -3,11 +3,16 @@
 """
 A somewhat robust way to fit bandpasses
 
-bandpass_fitter() Fits polynomals mutlipe times to
-get a robust fit.
+cheb_fitter() Fits Chebyshev polynomials, does to fits to be
+robust.
+
+bandpass_fitter() Fits polynomals twice to get a robust fit.
+
+bspline_fitt() Fits bsplines using the Huber Regressor
+as a loss function
 
 bspline_fitter() Fits bsplines using the Huber Regressor
-as a loss function
+as a loss function, fits twice to be even more robust
 """
 
 import logging
@@ -22,7 +27,65 @@ from sklearn.pipeline import make_pipeline
 logger = logging.getLogger()
 
 
-def poly_fitter(bandpass: list, poly_order: int = 20, mask_sigma: float = 6) -> float:
+def cheb_fitter(
+    bandpass: np.ndarray,
+    channels: np.ndarray = None,
+    chans_per_fit: int = 100,
+    mask_sigma: float = 6,
+) -> np.ndarray:
+    """
+    Fits bandpasses by Chebyshev fitting the bandpass, looking for channels that
+    are far from this fit, excluding these channels and refitting the bandpass
+    This works well for bandpasses with sine/cosine like features.
+
+    Args:
+        bandpass: the bandpass to fit
+
+        chans_per_fit: number of channels for each polynomial order
+
+        mask_sigma: standard deviation at which to mask outlying channels
+
+    Returns:
+        Fit to bandpass
+
+    Example:
+        yr = Your(input_file)
+        data = yr.get_data(0, 8192)
+        bandpass = np.median(section, axis=0)
+        fit = cheb_fitter(bandpass)
+    """
+    if not channels:
+        channels = np.arange(0, len(bandpass))
+    poly_order = len(bandpass) // chans_per_fit
+    logging.debug("Fitting with a %i polynomial", poly_order)
+    fit_values = np.polynomial.chebyshev.Chebyshev.fit(channels, bandpass, poly_order)
+    # fit a polynomial
+    diff = bandpass - fit_values  # find the difference between fitted and real bandpass
+    std_diff = stats.median_abs_deviation(diff, scale="normal")
+    logging.info(f"Standard Deviation of fit: {std_diff:.4}")
+    if std_diff > 0.0:
+        # if there is no variability in the channel, don't try to mask
+        mask = np.abs(diff - np.ma.median(diff)) < mask_sigma * std_diff
+
+        fit_values_clean = np.polynomial.chebyshev.Chebyshev.fit(
+            channels[mask], bandpass[mask], poly_order
+        )  # refit masking the outlier
+        best_fit_bandpass = fit_values_clean(channels)
+    else:
+        best_fit_bandpass = fit_values(channels)
+
+    logger.info(
+        "chi^2: %f.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
+    )
+    return best_fit_bandpass
+
+
+def poly_fitter(
+    bandpass: np.ndarray,
+    channels: np.ndarray = None,
+    chans_per_fit: int = 200,
+    mask_sigma: float = 6,
+) -> np.ndarray:
     """
     Fits bandpasses by polyfitting the bandpass, looking for channels that
     are far from this fit, excluding these channels and refitting the bandpass
@@ -41,9 +104,12 @@ def poly_fitter(bandpass: list, poly_order: int = 20, mask_sigma: float = 6) -> 
         yr = Your(input_file)
         data = yr.get_data(0, 8192)
         bandpass = np.median(section, axis=0)
-        fit = fit_bspline_huber(bandpass)
+        fit = poly_fitter(bandpass)
     """
-    channels = np.arange(0, len(bandpass))
+    if not channels:
+        channels = np.arange(0, len(bandpass))
+    poly_order = len(bandpass) // chans_per_fit
+    logging.debug("Fitting with a %i polynomial", poly_order)
     fit_values = np.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = np.poly1d(fit_values)  # get the values of the fitted bandpass
     diff = bandpass - poly(
@@ -64,7 +130,7 @@ def poly_fitter(bandpass: list, poly_order: int = 20, mask_sigma: float = 6) -> 
         best_fit_bandpass = poly(channels)
 
     logger.info(
-        f"chi^2: {stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]:.4}"
+        "chi^2: %f.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
     )
     return best_fit_bandpass
 
@@ -125,7 +191,9 @@ class SplineTransformer(TransformerMixin):
         return features
 
 
-def bspline_fitter(bandpass: np.ndarray, chans_per_knot: int = 100) -> np.ndarray:
+def bspline_fit(
+    bandpass: np.ndarray, channels: np.ndarray = None, chans_per_knot: int = 100
+) -> np.ndarray:
     """
     This fits a bsplines using the Huber regressor.
 
@@ -145,10 +213,12 @@ def bspline_fitter(bandpass: np.ndarray, chans_per_knot: int = 100) -> np.ndarra
         yr = Your(input_file)
         data = yr.get_data(0, 8192)
         bandpass = np.median(section, axis=0)
-        fit = bspline_fitter(bandpass)
+        fit = bspline_fit(bandpass)
     """
-    num_chans = len(bandpass)
-    channels = np.arange(0, num_chans)
+    if not channels:
+        num_chans = len(bandpass)
+        channels = np.arange(0, num_chans)
+
     channels = channels[:, np.newaxis]
     num_knots = num_chans // chans_per_knot
 
@@ -158,3 +228,57 @@ def bspline_fitter(bandpass: np.ndarray, chans_per_knot: int = 100) -> np.ndarra
 
     fit = model.predict(channels)
     return fit
+
+
+def bspline_fitter(
+    bandpass: np.ndarray,
+    channels: np.ndarray = None,
+    chans_per_fit: int = 100,
+    mask_sigma: float = 6,
+) -> np.ndarray:
+    """
+    This fits a bsplines using the Huber regressor.
+
+    The Huber Regressor is a robust fitting function.
+
+    This wraps bspline_fit, running it twice to help it futher reject outliers
+
+    Args:
+        Bandpass: the bandpass to fit
+
+        chans_per_fit: number of channels per spline knot
+
+    Returns:
+        Fit to bandpass
+
+    Example:
+        yr = Your(input_file)
+        data = yr.get_data(0, 8192)
+        bandpass = np.median(section, axis=0)
+        fit = bspline_fitter(bandpass)
+    """
+    if not channels:
+        channels = np.arange(0, len(bandpass))
+    first_bspline_fit = bspline_fit(channels, bandpass, chans_per_knot=chans_per_fit)
+    # fit the first spline
+    diff = bandpass - first_bspline_fit
+    # find the difference between fitted and real bandpass
+    std_diff = stats.median_abs_deviation(diff, scale="normal")
+    logging.info(f"Standard Deviation of fit: {std_diff:.4}")
+    if std_diff > 0.0:
+        # if there is no variability in the channel, don't try to mask
+        mask = np.abs(diff - np.ma.median(diff)) < mask_sigma * std_diff
+
+        second_bspline_fit = bspline_fit(bandpass[mask], channels[mask], chans_per_fit)
+        # refit masking the outliers
+        best_fit_bandpass = second_bspline_fit
+    else:
+        best_fit_bandpass = first_bspline_fit
+
+    logger.info(
+        "chi^2: %f.4f",
+        stats.chisquare(
+            bandpass, best_fit_bandpass, int(3 * chans_per_fit * len(bandpass))
+        )[0],
+    )
+    return best_fit_bandpass

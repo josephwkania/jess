@@ -652,7 +652,7 @@ class Paint(Frame):
         sets x axis labels in the correct location
         """
         ax_left = self.im_test_hor.axes
-        ax_right = self.im_time_clean.axes
+        ax_right = self.im_mask_time_frac.axes
         xticks_left = ax_left.get_xticks()
         logging.debug(f"x-axis ticks are {xticks_left}")
         xtick_labels_left = (
@@ -762,7 +762,7 @@ if __name__ == "__main__":
         default=0,
     )
     parser.add_argument(
-        "-no_ubtract",
+        "-no_subtract",
         "--no_bandpass_subtract",
         help="Don't subtract a polynomial fitted bandpass",
         required=False,
