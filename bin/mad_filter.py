@@ -24,6 +24,7 @@ from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
 from jess.fitters import cheb_fitter, poly_fitter, bspline_fitter
+
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
 
@@ -236,7 +237,7 @@ def mad_cleaner(
     dispersion_measure: float,
     sigma: float = 3,
     gulp: int = 16384,
-    fitter:str="poly_fitter",
+    fitter: str = "poly_fitter",
     channels_per_subband: int = 256,
     remove_ends: bool = False,
     out_file: str = None,
@@ -289,7 +290,7 @@ def mad_cleaner(
         fitter = bspline_fitter
     else:
         raise ValueError("You didn't give a valid fitter type! (Given %s)", fitter)
-    
+
     if not out_file:
         # if no out file is given, create the string
         path, file_ext = os.path.splitext(file[0])
@@ -302,9 +303,9 @@ def mad_cleaner(
             assert file_ext == ".fil", f"I can only write .fil, you gave {file_ext}!"
         else:
             out_file += ".fil"
-    
+
     yr = Your(file)
-    samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.tsamp)
+    samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.your_header.tsamp)
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
@@ -312,7 +313,7 @@ def mad_cleaner(
         nchans=yr.nchans,
         foff=yr.foff,  # MHz
         fch1=yr.fch1,  # MHz
-        tsamp=yr.tsamp,  # seconds
+        tsamp=yr.your_header.tsamp,  # seconds
         tstart=yr.tstart,  # MJD
         src_raj=yr.src_raj,  # HHMMSS.SS
         src_dej=yr.src_dej,  # DDMMSS.SS
