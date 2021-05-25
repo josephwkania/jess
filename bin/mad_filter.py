@@ -23,6 +23,7 @@ from your.formats.filwriter import make_sigproc_object
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
+from jess.fitters import cheb_fitter, poly_fitter, bspline_fitter
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
 
@@ -235,6 +236,7 @@ def mad_cleaner(
     dispersion_measure: float,
     sigma: float = 3,
     gulp: int = 16384,
+    fitter:str="poly_fitter",
     channels_per_subband: int = 256,
     remove_ends: bool = False,
     out_file: str = None,
@@ -279,11 +281,20 @@ def mad_cleaner(
         raise ValueError(f"Tried file extention {file_ext}, which I can't write")
     """
 
+    if fitter == "cheb_fitter":
+        fitter = cheb_fitter
+    elif fitter == "poly_fitter":
+        fitter = poly_fitter
+    elif fitter == "bspline_fitter":
+        fitter = bspline_fitter
+    else:
+        raise ValueError("You didn't give a valid fitter type! (Given %s)", fitter)
+    
     if not out_file:
         # if no out file is given, create the string
-        path, file_ext = os.path.splitext(file)
+        path, file_ext = os.path.splitext(file[0])
         out_file = path + "_MAD.fil"
-        logger.INFO(f"No outfile given, writing to {out_file}")
+        logger.info(f"No outfile given, writing to {out_file}")
     else:
         # if a file is given, make sure it has a .fil ext
         path, file_ext = os.path.splitext(out_file)
@@ -291,7 +302,7 @@ def mad_cleaner(
             assert file_ext == ".fil", f"I can only write .fil, you gave {file_ext}!"
         else:
             out_file += ".fil"
-
+    
     yr = Your(file)
     samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.tsamp)
 
@@ -396,6 +407,13 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "--fitter",
+        help="fitter to you, [cheb_fitter, poly_fitter(default), bspline_fitter]",
+        type=str,
+        default="poly_fitter",
+        required=False,
+    )
+    parser.add_argument(
         "--gulp",
         help="Number of samples to process at each loop",
         type=int,
@@ -440,6 +458,7 @@ if __name__ == "__main__":
         args.dispersion_measure,
         args.sigma,
         args.gulp,
+        args.fitter,
         args.channels_per_subband,
         args.remove_ends,
         args.out_file,

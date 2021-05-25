@@ -129,7 +129,19 @@ class Paint(Frame):
         self.next.grid(row=0, column=3)
 
         # Stat test to use
-        self.tests = ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
+        self.tests = [
+            "98-2",
+            "91-9",
+            "D'Angostino",
+            "Interdecile",
+            "IQR",
+            "Kurtosis",
+            "MAD",
+            "Midhing",
+            "Skew",
+            "Stand. Dev.",
+            "Trimean",
+        ]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
         self.which_test.set("IQR")
@@ -226,8 +238,9 @@ class Paint(Frame):
                 )
         self.read_data()
 
-        # create 6 plots, for ax1=time_series, ax2=dynamic spectra, ax3= histogram,
-        # ax4=bandpass, ax5 = vertical test, ax6 = horizontal test
+        # create 6 plots, for ax1=time_series, ax2=dynamic spectra,
+        # ax3= histogram, ax4=bandpass, ax5 = vertical test,
+        # ax6 = horizontal test
         gs = gridspec.GridSpec(
             3,
             3,
@@ -352,7 +365,7 @@ class Paint(Frame):
 
     def prev_gulp(self):
         """
-        Movies the images to the prevous gulp of data
+        Movies the images to the previous gulp of data
         """
         # check if new start samp is in the file
         if (self.start_samp - self.gulp_size) >= 0:
@@ -363,7 +376,8 @@ class Paint(Frame):
         """
         Redraws the plots when something is changed
         """
-        # added *args to make self.which_test.trace("w", self.update_plot) happy
+        # added *args to make self.which_test.trace("w", self.update_plot)
+        #  happy
         self.read_data()
         self.set_x_axis()
         self.im_ft.set_data(self.data)
@@ -477,25 +491,73 @@ class Paint(Frame):
         Runs the statistical tests
         ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         """
-        if self.which_test.get() == "D'Angostino":
+        which_test = self.which_test.get()
+        if which_test == "98-2":
+            self.ver_test = (
+                np.quantile(self.data, 0.98, axis=1)
+                - np.quantile(self.data, 0.02, axis=1)
+            ) / 2.0
+            self.hor_test = (
+                np.quantile(self.data, 0.98, axis=0)
+                - np.quantile(self.data, 0.02, axis=0)
+            ) / 2.0
+        elif which_test == "91-9":
+            self.ver_test = (
+                np.quantile(self.data, 0.91, axis=1)
+                - np.quantile(self.data, 0.09, axis=1)
+            ) / 2.0
+            self.hor_test = (
+                np.quantile(self.data, 0.91, axis=0)
+                - np.quantile(self.data, 0.09, axis=0)
+            ) / 2.0
+        elif which_test == "D'Angostino":
             self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
             self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
             # TODO plot p values
-        elif self.which_test.get() == "IQR":
+        elif which_test == "Interdecile":
+            self.ver_test = (
+                np.quantile(self.data, 0.90, axis=1)
+                - np.quantile(self.data, 0.10, axis=1)
+            ) / 2.0
+            self.hor_test = (
+                np.quantile(self.data, 0.90, axis=0)
+                - np.quantile(self.data, 0.10, axis=0)
+            ) / 2.0
+        elif which_test == "IQR":
             self.ver_test = stats.iqr(self.data, axis=1)
             self.hor_test = stats.iqr(self.data, axis=0)
-        elif self.which_test.get() == "Kurtosis":
+        elif which_test == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
             self.hor_test = stats.kurtosis(self.data, axis=0)
-        elif self.which_test.get() == "MAD":
+        elif which_test == "MAD":
             self.ver_test = stats.median_abs_deviation(self.data, axis=1)
             self.hor_test = stats.median_abs_deviation(self.data, axis=0)
-        elif self.which_test.get() == "Skew":
+        elif which_test == "Midhing":
+            self.ver_test = (
+                np.quantile(self.data, 0.25, axis=1)
+                + np.quantile(self.data, 0.75, axis=1)
+            ) / 2.0
+            self.hor_test = (
+                np.quantile(self.data, 0.25, axis=0)
+                + np.quantile(self.data, 0.75, axis=0)
+            ) / 2.0
+        elif which_test == "Skew":
             self.ver_test = stats.skew(self.data, axis=1)
             self.hor_test = stats.skew(self.data, axis=0)
-        elif self.which_test.get() == "Stand. Dev.":
+        elif which_test == "Stand. Dev.":
             self.ver_test = np.std(self.data, axis=1)
             self.hor_test = np.std(self.data, axis=0)
+        elif which_test == "Trimean":
+            self.ver_test = (
+                np.quantile(self.data, 0.25, axis=1)
+                + 2.0 * np.quantile(self.data, 0.50, axis=1)
+                + np.quantile(self.data, 0.75, axis=1)
+            ) / 4.0
+            self.hor_test = (
+                np.quantile(self.data, 0.25, axis=0)
+                + 2.0 * np.quantile(self.data, 0.50, axis=0)
+                + np.quantile(self.data, 0.75, axis=0)
+            ) / 4.0
 
 
 if __name__ == "__main__":

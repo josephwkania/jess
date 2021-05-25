@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 from scipy.signal import savgol_filter as sg
 
-from jess.fitters import poly_fitter
+from jess.fitters import poly_fitter, cheb_fitter, bspline_fitter
 
 
 def dagostino_time(
@@ -178,7 +178,7 @@ def kurtosis_time(
 
 
 def mad_spectra(
-    gulp: np.ndarray, frame: int = 256, sigma: float = 3, poly_order: int = 5
+    gulp: np.ndarray, frame: int = 256, sigma: float = 3, chans_per_fit: int = 50, fitter:object=poly_fitter
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -192,7 +192,9 @@ def mad_spectra(
 
        sigma (float): cutoff sigma
 
-       poly_order (int): polynomial order to fit the bandpass
+       chans_per_fit (int): polynomial/spline knots per channel to fit the bandpass
+
+       fitter: which fitter to use
 
     Returns:
 
@@ -205,8 +207,8 @@ def mad_spectra(
     max_value = iinfo.max
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        fit = poly_fitter(
-            np.median(gulp[:, j : j + frame], axis=0), poly_order=5
+        fit = fitter(
+            np.median(gulp[:, j : j + frame], axis=0), chans_per_fit=chans_per_fit
         )  # .astype(data_type)
         diff = gulp[:, j : j + frame] - fit
         cut = sigma * stats.median_abs_deviation(diff, axis=1, scale="Normal")
@@ -225,9 +227,9 @@ def mad_spectra(
 
         try:  # sometimes this fails to converge, if happens use original fit
             masked_arr = np.ma.masked_array(gulp[:, j : j + frame], mask=mask)
-            fit_clean = poly_fitter(
+            fit_clean = fitter(
                 np.ma.median(masked_arr, axis=0),
-                poly_order=poly_order,
+                chans_per_fit=chans_per_fit,
             )
         except Exception as e:
             logging.warning(f"Failed to fit with Exception: {e}"
