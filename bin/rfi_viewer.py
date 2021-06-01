@@ -30,6 +30,7 @@ Key Binds:
 import argparse
 import logging
 import os
+from builtins import range
 from tkinter import (
     BOTH,
     TOP,
@@ -132,9 +133,9 @@ class Paint(Frame):
         self.tests = [
             "98-2",
             "91-9",
-            "D'Angostino",
-            "Interdecile",
-            "IQR",
+            "90-10: Interdecile",
+            "75-25: IQR" "D'Angostino",
+            "KS",
             "Kurtosis",
             "MAD",
             "Midhing",
@@ -144,7 +145,7 @@ class Paint(Frame):
         ]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
-        self.which_test.set("IQR")
+        self.which_test.set("75-25: IQR")
         self.test.grid(row=0, column=4)
 
         self.which_test.trace("w", self.update_plot)
@@ -510,11 +511,7 @@ class Paint(Frame):
                 np.quantile(self.data, 0.91, axis=0)
                 - np.quantile(self.data, 0.09, axis=0)
             ) / 2.0
-        elif which_test == "D'Angostino":
-            self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
-            self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
-            # TODO plot p values
-        elif which_test == "Interdecile":
+        elif which_test == "90-10: Interdecile":
             self.ver_test = (
                 np.quantile(self.data, 0.90, axis=1)
                 - np.quantile(self.data, 0.10, axis=1)
@@ -523,9 +520,27 @@ class Paint(Frame):
                 np.quantile(self.data, 0.90, axis=0)
                 - np.quantile(self.data, 0.10, axis=0)
             ) / 2.0
-        elif which_test == "IQR":
+        elif which_test == "75-25: IQR":
             self.ver_test = stats.iqr(self.data, axis=1)
             self.hor_test = stats.iqr(self.data, axis=0)
+        elif which_test == "D'Angostino":
+            self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
+            self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
+            # TODO plot p values
+        elif which_test == "KS":
+            num_freq, num_samps = self.data.shape
+            self.ver_test = np.zeros(num_freq)
+            self.ver_test_p = np.zeros(num_freq)
+            self.hor_test = np.zeros(num_samps)
+            self.hor_test_p = np.zeros(num_samps)
+            for j in range(0, num_freq):
+                self.ver_test[j], self.ver_test_p[j] = stats.kstest(
+                    self.data[j, :], "norm"
+                )
+            for k in range(0, num_samps):
+                self.hor_test[k], self.hor_test_p[k] = stats.kstest(
+                    self.data[:, k], "norm"
+                )
         elif which_test == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
             self.hor_test = stats.kurtosis(self.data, axis=0)

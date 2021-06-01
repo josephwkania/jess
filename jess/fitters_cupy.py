@@ -6,8 +6,9 @@ A somewhat robust way to fit bandpasses - cupy edition
 import logging
 
 import cupy as cp
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
 from scipy import stats
+
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 logger = logging.getLogger()
 

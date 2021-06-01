@@ -10,7 +10,6 @@ import logging
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
@@ -18,6 +17,8 @@ from rich.progress import track
 from rich.table import Table
 from scipy import signal
 from your import Your
+
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):

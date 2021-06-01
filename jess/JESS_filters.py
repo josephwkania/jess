@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 from scipy.signal import savgol_filter as sg
 
-from jess.fitters import poly_fitter, cheb_fitter, bspline_fitter
+from jess.fitters import bspline_fitter, cheb_fitter, poly_fitter
 
 
 def dagostino_time(
@@ -178,7 +178,11 @@ def kurtosis_time(
 
 
 def mad_spectra(
-    gulp: np.ndarray, frame: int = 256, sigma: float = 3, chans_per_fit: int = 50, fitter:object=poly_fitter
+    gulp: np.ndarray,
+    frame: int = 256,
+    sigma: float = 3,
+    chans_per_fit: int = 50,
+    fitter: object = poly_fitter,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -232,13 +236,10 @@ def mad_spectra(
                 chans_per_fit=chans_per_fit,
             )
         except Exception as e:
-            logging.warning(f"Failed to fit with Exception: {e}"
-                            ", using original fit")
+            logging.warning(f"Failed to fit with Exception: {e}" ", using original fit")
             fit_clean = fit
 
-        np.clip(
-            fit_clean, min_value, max_value, out=fit_clean
-        )
+        np.clip(fit_clean, min_value, max_value, out=fit_clean)
         # clip the values so they don't wrap
         # when converted to ints
         fit_clean = fit_clean.astype(data_type)
@@ -284,7 +285,7 @@ def mad_time(
     # iqr_fit = poly_fitter(iqr_values.mean(axis=0))
     # iqr_flat = iqr_values - iqr_fit
     stds_test = stats.median_abs_deviation(test_values, scale="normal")
-    meds_test = np.median(test_values) 
+    meds_test = np.median(test_values)
 
     mask = test_values - meds_test < sigma * stds_test
 

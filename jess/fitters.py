@@ -54,7 +54,7 @@ def cheb_fitter(
         bandpass = np.median(section, axis=0)
         fit = cheb_fitter(bandpass)
     """
-    if not channels:
+    if channels is None:
         channels = np.arange(0, len(bandpass))
     poly_order = len(bandpass) // chans_per_fit
     logging.debug("Fitting with a %i polynomial", poly_order)
@@ -106,7 +106,7 @@ def poly_fitter(
         bandpass = np.median(section, axis=0)
         fit = poly_fitter(bandpass)
     """
-    if not channels:
+    if channels is None:
         channels = np.arange(0, len(bandpass))
     poly_order = len(bandpass) // chans_per_fit
     logging.debug("Fitting with a %i polynomial", poly_order)
@@ -215,8 +215,9 @@ def bspline_fit(
         bandpass = np.median(section, axis=0)
         fit = bspline_fit(bandpass)
     """
-    if not channels:
-        num_chans = len(bandpass)
+    
+    num_chans = len(bandpass)
+    if channels is None:
         channels = np.arange(0, num_chans)
 
     channels = channels[:, np.newaxis]
@@ -257,7 +258,7 @@ def bspline_fitter(
         bandpass = np.median(section, axis=0)
         fit = bspline_fitter(bandpass)
     """
-    if not channels:
+    if channels is None:
         channels = np.arange(0, len(bandpass))
     first_bspline_fit = bspline_fit(channels, bandpass, chans_per_knot=chans_per_fit)
     # fit the first spline

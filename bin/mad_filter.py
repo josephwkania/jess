@@ -11,8 +11,6 @@ import os
 import textwrap
 
 import numpy as np
-from jess.dispersion import dedisperse, delay_lost
-from jess.JESS_filters import mad_spectra
 
 # import psutil
 from rich.logging import RichHandler
@@ -23,7 +21,9 @@ from your.formats.filwriter import make_sigproc_object
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
-from jess.fitters import cheb_fitter, poly_fitter, bspline_fitter
+from jess.dispersion import dedisperse, delay_lost
+from jess.fitters import bspline_fitter, cheb_fitter, poly_fitter
+from jess.JESS_filters import mad_spectra
 
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
@@ -306,28 +306,32 @@ def mad_cleaner(
 
     yr = Your(file)
     samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.your_header.tsamp)
+    print(
+        f"dispersion_measure: {dispersion_measure}, yr.chan_freqs: {yr.chan_freqs}, yr.your_header.tsamp: {yr.your_header.tsamp}"
+    )
+    print(f"sampples_lost: {samples_lost}")
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
         source_name=yr.your_header.source_name,
-        nchans=yr.nchans,
-        foff=yr.foff,  # MHz
-        fch1=yr.fch1,  # MHz
+        nchans=yr.your_header.nchans,
+        foff=yr.your_header.foff,  # MHz
+        fch1=yr.your_header.fch1,  # MHz
         tsamp=yr.your_header.tsamp,  # seconds
-        tstart=yr.tstart,  # MJD
-        src_raj=yr.src_raj,  # HHMMSS.SS
-        src_dej=yr.src_dej,  # DDMMSS.SS
-        machine_id=yr.machine_id,
-        nbeams=yr.nbeams,
-        ibeam=yr.ibeam,
-        nbits=yr.nbits,
-        nifs=yr.nifs,
-        barycentric=yr.barycentric,
-        pulsarcentric=yr.pulsarcentric,
-        telescope_id=yr.telescope_id,
-        data_type=yr.data_type,
-        az_start=yr.az_start,
-        za_start=yr.za_start,
+        tstart=yr.your_header.tstart,  # MJD
+        # src_raj=yr.src_raj,  # HHMMSS.SS
+        # src_dej=yr.src_dej,  # DDMMSS.SS
+        # machine_id=yr.your_header.machine_id,
+        # nbeams=yr.your_header.nbeams,
+        # ibeam=yr.your_header.ibeam,
+        nbits=yr.your_header.nbits,
+        # nifs=yr.your_header.nifs,
+        # barycentric=yr.your_header.barycentric,
+        # pulsarcentric=yr.your_header.pulsarcentric,
+        # telescope_id=yr.your_header.telescope_id,
+        # data_type=yr.your_header.data_type,
+        # az_start=yr.your_header.az_start,
+        # za_start=yr.your_header.za_start,
     )
     sigproc_object.write_header(out_file)
 
@@ -343,16 +347,23 @@ def mad_cleaner(
             data = yr.get_data(j, 2 * samples_lost + gulp)
         else:
             data = yr.get_data(j, yr.your_header.nspectra - j)
-        dedisp = dedisperse(data, dispersion_measure, yr.tsamp, yr.chan_freqs)
+        dedisp = dedisperse(
+            data, dispersion_measure, yr.your_header.tsamp, yr.chan_freqs
+        )
         dedisp[0:-samples_lost, :] = mad_spectra(
             dedisp[0:-samples_lost, :], frame=channels_per_subband, sigma=sigma
         )
-        redisip = dedisperse(dedisp, -dispersion_measure, yr.tsamp, yr.chan_freqs)
-        redisip = redisip.astype(np.int8)
+        redisip = dedisperse(
+            dedisp, -dispersion_measure, yr.your_header.tsamp, yr.chan_freqs
+        )
+        redisip = redisip.astype(yr.your_header.dtype)
         sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
 
     # add data that can't be dispersed
     # because its at the end
+    print(
+        f"yr.your_header.nspectra - samples_lost, samples_lost: {yr.your_header.nspectra - samples_lost, samples_lost}"
+    )
     if not remove_ends:
         sigproc_object.append_spectra(
             yr.get_data(yr.your_header.nspectra - samples_lost, samples_lost), out_file
