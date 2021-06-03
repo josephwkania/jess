@@ -113,7 +113,7 @@ class Paint(Frame):
 
         # Creation of init_window
         # set widget title
-        self.master.title("your_viewer")
+        self.master.title("mask_viewer")
 
         # allowing the widget to take the full space of the root window
         self.pack(fill=BOTH)  # , expand=1)
@@ -151,7 +151,7 @@ class Paint(Frame):
 
         # move image back to previous gulp of data
         self.prev = Button(self)
-        self.prev["text"] = "Prevous Gulp"
+        self.prev["text"] = "Previous Gulp"
         self.prev["command"] = self.prev_gulp
         self.prev.grid(row=0, column=2)
 
@@ -162,7 +162,16 @@ class Paint(Frame):
         self.next.grid(row=0, column=3)
 
         # Stat test to use
-        self.tests = ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
+        # self.tests = ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
+        self.tests = [
+            "Anderson-Darling",
+            "D'Angostino",
+            "Jarque-Bera",
+            "KS",
+            "Kurtosis",
+            "Shapiro Wilk",
+            "Skew",
+        ]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
         self.which_test.set("IQR")

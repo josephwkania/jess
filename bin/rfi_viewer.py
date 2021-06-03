@@ -57,6 +57,8 @@ from your.utils.astro import calc_dispersion_delays, dedisperse
 from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
 
+from jess.calculators import shannon_entropy
+
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
 
@@ -101,6 +103,9 @@ class Paint(Frame):
         # added "file" to our menu
         menu.add_cascade(label="File", menu=file)
 
+        self.ver_test_p = None
+        self.hor_test_p = None
+
     def create_widgets(self):
         """
         Create all the user buttons
@@ -119,11 +124,11 @@ class Paint(Frame):
 
         # move image back to previous gulp of data
         self.prev = Button(self)
-        self.prev["text"] = "Prevous Gulp"
+        self.prev["text"] = "Previous Gulp"
         self.prev["command"] = self.prev_gulp
         self.prev.grid(row=0, column=2)
 
-        # move image foward to next gulp of data
+        # move image forward to next gulp of data
         self.next = Button(self)
         self.next["text"] = "Next Gulp"
         self.next["command"] = self.next_gulp
@@ -134,18 +139,23 @@ class Paint(Frame):
             "98-2",
             "91-9",
             "90-10: Interdecile",
-            "75-25: IQR" "D'Angostino",
+            "75-25: IQR",
+            "Anderson-Darling",
+            "D'Angostino",
+            "Jarque-Bera",
             "KS",
             "Kurtosis",
             "MAD",
             "Midhing",
+            "Shannon Entropy",
+            "Shapiro Wilk",
             "Skew",
             "Stand. Dev.",
             "Trimean",
         ]
         self.which_test = StringVar(self)
         self.test = OptionMenu(self, self.which_test, *self.tests)
-        self.which_test.set("75-25: IQR")
+        self.which_test.set("D'Angostino")  # "75-25: IQR")
         self.test.grid(row=0, column=4)
 
         self.which_test.trace("w", self.update_plot)
@@ -258,7 +268,7 @@ class Paint(Frame):
         ax4 = plt.subplot(gs[1, 2])  # bandpass
         self.ax5 = plt.subplot(
             gs[1, 0]
-        )  # verticle test.  Needs to be self. so I can self.ax6.legend()
+        )  # vertical test. Needs to be self. so I can self.ax6.legend()
         self.ax6 = plt.subplot(gs[2, 1])
         ax2.axis("off")
         ax1.set_xticks([])
@@ -277,7 +287,10 @@ class Paint(Frame):
         # make bandpass
         bp_std = np.std(self.data, axis=1)
         bp_y = np.linspace(self.your_obj.your_header.nchans, 0, len(self.bandpass))
+        # ax4.set_ylabel("Bandpass")
+        # ax4.yaxis.set_label_position("right")
         (self.im_bandpass,) = ax4.plot(self.bandpass, bp_y, label="Bandpass")
+
         if self.chan_std:
             self.im_bp_fill = ax4.fill_betweenx(
                 x1=self.bandpass - bp_std,
@@ -291,7 +304,7 @@ class Paint(Frame):
             ax4.legend()
         else:
             pass
-            # ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+            ax4.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         ax4.set_ylim([-1, len(self.bandpass) + 1])
         ax4.set_xlabel("Avg. Arb. Flux")
         # ax4.set_title("Bandpass", rotation='vertical', x=1.2, y=.25)
@@ -301,6 +314,8 @@ class Paint(Frame):
         (self.im_time,) = ax1.plot(self.time_series, label="Timeseries")
         ax1.set_xlim(-1, len(self.time_series + 1))
         ax1.set_ylabel("<Arb. Flux>")
+        # ax1.set_label("Time Series")
+        ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
         # ax1.set_title("Time Series", y=1.0, pad=-14)
         # ax1.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
@@ -321,21 +336,28 @@ class Paint(Frame):
         self.ax5.set_yticklabels(yticks)
 
         # Make histogram
-        self.ax3.hist(self.data.ravel(), bins=52, density=True)
+        self.ax3.hist(self.data.ravel(), bins=52, density=True, label="Hist")
+        self.ax3.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # show stat tests
-        self.stat_test()
-        (self.im_test_ver,) = self.ax5.plot(
-            self.ver_test, bp_y, label=f"{self.which_test.get()}"
-        )
+        which_test = self.stat_test()
+        if True:  # self.hor_test_p is None:
+            (self.im_test_ver,) = self.ax5.plot(self.ver_test, bp_y, label=which_test)
+            (self.im_test_hor,) = self.ax6.plot(self.hor_test, label=which_test)
+            self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+            self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
+        else:
+            (self.im_test_ver,) = self.ax5.plot(self.ver_test, bp_y, label=which_test)
+            _ = self.ax5.plot(self.ver_test_p, bp_y, label=self.test_label)
+            # self.im_test_ver.set_legend(which_test, "p-value")
+            (self.im_test_hor,) = self.ax6.plot(self.hor_test, label=which_test)
+            _ = self.ax6.plot(self.hor_test_p, label=self.test_label)
+            # self.im_test_hor.set_label(which_test, "p-value")
+            self.ax5.legend(handletextpad=0, handlelength=0.3, framealpha=0.4)
+            self.ax6.legend(handletextpad=0, handlelength=0.3, framealpha=0.4)
         self.ax5.set_ylim([-1, len(self.bandpass) + 1])
-        self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
-        (self.im_test_hor,) = self.ax6.plot(
-            self.hor_test, label=f"{self.which_test.get()}"
-        )
         self.ax6.set_xlim([-1, len(self.time_series) + 1])
-        self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.set_x_axis()
 
@@ -394,18 +416,19 @@ class Paint(Frame):
         self.im_time.axes.relim()
         self.im_time.axes.autoscale(axis="y")
 
-        self.stat_test()
+        which_test = self.stat_test()
+
         self.im_test_ver.set_xdata(self.ver_test)
         self.im_test_ver.axes.relim()
         self.im_test_ver.axes.autoscale(axis="x")
 
-        self.im_test_ver.set_label(f"{self.which_test.get()}")
+        self.im_test_ver.set_label(f"{which_test}")
         self.ax5.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_test_hor.set_ydata(self.hor_test)
         self.im_test_hor.axes.relim()
         self.im_test_hor.axes.autoscale(axis="y")
-        self.im_test_hor.set_label(f"{self.which_test.get()}")
+        self.im_test_hor.set_label(f"{which_test}")
         self.ax6.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.canvas.draw()
@@ -447,7 +470,7 @@ class Paint(Frame):
             bandpass = bandpass_fitter(np.median(self.data, axis=1))
             # fit data to median bandpass
             np.clip(bandpass, self.min, self.max, out=bandpass)
-            # make sure the fit is nummerically possable
+            # make sure the fit is numerically possable
             self.data = self.data - bandpass[:, None]
 
             # attempt to return the correct data type,
@@ -523,10 +546,42 @@ class Paint(Frame):
         elif which_test == "75-25: IQR":
             self.ver_test = stats.iqr(self.data, axis=1)
             self.hor_test = stats.iqr(self.data, axis=0)
+        elif which_test == "Anderson-Darling":
+            num_freq, num_samps = self.data.shape
+            self.ver_test = np.zeros(num_freq)
+            # self.ver_test_p = np.zeros(num_freq)
+            self.hor_test = np.zeros(num_samps)
+            # self.hor_test_p = np.zeros(num_samps)
+            for j in range(0, num_freq):
+                self.ver_test[j], _, _ = stats.anderson(self.data[j, :], dist="norm")
+            for k in range(0, num_samps):
+                self.hor_test[k], _, _ = stats.anderson(self.data[:, k], dist="norm")
         elif which_test == "D'Angostino":
             self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
             self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
-            # TODO plot p values
+            self.test_label = "p-value"
+        elif which_test == "Jarque-Bera":
+            num_freq, num_samps = self.data.shape
+            if num_freq < 2000:
+                logging.warning(
+                    "Jarque-Bera requires > 2000 points, given %i channels", num_freq
+                )
+            if num_samps < 2000:
+                logging.warning(
+                    "Jarque-Bera requires > 2000 points, given %i samples", num_samps
+                )
+            self.ver_test = np.zeros(num_freq)
+            self.ver_test_p = np.zeros(num_freq)
+            self.hor_test = np.zeros(num_samps)
+            self.hor_test_p = np.zeros(num_samps)
+            for j in range(0, num_freq):
+                self.ver_test[j], self.ver_test_p[j] = stats.jarque_bera(
+                    self.data[j, :],
+                )
+            for k in range(0, num_samps):
+                self.hor_test[k], self.hor_test_p[k] = stats.jarque_bera(
+                    self.data[:, k]
+                )
         elif which_test == "KS":
             num_freq, num_samps = self.data.shape
             self.ver_test = np.zeros(num_freq)
@@ -556,12 +611,29 @@ class Paint(Frame):
                 np.quantile(self.data, 0.25, axis=0)
                 + np.quantile(self.data, 0.75, axis=0)
             ) / 2.0
+        elif which_test == "Shannon Entropy":
+            self.ver_test = shannon_entropy(self.data, axis=1)
+            self.hor_test = shannon_entropy(self.data, axis=0)
+        elif which_test == "Shapiro Wilk":
+            num_freq, num_samps = self.data.shape
+            self.ver_test = np.zeros(num_freq)
+            self.ver_test_p = np.zeros(num_freq)
+            self.hor_test = np.zeros(num_samps)
+            self.hor_test_p = np.zeros(num_samps)
+            for j in range(0, num_freq):
+                self.ver_test[j], self.ver_test_p[j] = stats.shapiro(
+                    self.data[j, :],
+                )
+            for k in range(0, num_samps):
+                self.hor_test[k], self.hor_test_p[k] = stats.shapiro(self.data[:, k])
         elif which_test == "Skew":
             self.ver_test = stats.skew(self.data, axis=1)
             self.hor_test = stats.skew(self.data, axis=0)
         elif which_test == "Stand. Dev.":
             self.ver_test = np.std(self.data, axis=1)
             self.hor_test = np.std(self.data, axis=0)
+            self.ver_test_p = None
+            self.hor_test_p = None
         elif which_test == "Trimean":
             self.ver_test = (
                 np.quantile(self.data, 0.25, axis=1)
@@ -573,6 +645,7 @@ class Paint(Frame):
                 + 2.0 * np.quantile(self.data, 0.50, axis=0)
                 + np.quantile(self.data, 0.75, axis=0)
             ) / 4.0
+        return which_test
 
 
 if __name__ == "__main__":

@@ -8,7 +8,55 @@ import numpy as np
 from scipy import stats
 from scipy.signal import savgol_filter as sg
 
-from jess.fitters import bspline_fitter, cheb_fitter, poly_fitter
+from jess.fitters import poly_fitter
+
+
+def anderson_darling_time(
+    gulp: np.ndarray,
+    critical_cut: float = 1e-22,
+    frame: int = 128,
+    return_values: bool = False,
+) -> np.ndarray:
+    """
+    UNDER CONSTRUCTION !!!
+    Calculates the Anderson Darling test along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+        p_cut: blocks with a pvalue below this number get cut
+
+        frame: number of time samples to calculate the kurtosis
+
+        rerturn_values: return the test values
+
+    Returns:
+
+       Mask based on Critical value cut
+
+       optional: return the test values for each block
+    """
+    frame = int(frame)
+    test_values = np.zeros_like(gulp, dtype=np.float)
+    p_values = np.zeros_like(gulp, dtype=np.float)
+    mask = np.full_like(gulp, True, dtype=bool)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        for k in range(0, gulp.shape[1]):
+            # Loop over the channels
+            test_vec, p_vec = stats.kstest(
+                (gulp[j : j + frame, k] - np.median(gulp[j : j + frame, k]))
+                / np.std(gulp[j : j + frame, k]),
+                "norm",
+            )
+            test_values[j : j + frame, k] = test_vec
+            p_values[j : j + frame, k] = p_vec
+
+    mask = p_values < critical_cut
+
+    if return_values:
+        return mask, p_values
+
+    return mask
 
 
 def dagostino_time(
@@ -90,6 +138,54 @@ def iqr_time(
 
     if return_values:
         return mask, iqr_values
+
+    return mask
+
+
+def ks_time(
+    gulp: np.ndarray,
+    p_cut: float = 1e-22,
+    frame: int = 128,
+    return_values: bool = False,
+) -> np.ndarray:
+    """
+    UNDER CONSTRUCTION !!!
+    Calculates the KS test along the time axis
+
+    Args:
+        gulp: the dynamic spectum to be analyzed
+
+        p_cut: blocks with a pvalue below this number get cut
+
+        frame: number of time samples to calculate the kurtosis
+
+        rerturn_values: return the test values
+
+    Returns:
+
+       Mask based on p value cut
+
+       optional: return the test values for each block
+    """
+    frame = int(frame)
+    test_values = np.zeros_like(gulp, dtype=np.float)
+    p_values = np.zeros_like(gulp, dtype=np.float)
+    mask = np.full_like(gulp, True, dtype=bool)
+    for j in np.arange(0, len(gulp) - frame + 1, frame):
+        for k in range(0, gulp.shape[1]):
+            # Loop over the channels
+            test_vec, p_vec = stats.kstest(
+                (gulp[j : j + frame, k] - np.median(gulp[j : j + frame, k]))
+                / np.std(gulp[j : j + frame, k]),
+                "norm",
+            )
+            test_values[j : j + frame, k] = test_vec
+            p_values[j : j + frame, k] = p_vec
+
+    mask = p_values < p_cut
+
+    if return_values:
+        return mask, p_values
 
     return mask
 
@@ -430,7 +526,7 @@ def skew_time(
 
         p_cut: blocks with a pvalue below this number get cut
 
-        frame: number of time samples to calculate the kurtosis
+        frame: number of time samples to calculate the skew
 
         return_mask: bool
     Returns:
@@ -440,12 +536,12 @@ def skew_time(
        optional: pvalues for each of the blocks
     """
     frame = int(frame)
-    kvalues = np.zeros_like(gulp, dtype=np.float)
+    svalues = np.zeros_like(gulp, dtype=np.float)
     mask = np.zeros_like(gulp, dtype=bool)
     p_values = np.zeros_like(gulp, dtype=np.float)
     for j in np.arange(0, len(gulp) - frame + 1, frame):
-        kurtosis_vec, p_vec = stats.skewtest(gulp[j : j + frame], axis=0)
-        kvalues[j : j + frame, :] = kurtosis_vec
+        skew_vec, p_vec = stats.skewtest(gulp[j : j + frame], axis=0)
+        svalues[j : j + frame, :] = skew_vec
         p_values[j : j + frame, :] = p_vec
 
     mask = p_values < p_cut

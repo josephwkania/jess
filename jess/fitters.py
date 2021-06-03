@@ -215,7 +215,7 @@ def bspline_fit(
         bandpass = np.median(section, axis=0)
         fit = bspline_fit(bandpass)
     """
-    
+
     num_chans = len(bandpass)
     if channels is None:
         channels = np.arange(0, num_chans)
