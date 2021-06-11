@@ -10,8 +10,6 @@ import logging
 import os
 import textwrap
 
-import numpy as np
-
 # import psutil
 from rich.logging import RichHandler
 from rich.progress import track
@@ -83,13 +81,12 @@ class JessWriter(Writer):
         self.dm = dm
         self.sigma = sigma
         self.channels_per_subband = channels_per_subband
-        self.remove_ends =  remove_ends
+        self.remove_ends = remove_ends
 
-        #self.your_object = your_object
+        # self.your_object = your_object
         self.samples_lost = delay_lost(
             self.dm, your_object.chan_freqs, your_object.tsamp
         )
-
 
     def clean_data(self: object, data: np.ndarray) -> np.ndarray:
         dedispersed = dedisperse(
@@ -112,20 +109,18 @@ class JessWriter(Writer):
 
         return redispersed
 
-
     def get_data_to_write(self: object, start_sample: int, nsamp: int):
 
-        #Read data to self.data, selects channels
-        #Optionally perform RFI filtering and zero-DM subtraction
-        #Args:
+        # Read data to self.data, selects channels
+        # Optionally perform RFI filtering and zero-DM subtraction
+        # Args:
         #    start_sample (int): Start sample number to read from
         #    nsamp (int): Number of samples to read
 
-
         proposed_end = start_sample + nsamp + 2 * self.samples_lost
         if proposed_end > self.your_object.your_header.nspectra:
-              nsamp = self.your_object.your_header.nspectra
-              # something I don't know
+            nsamp = self.your_object.your_header.nspectra
+            # something I don't know
         data = self.your_object.get_data(
             start_sample, nsamp + 2 * self.samples_lost, npoln=self.npoln
         )
@@ -166,17 +161,19 @@ class JessWriter(Writer):
 
         shape = data.shape
 
-
         for i in range(data.shape[1]):
             cleaned = self.clean_data(data[:, i, :])
 
             if start_sample == 0 and not self.remove_ends:
-                data_clean = np.zeros([nsamp,shape[1], shape[2]], dtype=data.dtype)
-                data_clean[:, i, :] = cleaned[: -2*self.samples_lost]
-            elif start_sample + nsamp == self.your_object.your_header.nspectra and not self.remove_ends:
+                data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
+                data_clean[:, i, :] = cleaned[: -2 * self.samples_lost]
+            elif (
+                start_sample + nsamp == self.your_object.your_header.nspectra
+                and not self.remove_ends
+            ):
                 print("In final if")
-                data_clean = np.zeros([nsamp, shape[1],shape[2]], dtype=data.dtype)
-                data_clean[:, i, :] = cleaned[2*self.samples_lost :]
+                data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
+                data_clean[:, i, :] = cleaned[2 * self.samples_lost :]
             else:
                 data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
                 data_clean[:, i, :] = cleaned[self.samples_lost : -self.samples_lost]
@@ -207,7 +204,6 @@ class JessWriter(Writer):
 
         # shape of data is (nt, npoln, nf)
         self.data = data
-
 """
 
 """
@@ -230,6 +226,49 @@ def get_gulp_size(your: object) -> int:
 
     return np.floor(available_ram / bytes_per_spectra).astype(int)
 """
+
+
+def get_fitter(fitter: str) -> object:
+    """
+    Get the fitter object for a given string
+
+    ArgsL
+        fitter: string with the selection of cheb_fitter, poly_fitter, or bspline_fitter
+
+    return:
+        corresponding fitter object
+    """
+    if fitter == "cheb_fitter":
+        return cheb_fitter
+    if fitter == "poly_fitter":
+        return poly_fitter
+    if fitter == "bspline_fitter":
+        return bspline_fitter
+
+    raise ValueError(f"You didn't give a valid fitter type! (Given {fitter})")
+
+
+def get_outfile(file: str, out_file: str) -> str:
+    """
+    Makes the outfile name by:
+    if no str is given -> append _mad to the original file name
+    if str is given with an extension other than .fil -> assert error
+    if str is given without extention  -> add .fil
+    """
+    if not out_file:
+        # if no out file is given, create the string
+        path, file_ext = os.path.splitext(file[0])
+        logger.info("No outfile given, writing to %s", out_file)
+        return path + "_MAD.fil"
+
+    # if a file is given, make sure it has a .fil ext
+    path, file_ext = os.path.splitext(out_file)
+    if file_ext:
+        assert file_ext == ".fil", "I can only write .fil, you gave: %s!" % file_ext
+        return out_file
+
+    out_file += ".fil"
+    return out_file
 
 
 def mad_cleaner(
@@ -267,7 +306,7 @@ def mad_cleaner(
 
     original_yr = Your(file)
     wr = JessWriter(
-        original_yr,
+        original_yr,ff
         dm=dispersion_measure,
         sigma=sigma,
         channels_per_subband=channels_per_subband,
@@ -282,34 +321,18 @@ def mad_cleaner(
         raise ValueError(f"Tried file extention {file_ext}, which I can't write")
     """
 
-    if fitter == "cheb_fitter":
-        fitter = cheb_fitter
-    elif fitter == "poly_fitter":
-        fitter = poly_fitter
-    elif fitter == "bspline_fitter":
-        fitter = bspline_fitter
-    else:
-        raise ValueError("You didn't give a valid fitter type! (Given %s)", fitter)
-
-    if not out_file:
-        # if no out file is given, create the string
-        path, file_ext = os.path.splitext(file[0])
-        out_file = path + "_MAD.fil"
-        logger.info(f"No outfile given, writing to {out_file}")
-    else:
-        # if a file is given, make sure it has a .fil ext
-        path, file_ext = os.path.splitext(out_file)
-        if file_ext:
-            assert file_ext == ".fil", f"I can only write .fil, you gave {file_ext}!"
-        else:
-            out_file += ".fil"
+    fitter = get_fitter(fitter)
+    out_file = get_outfile(file, out_file)
 
     yr = Your(file)
     samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.your_header.tsamp)
-    print(
-        f"dispersion_measure: {dispersion_measure}, yr.chan_freqs: {yr.chan_freqs}, yr.your_header.tsamp: {yr.your_header.tsamp}"
+    logging.debug(
+        "dispersion_measure: %f, yr.chan_freqs: %f, yr.your_header.tsamp: %f",
+        dispersion_measure,
+        yr.chan_freqs,
+        yr.your_header.tsamp,
     )
-    print(f"sampples_lost: {samples_lost}")
+    logging.debug("samples_lost: %i", samples_lost)
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
@@ -361,9 +384,7 @@ def mad_cleaner(
 
     # add data that can't be dispersed
     # because its at the end
-    print(
-        f"yr.your_header.nspectra - samples_lost, samples_lost: {yr.your_header.nspectra - samples_lost, samples_lost}"
-    )
+
     if not remove_ends:
         sigproc_object.append_spectra(
             yr.get_data(yr.your_header.nspectra - samples_lost, samples_lost), out_file
@@ -448,20 +469,20 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    logging_format = (
+    LOGGING_FORMAT = (
         "%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s"
     )
 
     if args.verbose:
         logging.basicConfig(
             level=logging.DEBUG,
-            format=logging_format,
+            format=LOGGING_FORMAT,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
     else:
         logging.basicConfig(
             level=logging.INFO,
-            format=logging_format,
+            format=LOGGING_FORMAT,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
 
