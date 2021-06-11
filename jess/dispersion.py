@@ -38,7 +38,7 @@ def dedisperse(
         assert nf == len(chan_freqs)
         delays = calc_dispersion_delays(dm, chan_freqs)
 
-    delay_bins = -np.round(delays / tsamp).astype("int64")
+    delay_bins = np.round(delays / tsamp).astype("int64")
 
     dedispersed = np.zeros(data.shape, dtype=data.dtype)
     for ii in range(nf):
