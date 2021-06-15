@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-
 """
 Runs a MAD filter over dispersed data.
-
 """
 
 import argparse
@@ -232,7 +230,7 @@ def get_fitter(fitter: str) -> object:
     """
     Get the fitter object for a given string
 
-    ArgsL
+    Args:
         fitter: string with the selection of cheb_fitter, poly_fitter, or bspline_fitter
 
     return:
@@ -304,9 +302,9 @@ def mad_cleaner(
         out_file = path + "_mad_cleaned" + "." + file_ext
 
 
-    original_yr = Your(file)
+    original_yr_input = Your(file)
     wr = JessWriter(
-        original_yr,ff
+        original_yr_input,ff
         dm=dispersion_measure,
         sigma=sigma,
         channels_per_subband=channels_per_subband,
@@ -324,62 +322,64 @@ def mad_cleaner(
     fitter = get_fitter(fitter)
     out_file = get_outfile(file, out_file)
 
-    yr = Your(file)
-    samples_lost = delay_lost(dispersion_measure, yr.chan_freqs, yr.your_header.tsamp)
-    logging.debug(
-        "dispersion_measure: %f, yr.chan_freqs: %f, yr.your_header.tsamp: %f",
-        dispersion_measure,
-        yr.chan_freqs,
-        yr.your_header.tsamp,
+    yr_input = Your(file)
+    samples_lost = delay_lost(
+        dispersion_measure, yr_input.chan_freqs, yr_input.your_header.tsamp
     )
+    logging.debug(
+        "dispersion_measure: %f, yr_input.chan_freqs: %s",
+        dispersion_measure,
+        yr_input.chan_freqs,
+    )
+    logging.debug("yr_input.your_header.tsamp: %f", yr_input.your_header.tsamp)
     logging.debug("samples_lost: %i", samples_lost)
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
-        source_name=yr.your_header.source_name,
-        nchans=yr.your_header.nchans,
-        foff=yr.your_header.foff,  # MHz
-        fch1=yr.your_header.fch1,  # MHz
-        tsamp=yr.your_header.tsamp,  # seconds
-        tstart=yr.your_header.tstart,  # MJD
-        # src_raj=yr.src_raj,  # HHMMSS.SS
-        # src_dej=yr.src_dej,  # DDMMSS.SS
-        # machine_id=yr.your_header.machine_id,
-        # nbeams=yr.your_header.nbeams,
-        # ibeam=yr.your_header.ibeam,
-        nbits=yr.your_header.nbits,
-        # nifs=yr.your_header.nifs,
-        # barycentric=yr.your_header.barycentric,
-        # pulsarcentric=yr.your_header.pulsarcentric,
-        # telescope_id=yr.your_header.telescope_id,
-        # data_type=yr.your_header.data_type,
-        # az_start=yr.your_header.az_start,
-        # za_start=yr.your_header.za_start,
+        source_name=yr_input.your_header.source_name,
+        nchans=yr_input.your_header.nchans,
+        foff=yr_input.your_header.foff,  # MHz
+        fch1=yr_input.your_header.fch1,  # MHz
+        tsamp=yr_input.your_header.tsamp,  # seconds
+        tstart=yr_input.your_header.tstart,  # MJD
+        # src_raj=yr_input.src_raj,  # HHMMSS.SS
+        # src_dej=yr_input.src_dej,  # DDMMSS.SS
+        # machine_id=yr_input.your_header.machine_id,
+        # nbeams=yr_input.your_header.nbeams,
+        # ibeam=yr_input.your_header.ibeam,
+        nbits=yr_input.your_header.nbits,
+        # nifs=yr_input.your_header.nifs,
+        # barycentric=yr_input.your_header.barycentric,
+        # pulsarcentric=yr_input.your_header.pulsarcentric,
+        # telescope_id=yr_input.your_header.telescope_id,
+        # data_type=yr_input.your_header.data_type,
+        # az_start=yr_input.your_header.az_start,
+        # za_start=yr_input.your_header.za_start,
     )
     sigproc_object.write_header(out_file)
 
     # add data that can't be dispersed
     # because its at the start
     if not remove_ends:
-        sigproc_object.append_spectra(yr.get_data(0, samples_lost), out_file)
+        sigproc_object.append_spectra(yr_input.get_data(0, samples_lost), out_file)
 
     # loop through all the data we can dedisperse
-    for j in track(range(0, yr.your_header.nspectra, gulp)):
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
 
-        if 2 * samples_lost + j + gulp < yr.your_header.nspectra:
-            data = yr.get_data(j, 2 * samples_lost + gulp)
+        if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, 2 * samples_lost + gulp)
         else:
-            data = yr.get_data(j, yr.your_header.nspectra - j)
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         dedisp = dedisperse(
-            data, dispersion_measure, yr.your_header.tsamp, yr.chan_freqs
+            data, dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
         dedisp[0:-samples_lost, :] = mad_spectra(
             dedisp[0:-samples_lost, :], frame=channels_per_subband, sigma=sigma
         )
         redisip = dedisperse(
-            dedisp, -dispersion_measure, yr.your_header.tsamp, yr.chan_freqs
+            dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
-        redisip = redisip.astype(yr.your_header.dtype)
+        redisip = redisip.astype(yr_input.your_header.dtype)
         sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
 
     # add data that can't be dispersed
@@ -387,7 +387,10 @@ def mad_cleaner(
 
     if not remove_ends:
         sigproc_object.append_spectra(
-            yr.get_data(yr.your_header.nspectra - samples_lost, samples_lost), out_file
+            yr_input.get_data(
+                yr_input.your_header.nspectra - samples_lost, samples_lost
+            ),
+            out_file,
         )
 
 
@@ -412,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f",
         "--file",
-        help="fil or fits file to process",
+        help=".fil or .fits file to process",
         type=str,
         required=True,
         nargs="+",

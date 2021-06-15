@@ -57,7 +57,7 @@ from your.utils.astro import calc_dispersion_delays, dedisperse
 from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
 
-from jess.calculators import shannon_entropy
+from jess.calculators import preprocess, shannon_entropy
 
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
@@ -143,8 +143,8 @@ class Paint(Frame):
             "Anderson-Darling",
             "D'Angostino",
             "Jarque-Bera",
-            "KS",
             "Kurtosis",
+            "Lilliefors",
             "MAD",
             "Midhing",
             "Shannon Entropy",
@@ -517,32 +517,20 @@ class Paint(Frame):
         """
         which_test = self.which_test.get()
         if which_test == "98-2":
-            self.ver_test = (
-                np.quantile(self.data, 0.98, axis=1)
-                - np.quantile(self.data, 0.02, axis=1)
-            ) / 2.0
-            self.hor_test = (
-                np.quantile(self.data, 0.98, axis=0)
-                - np.quantile(self.data, 0.02, axis=0)
-            ) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.98, 0.02], axis=1)
+            self.ver_test = (top_quant - bottom_quant) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.98, 0.02], axis=0)
+            self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "91-9":
-            self.ver_test = (
-                np.quantile(self.data, 0.91, axis=1)
-                - np.quantile(self.data, 0.09, axis=1)
-            ) / 2.0
-            self.hor_test = (
-                np.quantile(self.data, 0.91, axis=0)
-                - np.quantile(self.data, 0.09, axis=0)
-            ) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.91, 0.09], axis=1)
+            self.ver_test = (top_quant - bottom_quant) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.91, 0.09], axis=0)
+            self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "90-10: Interdecile":
-            self.ver_test = (
-                np.quantile(self.data, 0.90, axis=1)
-                - np.quantile(self.data, 0.10, axis=1)
-            ) / 2.0
-            self.hor_test = (
-                np.quantile(self.data, 0.90, axis=0)
-                - np.quantile(self.data, 0.10, axis=0)
-            ) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.90, 0.10], axis=1)
+            self.ver_test = (top_quant - bottom_quant) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.90, 0.10], axis=0)
+            self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "75-25: IQR":
             self.ver_test = stats.iqr(self.data, axis=1)
             self.hor_test = stats.iqr(self.data, axis=0)
@@ -582,23 +570,26 @@ class Paint(Frame):
                 self.hor_test[k], self.hor_test_p[k] = stats.jarque_bera(
                     self.data[:, k]
                 )
-        elif which_test == "KS":
+        elif which_test == "Kurtosis":
+            self.ver_test = stats.kurtosis(self.data, axis=1)
+            self.hor_test = stats.kurtosis(self.data, axis=0)
+        elif which_test == "Lilliefors":
+            # I don't take into account the change of dof when calculating the p_value
+            # The test stattic is the same as statsmodels lilliefors
             num_freq, num_samps = self.data.shape
             self.ver_test = np.zeros(num_freq)
             self.ver_test_p = np.zeros(num_freq)
             self.hor_test = np.zeros(num_samps)
             self.hor_test_p = np.zeros(num_samps)
+            data_0, data_1 = preprocess(self.data)
             for j in range(0, num_freq):
                 self.ver_test[j], self.ver_test_p[j] = stats.kstest(
-                    self.data[j, :], "norm"
+                    data_0[j, :], "norm"
                 )
             for k in range(0, num_samps):
                 self.hor_test[k], self.hor_test_p[k] = stats.kstest(
-                    self.data[:, k], "norm"
+                    data_1[:, k], "norm"
                 )
-        elif which_test == "Kurtosis":
-            self.ver_test = stats.kurtosis(self.data, axis=1)
-            self.hor_test = stats.kurtosis(self.data, axis=0)
         elif which_test == "MAD":
             self.ver_test = stats.median_abs_deviation(self.data, axis=1)
             self.hor_test = stats.median_abs_deviation(self.data, axis=0)
@@ -620,12 +611,14 @@ class Paint(Frame):
             self.ver_test_p = np.zeros(num_freq)
             self.hor_test = np.zeros(num_samps)
             self.hor_test_p = np.zeros(num_samps)
-            for j in range(0, num_freq):
-                self.ver_test[j], self.ver_test_p[j] = stats.shapiro(
-                    self.data[j, :],
+            for ichan in range(0, num_freq):
+                self.ver_test[ichan], self.ver_test_p[ichan] = stats.shapiro(
+                    self.data[ichan, :],
                 )
-            for k in range(0, num_samps):
-                self.hor_test[k], self.hor_test_p[k] = stats.shapiro(self.data[:, k])
+            for isamp in range(0, num_samps):
+                self.hor_test[isamp], self.hor_test_p[isamp] = stats.shapiro(
+                    self.data[:, isamp]
+                )
         elif which_test == "Skew":
             self.ver_test = stats.skew(self.data, axis=1)
             self.hor_test = stats.skew(self.data, axis=0)
@@ -635,16 +628,17 @@ class Paint(Frame):
             self.ver_test_p = None
             self.hor_test_p = None
         elif which_test == "Trimean":
-            self.ver_test = (
-                np.quantile(self.data, 0.25, axis=1)
-                + 2.0 * np.quantile(self.data, 0.50, axis=1)
-                + np.quantile(self.data, 0.75, axis=1)
-            ) / 4.0
-            self.hor_test = (
-                np.quantile(self.data, 0.25, axis=0)
-                + 2.0 * np.quantile(self.data, 0.50, axis=0)
-                + np.quantile(self.data, 0.75, axis=0)
-            ) / 4.0
+            top_quant, middle_quant, bottom_quant = np.quantile(
+                self.data, [0.75, 0.50, 0.25], axis=1
+            )
+            self.ver_test = (bottom_quant + 2.0 * middle_quant + top_quant) / 4.0
+            top_quant, middle_quant, bottom_quant = np.quantile(
+                self.data, [0.75, 0.50, 0.25], axis=0
+            )
+            self.hor_test = (bottom_quant + 2.0 * middle_quant + top_quant) / 4.0
+        else:
+            raise ValueError(f"You gave {which_test}, which is not avaliable.")
+
         return which_test
 
 
