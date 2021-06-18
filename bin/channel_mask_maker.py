@@ -86,6 +86,8 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
             test[j], _ = stats.kstest(data_0[j, :], "norm")
     elif which_test == "mad":
         test = stats.median_abs_deviation(data, axis=0)
+    elif which_test == "mean":
+        test = np.mean(data, axis=0)
     elif which_test == "midhing":
         top_quant, bottom_quant = np.quantile(data, [0.75, 0.25], axis=0)
         test = (bottom_quant + top_quant) / 2.0

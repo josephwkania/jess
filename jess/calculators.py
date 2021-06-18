@@ -73,11 +73,11 @@ def preprocess(
     if disperion_calc == "std":
         dispersion_0 = np.std(data, axis=0, ddof=1)
         dispersion_1 = np.std(data, axis=1, ddof=1)
-    if disperion_calc == "mad":
+    elif disperion_calc == "mad":
         dispersion_0 = median_abs_deviation(data, axis=0, scale="normal")
         dispersion_1 = median_abs_deviation(data, axis=1, scale="normal")
     else:
-        raise NotADirectoryError(f"Given {disperion_calc} for dispersion calculator")
+        raise NotImplementedError(f"Given {disperion_calc} for dispersion calculator")
 
     return (data - central_0) / dispersion_0, (
         data - central_1[:, None]
