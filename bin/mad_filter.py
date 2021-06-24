@@ -18,7 +18,7 @@ from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
 from jess.dispersion import dedisperse, delay_lost
-from jess.fitters import bspline_fitter, cheb_fitter, poly_fitter
+from jess.fitters import get_fitter  # bspline_fitter, cheb_fitter, poly_fitter
 from jess.JESS_filters import mad_spectra
 
 # from your.utils.rfi import sk_sg_filter
@@ -224,26 +224,6 @@ def get_gulp_size(your: object) -> int:
 
     return np.floor(available_ram / bytes_per_spectra).astype(int)
 """
-
-
-def get_fitter(fitter: str) -> object:
-    """
-    Get the fitter object for a given string
-
-    Args:
-        fitter: string with the selection of cheb_fitter, poly_fitter, or bspline_fitter
-
-    return:
-        corresponding fitter object
-    """
-    if fitter == "cheb_fitter":
-        return cheb_fitter
-    if fitter == "poly_fitter":
-        return poly_fitter
-    if fitter == "bspline_fitter":
-        return bspline_fitter
-
-    raise ValueError(f"You didn't give a valid fitter type! (Given {fitter})")
 
 
 def get_outfile(file: str, out_file: str) -> str:

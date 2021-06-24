@@ -14,8 +14,8 @@ from typing import List
 
 import numpy as np
 from rich.logging import RichHandler
-from your.utils.misc import YourArgparseFormatter
 from your import Your
+from your.utils.misc import YourArgparseFormatter
 
 from jess.channel_masks import channel_masker
 

@@ -43,6 +43,8 @@ from tkinter import (
     filedialog,
 )
 
+# from urllib.parse import non_hierarchical
+
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -54,10 +56,10 @@ from rich.table import Table
 from scipy import stats
 from your import Your
 from your.utils.astro import calc_dispersion_delays, dedisperse
-from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
 
 from jess.calculators import preprocess, shannon_entropy
+from jess.fitters import bspline_fitter
 
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework
@@ -190,10 +192,11 @@ class Paint(Frame):
 
     def load_file(
         self,
-        file_name=[""],
+        file_name=None,
         start_samp=0,
         gulp_size=4096,
         chan_std=False,
+        mask_file=None,
         bandpass_subtract=False,
     ):
         """
@@ -212,7 +215,7 @@ class Paint(Frame):
         self.gulp_size = gulp_size
         self.chan_std = chan_std
 
-        if file_name == [""]:
+        if file_name is None:
             file_name = filedialog.askopenfilename(
                 filetypes=(("fits/fil files", "*.fil *.fits"), ("All files", "*.*"))
             )
@@ -227,6 +230,14 @@ class Paint(Frame):
             self.subtract = True
         else:
             self.subtract = False
+
+        if mask_file is not None:
+            bad_chans = np.loadtxt(mask_file, dtype=int)
+            self.mask = np.zeros(self.your_obj.your_header.nchans, dtype=bool)
+            self.mask[bad_chans] = True
+            logging.debug("Masking %i", self.mask)
+        else:
+            self.mask = np.zeros(self.your_obj.your_header.nchans, dtype=bool)
 
         logging.info("Printing Header parameters")
         self.get_header()
@@ -276,12 +287,16 @@ class Paint(Frame):
 
         # get the min and max image values so that
         # we can see the typical values well
-        median = np.median(self.data)
-        std = np.std(self.data)
-        self.vmax = min(np.max(self.data), median + 4 * std)
-        self.vmin = max(np.min(self.data), median - 4 * std)
+        median = np.ma.median(self.data)
+        std = np.ma.std(self.data)
+        self.vmax = min(np.ma.max(self.data), median + 4 * std)
+        self.vmin = max(np.ma.min(self.data), median - 4 * std)
         self.im_ft = ax2.imshow(
-            self.data, aspect="auto", vmin=self.vmin, vmax=self.vmax
+            self.data,
+            aspect="auto",
+            vmin=self.vmin,
+            vmax=self.vmax,
+            interpolation="none",
         )
 
         # make bandpass
@@ -336,7 +351,7 @@ class Paint(Frame):
         self.ax5.set_yticklabels(yticks)
 
         # Make histogram
-        self.ax3.hist(self.data.ravel(), bins=52, density=True, label="Hist")
+        self.ax3.hist(self.data.compressed(), bins=52, density=True, label="Hist")
         self.ax3.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         # show stat tests
@@ -412,7 +427,7 @@ class Paint(Frame):
             self.fill_bp()
         self.im_bandpass.axes.relim()
         self.im_bandpass.axes.autoscale(axis="x")
-        self.im_time.set_ydata(np.mean(self.data, axis=0))
+        self.im_time.set_ydata(np.ma.mean(self.data, axis=0))
         self.im_time.axes.relim()
         self.im_time.axes.autoscale(axis="y")
 
@@ -457,17 +472,23 @@ class Paint(Frame):
         """
         ts = self.start_samp * self.your_obj.your_header.tsamp
         te = (self.start_samp + self.gulp_size) * self.your_obj.your_header.tsamp
-        self.data = self.your_obj.get_data(self.start_samp, self.gulp_size).T
+        data_chunk = self.your_obj.get_data(self.start_samp, self.gulp_size).T
         if self.dm != 0:
             logging.info(f"Dedispersing data at DM: {self.dm}")
-            self.data = dedisperse(
-                self.data.copy(),
+            data_chunk = dedisperse(
+                data_chunk.copy(),
                 self.dm,
                 self.your_obj.native_tsamp,
                 delays=self.dispersion_delays,
             )
+        if self.mask is None:
+            mask = np.broadcast_to(False, data_chunk.shape)
+            self.data = np.ma.array(data_chunk, mask=mask)
+        else:
+            mask = np.broadcast_to(self.mask[:, None], data_chunk.shape)
+            self.data = np.ma.array(data_chunk, mask=mask)
         if self.subtract:
-            bandpass = bandpass_fitter(np.median(self.data, axis=1))
+            bandpass = bspline_fitter(np.median(self.data, axis=1))
             # fit data to median bandpass
             np.clip(bandpass, self.min, self.max, out=bandpass)
             # make sure the fit is numerically possable
@@ -479,12 +500,12 @@ class Paint(Frame):
             # diff = np.clip(self.data - bandpass[:, None], self.min, self.max)
             # self.data = diff #diff.astype(self.your_obj.your_header.dtype)
 
-        self.bandpass = np.mean(self.data, axis=1)
-        self.time_series = np.mean(self.data, axis=0)
+        self.bandpass = np.ma.mean(self.data, axis=1)
+        self.time_series = np.ma.mean(self.data, axis=0)
         logging.info(
             f"Displaying {self.gulp_size} samples from sample "
             f"{self.start_samp} i.e {ts:.2f}-{te:.2f}s - gulp mean: "
-            f"{np.mean(self.data):.3f}, std: {np.std(self.data):.3f}"
+            f"{np.ma.mean(self.data):.3f}, std: {np.ma.std(self.data):.3f}"
         )
 
     def set_x_axis(self):
@@ -516,24 +537,32 @@ class Paint(Frame):
         ["D'Angostino", "IQR", "Kurtosis", "MAD", "Skew", "Stand. Dev."]
         """
         which_test = self.which_test.get()
+        # mask = np.broadcast_to(self.mask[:,None],  self.data.shape)
+        # self.data = self.data[mask]
         if which_test == "98-2":
             top_quant, bottom_quant = np.quantile(self.data, [0.98, 0.02], axis=1)
             self.ver_test = (top_quant - bottom_quant) / 2.0
-            top_quant, bottom_quant = np.quantile(self.data, [0.98, 0.02], axis=0)
+            top_quant, bottom_quant = np.quantile(
+                self.data[~self.mask], [0.98, 0.02], axis=0
+            )
             self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "91-9":
             top_quant, bottom_quant = np.quantile(self.data, [0.91, 0.09], axis=1)
             self.ver_test = (top_quant - bottom_quant) / 2.0
-            top_quant, bottom_quant = np.quantile(self.data, [0.91, 0.09], axis=0)
+            top_quant, bottom_quant = np.quantile(
+                self.data[~self.mask], [0.91, 0.09], axis=0
+            )
             self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "90-10: Interdecile":
             top_quant, bottom_quant = np.quantile(self.data, [0.90, 0.10], axis=1)
             self.ver_test = (top_quant - bottom_quant) / 2.0
-            top_quant, bottom_quant = np.quantile(self.data, [0.90, 0.10], axis=0)
+            top_quant, bottom_quant = np.quantile(
+                self.data[~self.mask], [0.90, 0.10], axis=0
+            )
             self.hor_test = (top_quant - bottom_quant) / 2.0
         elif which_test == "75-25: IQR":
             self.ver_test = stats.iqr(self.data, axis=1)
-            self.hor_test = stats.iqr(self.data, axis=0)
+            self.hor_test = stats.iqr(self.data[~self.mask], axis=0)
         elif which_test == "Anderson-Darling":
             num_freq, num_samps = self.data.shape
             self.ver_test = np.zeros(num_freq)
@@ -543,11 +572,15 @@ class Paint(Frame):
             for j in range(0, num_freq):
                 self.ver_test[j], _, _ = stats.anderson(self.data[j, :], dist="norm")
             for k in range(0, num_samps):
-                self.hor_test[k], _, _ = stats.anderson(self.data[:, k], dist="norm")
+                self.hor_test[k], _, _ = stats.anderson(
+                    self.data[~self.mask][:, k], dist="norm"
+                )
         elif which_test == "D'Angostino":
             self.ver_test, self.ver_test_p = stats.normaltest(self.data, axis=1)
-            self.hor_test, self.hor_test_p = stats.normaltest(self.data, axis=0)
-            self.test_label = "p-value"
+            self.hor_test, self.hor_test_p = stats.normaltest(
+                self.data[~self.mask], axis=0
+            )
+            # self.test_label = "p-value"
         elif which_test == "Jarque-Bera":
             num_freq, num_samps = self.data.shape
             if num_freq < 2000:
@@ -568,11 +601,11 @@ class Paint(Frame):
                 )
             for k in range(0, num_samps):
                 self.hor_test[k], self.hor_test_p[k] = stats.jarque_bera(
-                    self.data[:, k]
+                    self.data[~self.mask][:, k]
                 )
         elif which_test == "Kurtosis":
             self.ver_test = stats.kurtosis(self.data, axis=1)
-            self.hor_test = stats.kurtosis(self.data, axis=0)
+            self.hor_test = stats.kurtosis(self.data[~self.mask], axis=0)
         elif which_test == "Lilliefors":
             # I don't take into account the change of dof when calculating the p_value
             # The test stattic is the same as statsmodels lilliefors
@@ -587,24 +620,23 @@ class Paint(Frame):
                     data_0[j, :], "norm"
                 )
             for k in range(0, num_samps):
+                print(k)
                 self.hor_test[k], self.hor_test_p[k] = stats.kstest(
-                    data_1[:, k], "norm"
+                    data_1[~self.mask][:, k], "norm"
                 )
         elif which_test == "MAD":
             self.ver_test = stats.median_abs_deviation(self.data, axis=1)
-            self.hor_test = stats.median_abs_deviation(self.data, axis=0)
+            self.hor_test = stats.median_abs_deviation(self.data[~self.mask], axis=0)
         elif which_test == "Midhing":
-            self.ver_test = (
-                np.quantile(self.data, 0.25, axis=1)
-                + np.quantile(self.data, 0.75, axis=1)
-            ) / 2.0
-            self.hor_test = (
-                np.quantile(self.data, 0.25, axis=0)
-                + np.quantile(self.data, 0.75, axis=0)
-            ) / 2.0
+            top_quant, bottom_quant = np.quantile(self.data, [0.75, 0.25], axis=1)
+            self.ver_test = (top_quant + bottom_quant) / 2.0
+            top_quant, bottom_quant = np.quantile(
+                self.data[~self.mask], [0.75, 0.25], axis=0
+            )
+            self.hor_test = (bottom_quant + top_quant) / 2.0
         elif which_test == "Shannon Entropy":
             self.ver_test = shannon_entropy(self.data, axis=1)
-            self.hor_test = shannon_entropy(self.data, axis=0)
+            self.hor_test = shannon_entropy(self.data[~self.mask], axis=0)
         elif which_test == "Shapiro Wilk":
             num_freq, num_samps = self.data.shape
             self.ver_test = np.zeros(num_freq)
@@ -617,28 +649,29 @@ class Paint(Frame):
                 )
             for isamp in range(0, num_samps):
                 self.hor_test[isamp], self.hor_test_p[isamp] = stats.shapiro(
-                    self.data[:, isamp]
+                    self.data[~self.mask][:, isamp]
                 )
         elif which_test == "Skew":
             self.ver_test = stats.skew(self.data, axis=1)
-            self.hor_test = stats.skew(self.data, axis=0)
+            self.hor_test = stats.skew(self.data[~self.mask], axis=0)
         elif which_test == "Stand. Dev.":
             self.ver_test = np.std(self.data, axis=1)
-            self.hor_test = np.std(self.data, axis=0)
-            self.ver_test_p = None
-            self.hor_test_p = None
+            self.hor_test = np.std(self.data[~self.mask], axis=0)
+            # self.ver_test_p = None
+            # self.hor_test_p = None
         elif which_test == "Trimean":
             top_quant, middle_quant, bottom_quant = np.quantile(
                 self.data, [0.75, 0.50, 0.25], axis=1
             )
             self.ver_test = (bottom_quant + 2.0 * middle_quant + top_quant) / 4.0
             top_quant, middle_quant, bottom_quant = np.quantile(
-                self.data, [0.75, 0.50, 0.25], axis=0
+                self.data[~self.mask], [0.75, 0.50, 0.25], axis=0
             )
             self.hor_test = (bottom_quant + 2.0 * middle_quant + top_quant) / 4.0
         else:
             raise ValueError(f"You gave {which_test}, which is not avaliable.")
 
+        self.ver_test[self.mask] = np.nan  # mask values that are channel masked
         return which_test
 
 
@@ -695,6 +728,14 @@ if __name__ == "__main__":
         default=0,
     )
     parser.add_argument(
+        "-m",
+        "--mask",
+        help="Channel Mask to apply",
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-subtract",
         "--bandpass_subtract",
         help="subtract a polynomial fitted bandpass",
@@ -731,6 +772,7 @@ if __name__ == "__main__":
         values.start,
         values.gulp,
         values.chan_std,
+        values.mask,
         values.bandpass_subtract,
     )  # load file with user params
     root.mainloop()

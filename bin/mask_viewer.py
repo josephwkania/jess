@@ -78,9 +78,9 @@ from rich.logging import RichHandler
 from rich.table import Table
 from your import Your
 from your.utils.astro import calc_dispersion_delays, dedisperse
-from your.utils.math import bandpass_fitter
 from your.utils.misc import YourArgparseFormatter
 
+from jess.fitters import bspline_fitter
 from jess.JESS_filters import (
     dagostino_time,
     iqr_time,
@@ -403,7 +403,9 @@ class Paint(Frame):
         # self.ax21.legend(handletextpad=0, handlelength=0, framealpha=0.4)
 
         self.im_mask = ax22.imshow(
-            self.mask, aspect="auto"  # , vmin=self.vmin, vmax=self.vmax
+            self.mask,
+            aspect="auto",
+            interpolation="none",  # , vmin=self.vmin, vmax=self.vmax
         )
         ax22.text(
             0.05,
@@ -636,7 +638,7 @@ class Paint(Frame):
                 delays=self.dispersion_delays,
             )
         if self.subtract:
-            bandpass = bandpass_fitter(np.median(self.data, axis=1))
+            bandpass = bspline_fitter(np.median(self.data, axis=1))
             # fit data to median bandpass
             np.clip(bandpass, self.min, self.max, out=bandpass)
             # make sure the fit is nummerically possable
