@@ -643,13 +643,14 @@ class Paint(Frame):
             self.ver_test_p = np.zeros(num_freq)
             self.hor_test = np.zeros(num_samps)
             self.hor_test_p = np.zeros(num_samps)
+            data_0, data_1 = preprocess(self.data)
             for ichan in range(0, num_freq):
                 self.ver_test[ichan], self.ver_test_p[ichan] = stats.shapiro(
-                    self.data[ichan, :],
+                    data_0[ichan, :],
                 )
             for isamp in range(0, num_samps):
                 self.hor_test[isamp], self.hor_test_p[isamp] = stats.shapiro(
-                    self.data[~self.mask][:, isamp]
+                    data_1[~self.mask][:, isamp]
                 )
         elif which_test == "Skew":
             self.ver_test = stats.skew(self.data, axis=1)

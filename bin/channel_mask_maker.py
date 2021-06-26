@@ -14,6 +14,7 @@ from typing import List
 
 import numpy as np
 from rich.logging import RichHandler
+from scipy.signal import decimate
 from your import Your
 from your.utils.misc import YourArgparseFormatter
 
@@ -37,6 +38,7 @@ def channel_mask_maker(
     sigma: float = 3.0,
     start: int = 0,
     nspec: int = 65536,
+    decimation_factor: int = None,
     fitter: str = "bspline_fitter",
     chans_per_fit: int = 47,
     flag_above: bool = True,
@@ -60,6 +62,8 @@ def channel_mask_maker(
         start = 0
         nspec = yr_obj.your_header.nspectra
     dynamic_spectra = yr_obj.get_data(start, nspec)
+    if decimation_factor is not None:
+        dynamic_spectra = decimate(dynamic_spectra, decimation_factor, axis=0)
 
     mask = channel_masker(
         dynamic_spectra,
@@ -148,6 +152,14 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-deci",
+        "--decimation_factor",
+        help="Decimate in time by this factor",
+        type=int,
+        default=None,
+        required=False,
+    )
+    parser.add_argument(
         "-start",
         "--start",
         help="Spectra to start.",
@@ -204,6 +216,7 @@ if __name__ == "__main__":
         args.sigma,
         args.start,
         args.num_spectra,
+        args.decimation_factor,
         args.fitter,
         args.chans_per_fit,
         args.flag_below,
