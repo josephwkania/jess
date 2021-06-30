@@ -555,3 +555,49 @@ def skew_time(
         return mask, p_values
 
     return mask
+
+
+def zero_dm_filter(dynamic_spectra: np.ndarray, copy: bool = False):
+    """
+    Mask-safe zero-dm subtraction
+
+    args:
+        dynamic_spectra: The data you want to zero-dm, expects times samples
+                         on the vertical axis. Accepts numpy.ma.arrays.
+
+        copy: make a copy of the data instead of processing in place
+
+    returns:
+        dynamic spectra with a (more) uniform zero time series
+
+    note:
+        This should masked values. I am mainly conserned with bad data being spread out
+        ny the filter, and this ignores masked values when calculating time series
+        and bandpass
+
+    example:
+        yr = Your("some.fil")
+        dynamic_spectra = yr.get_data(744000, 2 ** 14)
+
+        mask = np.zeros(yr.your_header.nchans, dtype=bool)
+        mask[0:100] = True # mask the first hundred channels
+
+        dynamic_spoectra = np.ma.array(dynamic_cpectra,
+                                        mask=np.broadcast_to(dynamic_spectra.shape))
+        cleaned = zero_dm_filter(dynamic_spectra)
+    """
+    if copy:
+        dynamic_spectra = dynamic_spectra.copy()
+    data_type = dynamic_spectra.dtype
+    iinfo = np.iinfo(data_type)
+
+    time_series = np.ma.mean(dynamic_spectra, axis=1)
+    band_pass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
+
+    np.clip(
+        np.round(dynamic_spectra - time_series[:, None] + band_pass),
+        iinfo.min,
+        iinfo.max,
+        out=dynamic_spectra,
+    )
+    return dynamic_spectra.astype(data_type)
