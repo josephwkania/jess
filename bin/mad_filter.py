@@ -342,7 +342,10 @@ def mad_cleaner(
     # add data that can't be dispersed
     # because its at the start
     if not remove_ends:
-        sigproc_object.append_spectra(yr_input.get_data(0, samples_lost), out_file)
+        cleaned = mad_spectra(
+            yr_input.get_data(0, samples_lost), frame=channels_per_subband, sigma=sigma
+        )
+        sigproc_object.append_spectra(cleaned, out_file)
 
     # loop through all the data we can dedisperse
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
@@ -367,10 +370,15 @@ def mad_cleaner(
     # because its at the end
 
     if not remove_ends:
-        sigproc_object.append_spectra(
+        cleaned = mad_spectra(
             yr_input.get_data(
                 yr_input.your_header.nspectra - samples_lost, samples_lost
             ),
+            frame=channels_per_subband,
+            sigma=sigma,
+        )
+        sigproc_object.append_spectra(
+            cleaned,
             out_file,
         )
 

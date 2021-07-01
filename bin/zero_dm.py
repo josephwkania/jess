@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-A zero dm filter - 
+A zero dm filter, subtracts the mean from each
+spectra, making the zero dm time series very close
+to zero. This is equivalent to a low pass filter.
+See "An interference removal technique for radio pulsar searches"
+R.P Eatough 2009
+
+This seems to work best when applied near the end of
+processing, as not to spread structured RFI out in
+frequency.
 """
 
 import argparse
@@ -9,12 +17,13 @@ import os
 import textwrap
 
 import numpy as np
-from jess.JESS_filters import zero_dm
 from rich.logging import RichHandler
 from rich.progress import track
 from your import Your
 from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
+
+from jess.JESS_filters import zero_dm
 
 logger = logging.getLogger()
 
@@ -50,18 +59,20 @@ def zero_dm_cleaner(
     out_file: str = None,
 ) -> None:
     """
-    Loops over a file, dedisperses the data, runs a subbanded mad filter,
-    redisperses the data, and then saves to a new file.
+    Loops over a file, zero DMing each block, uses one
+    bandpass over all the data, as not to create jumps.
+    This could be problematic if there are very large
+    changes in antenna temp
 
     Args:
         file: the file to loop over
 
-        sigma: sigma to remove outliers
+        mask_file: the file that contains channels to mask
 
-        channels_per_subband: the number of channels for each subband
+        gulp: amount of data to process each loop
 
-        keep_ends: keep the ends of file that can't be cleaned
-                   because they can't be dedispersed
+        outfile: file to write to, if not give, appends _zeroDM to the
+                 input file name.
     """
 
     yr_input = Your(file)
@@ -111,9 +122,11 @@ def zero_dm_cleaner(
         data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
         # use one bandpass to prevent jumps
         if bandpass is None:
+            logging.debug("Creating bandpass")
             bandpass = np.ma.mean(data, axis=0)
         data = zero_dm(data, bandpass)
         sigproc_object.append_spectra(data, out_file)
+    logging.info("Done!")
 
 
 if __name__ == "__main__":
