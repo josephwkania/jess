@@ -236,8 +236,9 @@ def get_outfile(file: str, out_file: str) -> str:
     if not out_file:
         # if no out file is given, create the string
         path, file_ext = os.path.splitext(file[0])
+        out_file = path + "_MAD.fil"
         logger.info("No outfile given, writing to %s", out_file)
-        return path + "_MAD.fil"
+        return out_file
 
     # if a file is given, make sure it has a .fil ext
     path, file_ext = os.path.splitext(out_file)

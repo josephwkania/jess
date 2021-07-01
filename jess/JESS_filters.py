@@ -299,6 +299,9 @@ def mad_spectra(
     Returns:
 
        Dynamic Spectrum with values clipped
+
+    See:
+        https://github.com/rohinijoshi06/mad-filter-gpu
     """
     frame = int(frame)
     data_type = gulp.dtype
@@ -557,13 +560,18 @@ def skew_time(
     return mask
 
 
-def zero_dm_filter(dynamic_spectra: np.ndarray, copy: bool = False):
+def zero_dm(
+    dynamic_spectra: np.ndarray, bandpass: np.ndarray = None, copy: bool = False
+) -> np.ndarray:
     """
     Mask-safe zero-dm subtraction
 
     args:
         dynamic_spectra: The data you want to zero-dm, expects times samples
                          on the vertical axis. Accepts numpy.ma.arrays.
+
+        bandpass - Use if a large file is broken up into pieces.
+                   Be careful about how you use this with masks.
 
         copy: make a copy of the data instead of processing in place
 
@@ -582,9 +590,19 @@ def zero_dm_filter(dynamic_spectra: np.ndarray, copy: bool = False):
         mask = np.zeros(yr.your_header.nchans, dtype=bool)
         mask[0:100] = True # mask the first hundred channels
 
-        dynamic_spoectra = np.ma.array(dynamic_cpectra,
+        dynamic_spectra = np.ma.array(dynamic_spectra,
                                         mask=np.broadcast_to(dynamic_spectra.shape))
-        cleaned = zero_dm_filter(dynamic_spectra)
+        cleaned = zero_dm(dynamic_spectra)
+
+    from:
+        "An interference removal technique for radio pulsar searches" R.P Eatough 2009
+
+    see:
+        https://sourceforge.net/p/heimdall-astro/code/ci/master/tree/Pipeline/clean_filterbank_rfi.cu
+
+        https://github.com/scottransom/presto/blob/de2cf58262190d35fb37dbebf8308a6e29d72adf/src/zerodm.c
+
+        https://github.com/thepetabyteproject/your/blob/1f4b39326835e6bb87e0003318b433dc1455a137/your/writer.py#L232
     """
     if copy:
         dynamic_spectra = dynamic_spectra.copy()
@@ -592,10 +610,11 @@ def zero_dm_filter(dynamic_spectra: np.ndarray, copy: bool = False):
     iinfo = np.iinfo(data_type)
 
     time_series = np.ma.mean(dynamic_spectra, axis=1)
-    band_pass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
+    if bandpass is None:
+        bandpass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
 
     np.clip(
-        np.round(dynamic_spectra - time_series[:, None] + band_pass),
+        np.round(dynamic_spectra - time_series[:, None] + bandpass),
         iinfo.min,
         iinfo.max,
         out=dynamic_spectra,
