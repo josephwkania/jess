@@ -41,6 +41,7 @@ def channel_mask_maker(
     decimation_factor: int = None,
     fitter: str = "bspline_fitter",
     chans_per_fit: int = 47,
+    flagger="z_score_flagger",
     flag_above: bool = True,
     flag_below: bool = True,
     out_file: str = None,
@@ -71,6 +72,7 @@ def channel_mask_maker(
         sigma=sigma,
         fitter=fitter,
         chans_per_fit=chans_per_fit,
+        flagger=flagger,
         flag_above=flag_above,
         flag_below=flag_below,
         show_plots=False,
@@ -118,7 +120,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-sig",
         "--sigma",
-        help="Sigma at which to cut data",
+        help="Sigma at which to cut data, (z_score_flagger only)",
         type=float,
         default=3.0,
         required=False,
@@ -138,6 +140,15 @@ if __name__ == "__main__":
         help="Number of channels for each fit degree of freedom.",
         type=int,
         default=47,
+        required=False,
+    )
+    parser.add_argument(
+        "-flagger",
+        "--flagger",
+        help="""Flagger to remove outliers,
+        [z_score_flagger, dbscan_flagger]""",
+        type=str,
+        default="z_score_flagger",
         required=False,
     )
     parser.add_argument(
@@ -170,7 +181,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-flag_above",
         "--flag_above",
-        help="Flag values that are above median+sigma*stand dev.",
+        help="""Flag values that are above median+sigma*stand dev.
+            (z_score_flagger only)""",
         type=bool,
         default=True,
         required=False,
@@ -178,7 +190,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-flag_below",
         "--flag_below",
-        help="Flag values that are below median-sigma*stand dev.",
+        help="""Flag values that are below median-sigma*stand dev.
+            (z_score_flagger only)""",
         type=bool,
         default=True,
         required=False,
@@ -219,6 +232,7 @@ if __name__ == "__main__":
         args.decimation_factor,
         args.fitter,
         args.chans_per_fit,
+        args.flagger,
         args.flag_below,
         args.flag_above,
         args.out_file,

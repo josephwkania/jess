@@ -84,8 +84,8 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         _, num_freq = data.shape
         test = np.zeros(num_freq)
         # test_p = np.zeros(num_freq)
-        for k in range(0, num_freq):
-            test, _ = stats.shapiro(data[:, k])
+        for ichan in range(0, num_freq):
+            test[ichan], _ = stats.shapiro(data[:, ichan])
     elif which_test == "skew":
         test = stats.skew(data, axis=0)
     elif which_test == "stand-dev":
@@ -98,6 +98,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
     else:
         raise ValueError(f"You gave {which_test}, which is not avaliable.")
 
+    assert len(test) == data.shape[1], "test fail to return a value for each channel"
     return test
 
 
@@ -292,7 +293,7 @@ def channel_masker(
     sigma: float = 3.0,
     fitter: str = "median_fitter",
     chans_per_fit: int = 47,
-    flagger: str = "dbscan_flagger",
+    flagger: str = "z_score_flagger",
     flag_above: bool = True,
     flag_below: bool = True,
     eps: float = 0.9,
@@ -337,7 +338,8 @@ def channel_masker(
 
         chans_per_fit - the number of channels per fitting point, see fitters.py
                         (default: 50)
-        flagger: The flagger to remove outlying points, [z_score_flagger, dbscan_flagger]
+        flagger: The flagger to remove outlying points,
+                 [z_score_flagger, dbscan_flagger]
 
         flag_upper - flag values above median+sigma*standard dev (Only z-score)
 
@@ -367,17 +369,19 @@ def channel_masker(
     flat = test_values - fit
 
     if flagger == "z_score_flagger":
+        logging.debug("Using z_score_flagger")
         mask = z_score_flagger(
             flat,
             flag_above=flag_above,
             flag_below=flag_below,
-            ssigma=sigma,
+            sigma=sigma,
             show_plots=show_plots,
         )
     elif flagger == "dbscan_flagger":
+        logging.debug("Using dbscan_flagger")
         mask = dbscan_flagger(flat, eps=eps, min_clust_frac=min_clust_frac)
     else:
-        raise ValueError(f"You asked for {flagger}, which not avilable")
+        raise ValueError(f"You asked for {flagger}, which not available")
 
     if show_plots:
         plt.figure(figsize=(10, 10))
