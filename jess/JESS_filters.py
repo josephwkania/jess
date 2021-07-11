@@ -322,11 +322,13 @@ def mad_spectra(
         # mask = (thresh_bottom < diff) & (diff < thresh_top)
         # mask is where data is good
 
-        thresh = np.tile(cut, (frame, 1)).T
-        medians = np.tile(medians, (frame, 1)).T
-        mask = np.abs(diff - medians) > thresh
+        # thresh = np.tile(cut, (frame, 1)).T
+        # medians = np.tile(medians, (frame, 1)).T
+        # mask = np.abs(diff - medians) > thresh
 
-        logging.info(f"mask: {mask.sum()}")
+        mask = np.abs(diff - medians[:, None]) > cut[:, None]
+
+        logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
 
         try:  # sometimes this fails to converge, if happens use original fit
             masked_arr = np.ma.masked_array(gulp[:, j : j + frame], mask=mask)
@@ -335,7 +337,7 @@ def mad_spectra(
                 chans_per_fit=chans_per_fit,
             )
         except Exception as e:
-            logging.warning(f"Failed to fit with Exception: {e}" ", using original fit")
+            logging.warning("Failed to fit with Exception: %f, using original fit", e)
             fit_clean = fit
 
         np.clip(fit_clean, min_value, max_value, out=fit_clean)
@@ -343,9 +345,7 @@ def mad_spectra(
         # when converted to ints
         fit_clean = fit_clean.astype(data_type)
         # convert to dtype of the original
-        gulp[:, j : j + frame] = np.where(
-            mask, np.tile(fit_clean, (len(gulp), 1)), gulp[:, j : j + frame]
-        )
+        gulp[:, j : j + frame] = np.where(mask, fit_clean, gulp[:, j : j + frame])
 
     return gulp.astype(data_type)
 
@@ -488,6 +488,90 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
+def mad_fft_combined_clip(
+    gulp: np.ndarray,
+    frame: int = 256,
+    sigma: float = 3,
+    chans_per_fit: int = 50,
+    fitter: object = poly_fitter,
+) -> np.ndarray:
+    """
+    Takes the real FFT of the dynamic spectra along the time axis
+    (a FFT for each channel). Then take the absolute value, this
+    gives the magnitude of the power @ each frequence.
+
+    Then run the MAD filter along the freqency axis, this looks for
+    outliers in the in the spectra. Narrow band RFI will only be
+    in a few channels, add will be flagged.
+
+    This mask is then used to flag the complex FFT by setting the
+    flagged points to zero. The first row is excluded because this
+    is the powers for each channel. This could be zero, but it has
+    so effect, and keeping it at its current value keeps the
+    bandpass somooth.
+
+    The masked FFT is then inverse real fft back. Data is clip to
+    min/max for the given input data type and returned as that
+    data type.
+
+    Args:
+       gulp: a dynamic with time on the vertical axis,
+       and freq on the horizontal
+
+       frame (int): number of frequency samples to calculate MAD, i.e. the
+                    channels per subband
+
+       sigma (float): cutoff sigma
+
+       chans_per_fit (int): polynomial/spline knots per channel to fit the bandpass
+
+       fitter: which fitter to use, see jess.fitters for options
+
+    Returns:
+
+       Dynamic Spectrum with narrow band perodic RFI removed.
+
+    See:
+
+        For MAD
+        https://github.com/rohinijoshi06/mad-filter-gpu
+
+        For FFT cleaning
+        https://arxiv.org/abs/2012.11630 & https://github.com/ymaan4/RFIClean
+
+    """
+    frame = int(frame)
+    data_type = gulp.dtype
+    iinfo = np.iinfo(data_type)
+    min_value = iinfo.min
+    max_value = iinfo.max
+
+    gulp_fftd = np.fft.rfft(gulp, axis=0)
+    gulp_fftd_abs = np.abs(gulp_fftd)
+
+    for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
+        fit = fitter(
+            np.median(gulp_fftd_abs[:, j : j + frame], axis=0),
+            chans_per_fit=chans_per_fit,
+        )  # .astype(data_type)
+        diff = gulp_fftd_abs[:, j : j + frame] - fit
+        cut = sigma * stats.median_abs_deviation(diff, axis=1, scale="Normal")
+        medians = np.median(diff, axis=1)
+
+        mask = np.abs(diff - medians[:, None]) > cut[:, None]
+        mask[0, :] = False  # set the row to false to preserve the powser levels
+
+        logging.info("Masked Percentage: %.2f %%", mask.mean())
+
+        gulp_fftd[:, j : j + frame][mask] = 0
+
+    gulp_cleaned = np.fft.irfft(gulp_fftd, axis=0)
+
+    np.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
+
+    return gulp_cleaned.astype(data_type)
+
+
 def mad_time_cutter(gulp, frame=256, sigma=10):
     """
     Calculates Median Absolute Deviations along the time axis
@@ -603,6 +687,8 @@ def zero_dm(
         https://github.com/scottransom/presto/blob/de2cf58262190d35fb37dbebf8308a6e29d72adf/src/zerodm.c
 
         https://github.com/thepetabyteproject/your/blob/1f4b39326835e6bb87e0003318b433dc1455a137/your/writer.py#L232
+
+        https://sigpyproc3.readthedocs.io/en/latest/_modules/sigpyproc/Filterbank.html#Filterbank.removeZeroDM
     """
     if copy:
         dynamic_spectra = dynamic_spectra.copy()

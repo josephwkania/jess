@@ -12,8 +12,8 @@ def dedisperse(
     data: np.ndarray,
     dm: float,
     tsamp: float,
-    chan_freqs: np.ndarray = [],
-    delays: np.ndarray = [],
+    chan_freqs: np.ndarray = None,
+    delays: np.ndarray = None,
 ) -> np.ndarray:
     """
     Dedisperse a chunk of data..
@@ -31,21 +31,21 @@ def dedisperse(
     Returns:
         dedispersed (float): Dedispersed data
     """
-    nt, nf = data.shape
-    if np.any(delays):
-        assert len(delays) == nf
+    _, num_freq = data.shape
+    if delays is not None:
+        assert len(delays) == num_freq
     else:
-        assert nf == len(chan_freqs)
+        assert num_freq == len(chan_freqs)
         delays = calc_dispersion_delays(dm, chan_freqs)
 
     delay_bins = np.round(delays / tsamp).astype("int64")
 
     dedispersed = np.zeros(data.shape, dtype=data.dtype)
-    for ii in range(nf):
-        dedispersed[:, ii] = np.concatenate(
+    for ichan in range(num_freq):
+        dedispersed[:, ichan] = np.concatenate(
             [
-                data[-delay_bins[ii] :, ii],
-                data[: -delay_bins[ii], ii],
+                data[-delay_bins[ichan] :, ichan],
+                data[: -delay_bins[ichan], ichan],
             ]
         )
     return dedispersed
