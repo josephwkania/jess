@@ -488,7 +488,7 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
-def mad_fft_combined_clip(
+def mad_fft(
     gulp: np.ndarray,
     frame: int = 256,
     sigma: float = 3,
@@ -498,7 +498,7 @@ def mad_fft_combined_clip(
     """
     Takes the real FFT of the dynamic spectra along the time axis
     (a FFT for each channel). Then take the absolute value, this
-    gives the magnitude of the power @ each frequence.
+    gives the magnitude of the power @ each frequency.
 
     Then run the MAD filter along the freqency axis, this looks for
     outliers in the in the spectra. Narrow band RFI will only be
@@ -508,7 +508,7 @@ def mad_fft_combined_clip(
     flagged points to zero. The first row is excluded because this
     is the powers for each channel. This could be zero, but it has
     so effect, and keeping it at its current value keeps the
-    bandpass somooth.
+    bandpass smooth.
 
     The masked FFT is then inverse real fft back. Data is clip to
     min/max for the given input data type and returned as that
@@ -682,6 +682,8 @@ def zero_dm(
         "An interference removal technique for radio pulsar searches" R.P Eatough 2009
 
     see:
+        https://github.com/SixByNine/sigproc/blob/28ba4f4539d41a8722c6ed194fa66e87bf4610fc/src/zerodm.c#L195
+
         https://sourceforge.net/p/heimdall-astro/code/ci/master/tree/Pipeline/clean_filterbank_rfi.cu
 
         https://github.com/scottransom/presto/blob/de2cf58262190d35fb37dbebf8308a6e29d72adf/src/zerodm.c
@@ -706,3 +708,85 @@ def zero_dm(
         out=dynamic_spectra,
     )
     return dynamic_spectra.astype(data_type)
+
+
+def zero_dm_fft(
+    dynamic_spectra: np.ndarray,
+    bandpass: np.ndarray = None,
+    modes_to_zero: int = 2,
+) -> np.ndarray:
+    """
+    This removes low frequency components from each spectra. This extends 0-DM
+    subtraction. 0-DM subtraction as described in Eatough 2009, involves subtraction
+    of the mean of each spectra from each spectra, makeing the zero-DM time series
+    contant. This is effective in removing broadband RFI that has no structure.
+
+    This is very effective for moderate bandwidths and low dynamic ranges.
+    As bandwidths increase, we can see zero-DM RFI that only extends through
+    part of the band. Increases in dynamic range allow for zero-DM RFI to have
+    spectral structure, either intrinsically or the result of the receiving chain.
+
+    This attempts to corret for these problems with the subtraction method.
+    This removes the zero Fourier term (the total power), equivalent to the
+    subtraction method. It also can remove higher order terms, removing slowing
+    signals across the band.
+
+    You need to be careful about how many terms you remove. We will start to
+    to remove more components of the pulse. When this happens is determined
+    by the fraction of the band that contains the pulse. The larger the pulse,
+    the lower the Fourier components.
+
+    args:
+        dynamic_spectra - The dynamic spectra you want to clean. Time axis
+                         must be verticals
+
+        bandpass - Bandpass to add. We subtract off the DC component, we
+                   must add it back to safely write the data as unsigned ints
+                   if no bandpass is given, this will use the bandpass from the
+                   dynamic spectra given, this can cause jumps if you sare processing
+                   multiple chunks.
+
+        modes_to_zero - The number of modes to filter.
+
+    returns:
+        dynamic spectra with low frequency modes filtered, same data type as given
+
+    notes:
+        See jess.filters.zero_dm Docstring for other implementations
+        of subtraction 0-dm filters.
+    """
+    assert isinstance(
+        modes_to_zero, int
+    ), f"You must give an integer number of nodes, you gave {modes_to_zero}"
+    if modes_to_zero == 0:
+        raise ValueError("You said to zero no modes, this will have no effect")
+    if modes_to_zero == 1:
+        logging.warning("Only removing first mode, consider using standard zero-dm")
+
+    if bandpass is None:
+        bandpass = dynamic_spectra.mean(axis=0)
+
+    data_type = dynamic_spectra.dtype
+    iinfo = np.iinfo(data_type)
+
+    dynamic_spectra_fftd = np.fft.rfft(dynamic_spectra, axis=1)
+
+    # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
+    # the dynamic spectra since FFT is complex
+    mask = np.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
+    mask[
+        :modes_to_zero,
+    ] = True
+
+    logging.info("Masked Percentage: %.2f %%", mask.mean())
+
+    # zero out the modes we don't want
+    dynamic_spectra_fftd[np.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0
+
+    # Add the bandpass back so out values are in the correct range
+    dynamic_spectra_cleaned = np.fft.irfft(dynamic_spectra_fftd, axis=1) + bandpass
+
+    # clip so astype doesn't wrap
+    np.clip(dynamic_spectra_cleaned, iinfo.min, iinfo.max, out=dynamic_spectra_cleaned)
+
+    return np.round(dynamic_spectra_cleaned).astype(data_type)
