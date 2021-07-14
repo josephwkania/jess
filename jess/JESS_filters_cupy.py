@@ -190,7 +190,7 @@ def mad_fft(
     return gulp_cleaned.get()
 
 
-def zero_dm_fft_gpu(
+def zero_dm_fft(
     dynamic_spectra: np.ndarray,
     bandpass: np.ndarray = None,
     modes_to_zero: int = 2,
