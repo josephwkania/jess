@@ -494,6 +494,7 @@ def mad_fft(
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
+    bad_chans: np.ndarray = None,
 ) -> np.ndarray:
     """
     Takes the real FFT of the dynamic spectra along the time axis
@@ -527,6 +528,9 @@ def mad_fft(
 
        fitter: which fitter to use, see jess.fitters for options
 
+       bad_chans: list of bad channels - these have all information
+                  removed except for the power
+
     Returns:
 
        Dynamic Spectrum with narrow band perodic RFI removed.
@@ -548,6 +552,12 @@ def mad_fft(
 
     gulp_fftd = np.fft.rfft(gulp, axis=0)
     gulp_fftd_abs = np.abs(gulp_fftd)
+
+    # remove infomation for the bad channels, but leave power
+    # this has no effect on the following filter
+    # which works on gulp_fftd_abd
+    if bad_chans is not None:
+        gulp_fftd[1:, bad_chans] = 0
 
     for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
         fit = fitter(
@@ -743,7 +753,7 @@ def zero_dm_fft(
         bandpass - Bandpass to add. We subtract off the DC component, we
                    must add it back to safely write the data as unsigned ints
                    if no bandpass is given, this will use the bandpass from the
-                   dynamic spectra given, this can cause jumps if you sare processing
+                   dynamic spectra given, this can cause jumps if you are processing
                    multiple chunks.
 
         modes_to_zero - The number of modes to filter.

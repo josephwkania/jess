@@ -32,7 +32,7 @@ def get_outfile(file: str, out_file: str) -> str:
     """
     Makes the outfile name by:
     if no str is given -> append _zeroDM to the original file name
-    if str is given with an extension other than .fil -> assert error
+    if str is given with an extension other than .fil -> Value error
     if str is given without extention  -> add .fil
     """
     if not out_file:
@@ -45,7 +45,8 @@ def get_outfile(file: str, out_file: str) -> str:
     # if a file is given, make sure it has a .fil ext
     path, file_ext = os.path.splitext(out_file)
     if file_ext:
-        assert file_ext == ".fil", "I can only write .fil, you gave: %s!" % file_ext
+        if not file_ext == ".fil":
+            raise ValueError("I can only write .fil, you gave: %s!" % file_ext)
         return out_file
 
     out_file += ".fil"
