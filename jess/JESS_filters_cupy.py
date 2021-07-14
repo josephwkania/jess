@@ -272,4 +272,4 @@ def zero_dm_fft(
     # clip so astype doesn't wrap
     cp.clip(dynamic_spectra_cleaned, iinfo.min, iinfo.max, out=dynamic_spectra_cleaned)
 
-    return cp.round(dynamic_spectra_cleaned).astype(data_type).get()
+    return cp.around(dynamic_spectra_cleaned).astype(data_type).get()
