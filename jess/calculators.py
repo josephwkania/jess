@@ -3,8 +3,44 @@
 The repository for all calculators
 """
 
+import logging
+
 import numpy as np
+from scipy import signal
 from scipy.stats import entropy, median_abs_deviation
+
+
+def decimate(
+    dynamic_spectra: np.ndarray, time_factor: int = None, freq_factor: int = None
+) -> np.ndarray:
+    """
+    Makes decimates along either/both time and frequency axes.
+    Flattens data along frequency before freqency decimation.
+    Fattens again in frequency before returning.
+
+    args:
+        dynamic_spectra: dynamic spectra with time on the ventricle axis
+
+        time_factor: factor to reduce time sampling by
+
+        freq_factor: factor to reduce freqency channels
+
+    returns:
+        Flattened in frequency dynamic spectra, reduced in time and/or freqency
+    """
+    if time_factor is not None:
+        if not isinstance(time_factor, int):
+            time_factor = int(time_factor)
+        logging.warning("time_factor was not an int: now is %i", time_factor)
+        dynamic_spectra = signal.decimate(dynamic_spectra, time_factor, axis=0)
+    if freq_factor is not None:
+        if not isinstance(freq_factor, int):
+            freq_factor = int(freq_factor)
+        logging.warning("freq_factor was not an int: now is %i", freq_factor)
+        dynamic_spectra = signal.decimate(
+            dynamic_spectra - np.median(dynamic_spectra, axis=0), freq_factor
+        )
+    return dynamic_spectra - np.median(dynamic_spectra, axis=0)
 
 
 def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
@@ -48,7 +84,7 @@ def preprocess(
     Preprocess the array for later statistical tests
 
     Args:
-        data: 2D dynamic specra to process
+        data: 2D dynamic spectra to process
 
         central_value_calc: The method to calculate the central value,
 

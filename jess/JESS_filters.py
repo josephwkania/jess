@@ -5,7 +5,7 @@ The repository for all my filters
 import logging
 
 import numpy as np
-from scipy import stats
+from scipy import signal, stats
 from scipy.signal import savgol_filter as sg
 
 from jess.fitters import poly_fitter
@@ -495,6 +495,7 @@ def mad_fft(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
+    return_mask: bool = False,
 ) -> np.ndarray:
     """
     Takes the real FFT of the dynamic spectra along the time axis
@@ -531,9 +532,13 @@ def mad_fft(
        bad_chans: list of bad channels - these have all information
                   removed except for the power
 
+        return_mask: return the bool mask of flagged frequencies
+
     Returns:
 
        Dynamic Spectrum with narrow band perodic RFI removed.
+
+       (optional) bool mask of frequencies where bad=True
 
     See:
 
@@ -552,34 +557,47 @@ def mad_fft(
 
     gulp_fftd = np.fft.rfft(gulp, axis=0)
     gulp_fftd_abs = np.abs(gulp_fftd)
-
-    # remove infomation for the bad channels, but leave power
-    # this has no effect on the following filter
-    # which works on gulp_fftd_abd
-    if bad_chans is not None:
-        gulp_fftd[1:, bad_chans] = 0
+    mask = np.zeros_like(gulp_fftd_abs, dtype=bool)
 
     for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
         fit = fitter(
             np.median(gulp_fftd_abs[:, j : j + frame], axis=0),
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
+
         diff = gulp_fftd_abs[:, j : j + frame] - fit
-        cut = sigma * stats.median_abs_deviation(diff, axis=1, scale="Normal")
-        medians = np.median(diff, axis=1)
+        cut = sigma * stats.median_abs_deviation(diff, axis=None, scale="Normal")
+        # adds some resistance to jumps in medians
+        medians = signal.medfilt(np.median(diff, axis=1), 7)
+        mask[:, j : j + frame] = np.abs(diff - medians[:, None]) > cut
 
-        mask = np.abs(diff - medians[:, None]) > cut[:, None]
-        mask[0, :] = False  # set the row to false to preserve the powser levels
+    # maybe some lekage into the nearby channels
+    # but this doesn't seem to help much
+    # mask = ndimage.binary_dilation(mask)
 
-        logging.info("Masked Percentage: %.2f %%", mask.mean())
+    # remove infomation for the bad channels, but leave power
+    # this has no effect on the following filter
+    # which works on gulp_fftd_abd
+    if bad_chans is not None:
+        logging.debug("Applying channel mask %s", bad_chans)
+        mask[1:, bad_chans] = True
 
-        gulp_fftd[:, j : j + frame][mask] = 0
+    mask[0, :] = False  # set the row to false to preserve the powser levels
+    gulp_fftd[mask] = 0
+
+    # We're flagging complex data, so multiply by 2
+    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
 
     gulp_cleaned = np.fft.irfft(gulp_fftd, axis=0)
 
     np.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
 
-    return gulp_cleaned.astype(data_type)
+    gulp_cleaned = gulp_cleaned.astype(data_type)
+
+    if return_mask:
+        return gulp_cleaned, mask
+
+    return gulp_cleaned
 
 
 def mad_time_cutter(gulp, frame=256, sigma=10):
@@ -788,7 +806,7 @@ def zero_dm_fft(
         :modes_to_zero,
     ] = True
 
-    logging.info("Masked Percentage: %.2f %%", mask.mean())
+    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
 
     # zero out the modes we don't want
     dynamic_spectra_fftd[np.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0

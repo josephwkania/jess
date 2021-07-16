@@ -131,7 +131,9 @@ def fft_cleaner(
             logging.debug("Creating bandpass")
             bandpass = np.ma.mean(data, axis=0)
         data = mad_fft(data, sigma=sigma)
-        data = zero_dm_fft(data, bandpass, modes_to_zero=modes_to_zero)
+        if modes_to_zero is not None:
+            logging.debug("Zero DMing")
+            data = zero_dm_fft(data, bandpass, modes_to_zero=modes_to_zero)
         sigproc_object.append_spectra(data, out_file)
     logging.info("Done!")
 
@@ -188,7 +190,7 @@ if __name__ == "__main__":
         "--modes_to_zero",
         help="Number of modes to zero",
         type=int,
-        default=6,
+        default=None,
         required=False,
     )
     parser.add_argument(
