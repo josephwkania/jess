@@ -181,8 +181,6 @@ def mad_fft(
 
         mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut
 
-        gulp_fftd[:, j : j + frame][mask.get()] = 0
-
     # remove infomation for the bad channels, but leave power
     # this has no effect on the following filter
     # which works on gulp_fftd_abd
