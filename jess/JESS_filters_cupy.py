@@ -177,7 +177,7 @@ def mad_fft(
         cut = sigma * median_abs_deviation_gpu(diff, axis=None, scale="Normal")
         medians = cp.median(diff, axis=1)
         # adds some resistance to jumps in medians
-        medians = cp.asarray(signal.medfilt(medians.get()))
+        medians = cp.asarray(signal.medfilt(medians.get(), 7))
 
         mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut
 

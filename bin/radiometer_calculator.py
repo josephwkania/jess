@@ -6,10 +6,12 @@ Calculated from raw sampling time to 2**max_boxcar_width
 
 import argparse
 import logging
+from builtins import ValueError
 
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
@@ -17,8 +19,6 @@ from rich.progress import track
 from rich.table import Table
 from scipy import signal
 from your import Your
-
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):
@@ -31,17 +31,17 @@ def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width
     timeseries
     """
     yr = Your(input_file)
-    timeseries = cp.zeros(yr.your_header.nspectra, dtype=np.float64)
 
     if nspectra == -1:
         end = yr.your_header.nspectra
     else:
         end = 2 ** nspectra
-
-    assert (
-        2 ** max_boxcar_width < 2 * end
-    ), f"""2*number samples to be processed:
+    timeseries = cp.zeros(end, dtype=np.float64)
+    if 2 ** max_boxcar_width > 2 * end:
+        raise ValueError(
+            f"""2*number samples to be processed:
         {2*end} is shorter than the max boxcar width of {2**max_boxcar_width}"""
+        )
 
     for j in track(np.arange(0, end, block_size)):
         if j + block_size > end:
@@ -117,7 +117,7 @@ def get_stds(
         axs[1].set_xscale("log", basex=2)
         axs[1].set_yscale("log", basey=2)
         axs[1].plot(widths, stds, "-.", label="Stand Dev")
-        axs[1].plot(widths, mads, "*sle", label="Median Abs Dev")
+        axs[1].plot(widths, mads, "*", label="Median Abs Dev")
         axs[1].plot(widths, mads[0] / np.sqrt(widths), label="Guass Noise")
         axs[1].set_ylabel("Stand. Dev.")
         axs[1].set_xlabel("Boxcar Width [Sample]")
@@ -130,7 +130,7 @@ def get_stds(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="your_header.py",
-        description="Read header from psrfits/filterbank files and print the unified header",
+        description="Show Radiometer noise for the zero DM time series",
         epilog=__doc__,
     )
     parser.add_argument(
