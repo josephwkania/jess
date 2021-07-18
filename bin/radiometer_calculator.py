@@ -11,7 +11,6 @@ from builtins import ValueError
 import cupy as cp
 import matplotlib.pyplot as plt
 import numpy as np
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
 from rich import box
 from rich.console import Console
 from rich.logging import RichHandler
@@ -19,6 +18,8 @@ from rich.progress import track
 from rich.table import Table
 from scipy import signal
 from your import Your
+
+from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):
@@ -90,8 +91,8 @@ def get_stds(
     stds = stds.get()  # Don't need cupy
     mads = mads.get()
 
-    stds_dic = {j: [w, k] for j, w, k in zip(widths, stds, mads)}
-    logging.debug(f"Boxcarwidths: std-dev mad{stds_dic}")
+    stds_dic = {width: [std, mad] for width, std, mad in zip(widths, stds, mads)}
+    logging.debug("Boxcarwidths: std-dev mad %f", stds_dic)
 
     if not headless:
         console = Console()
@@ -99,8 +100,8 @@ def get_stds(
         table.add_column("Boxcar Width", justify="right")
         table.add_column("Stand. Dev")
         table.add_column("Median Abs Dev")
-        for w, s, i in zip(widths, stds, mads):
-            table.add_row(f"{w}", f"{s:.4e}", f"{i:.4e}")
+        for width, std, mad in zip(widths, stds, mads):
+            table.add_row(f"{width}", f"{std:.4e}", f"{mad:.4e}")
         console.print(table)
 
         fig, axs = plt.subplots(2, constrained_layout=True)
@@ -162,20 +163,20 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", help="Be verbose", action="store_true")
 
     values = parser.parse_args()
-    logging_format = (
+    LOGGING_FORMAT = (
         "%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s"
     )
 
     if values.verbose:
         logging.basicConfig(
             level=logging.DEBUG,
-            format=logging_format,
+            format=LOGGING_FORMAT,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
     else:
         logging.basicConfig(
             level=logging.INFO,
-            format=logging_format,
+            format=LOGGING_FORMAT,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
     get_stds(

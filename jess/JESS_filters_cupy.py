@@ -3,20 +3,19 @@
 This contains cupy versions of some of JESS_filters
  """
 import logging
-from typing import Union
 
 import cupy as cp
 import numpy as np
-from scipy import signal
+from cupyx.scipy.signal import medfilt
 
-from jess.fitters import poly_fitter
-from jess.fitters_cupy import bandpass_fitter
+# from jess.fitters import poly_fitter
+from jess.fitters_cupy import poly_fitter
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def spectral_mad(
-    gulp: Union[int, float], frame: int = 256, sigma: float = 3, poly_order: int = 5
-) -> Union[int, float]:
+    dynamic_spectra: cp.ndarray, frame: int = 256, sigma: float = 3, poly_order: int = 5
+) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
     (i.e. for each time sample across all channels)
@@ -34,70 +33,68 @@ def spectral_mad(
 
        Dynamic Spectrum with values clipped
 
-    Note:
+    Notes:
         This version differs from the cpu version.
         This uses nans, while cpu version uses np.ma mask,
-        performance is about the same
+        excision performance is about the same. See the cpu docstring for
+        references.
     """
     frame = int(frame)
-    data_type = gulp.dtype
+    data_type = dynamic_spectra.dtype
     iinfo = np.iinfo(data_type)
     min_value = iinfo.min
     max_value = iinfo.max
 
-    for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        fit = cp.array(
-            bandpass_fitter(cp.median(gulp[:, j : j + frame], axis=0), poly_order=5)
+    mask = cp.zeros_like(dynamic_spectra, dtype=bool)
+
+    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+        fit = poly_fitter(
+            cp.median(dynamic_spectra[:, j : j + frame], axis=0), poly_order=5
         )
         # .astype(data_type)
-        diff = gulp[:, j : j + frame] - fit
+
+        diff = dynamic_spectra[:, j : j + frame] - fit
         cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
-
         medians = cp.median(diff, axis=1)
-        # threash_top = cp.tile(cut+medians, ( frame, 1)).T
-        # threash_bottom = cp.tile(medians-cut, ( frame, 1)).T
-        # mask = (threash_bottom < diff) & (diff < threash_top)
-        # mask is where data is good
+        mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) < cut[:, None]
 
-        threash = cp.tile(cut, (frame, 1)).T
-        medians = cp.tile(medians, (frame, 1)).T
-        mask = cp.abs(diff - medians) < threash
-        logging.info("Masking %.2f  %%", mask.mean() * 100)
-
-        try:  # sometimes this fails to converge, if happens use origial fit
-            fit_clean = bandpass_fitter(
-                cp.array(
-                    np.nanmedian(
-                        cp.where(mask, gulp[:, j : j + frame], np.nan).get(), axis=0
-                    )
+        try:  # sometimes this fails to converge, if happens use original fit
+            fit_clean = poly_fitter(
+                cp.nanmedian(
+                    cp.where(
+                        mask[:, j : j + frame],
+                        dynamic_spectra[:, j : j + frame],
+                        np.nan,
+                    ),
+                    axis=0,
                 ),
                 poly_order=poly_order,
             )
-            # cp.nanmedian exists in cupy 9.0, should update this when released
         except Exception as e:
             logging.warning("Failed to fit with Exception: %s, using original fit", e)
             fit_clean = fit
-
         cp.clip(
             fit_clean, min_value, max_value, out=fit_clean
         )  # clip the values so they don't wrap when converted to ints
-        fit_clean = fit_clean.astype(data_type)  # convert to dtype of the original
-        gulp[:, j : j + frame] = cp.where(
-            mask, gulp[:, j : j + frame], cp.tile(fit_clean, (len(gulp), 1))
+        dynamic_spectra[:, j : j + frame] = cp.where(
+            mask[:, j : j + frame],
+            dynamic_spectra[:, j : j + frame],
+            fit_clean,
         )
 
-    return (gulp.get()).astype(data_type)
+    logging.info("Masking %.2f %%", (1 - mask.mean()) * 100)
+    return dynamic_spectra.astype(data_type)
 
 
 def mad_fft(
-    gulp: np.ndarray,
+    gulp: cp.ndarray,
     frame: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
     return_mask: bool = False,
-) -> np.ndarray:
+) -> cp.ndarray:
     """
     Takes the real FFT of the dynamic spectra along the time axis
     (a FFT for each channel). Then take the absolute value, this
@@ -170,14 +167,14 @@ def mad_fft(
 
     for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
         fit = fitter(
-            cp.median(gulp_fftd_abs[:, j : j + frame], axis=0).get(),
+            cp.median(gulp_fftd_abs[:, j : j + frame], axis=0),
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
         diff = gulp_fftd_abs[:, j : j + frame] - cp.array(fit)
         cut = sigma * median_abs_deviation_gpu(diff, axis=None, scale="Normal")
         medians = cp.median(diff, axis=1)
         # adds some resistance to jumps in medians
-        medians = cp.asarray(signal.medfilt(medians.get(), 7))
+        medians = medfilt(medians, 7)
 
         mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut
 
@@ -198,19 +195,19 @@ def mad_fft(
 
     cp.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
 
-    gulp_cleaned = gulp_cleaned.astype(data_type).get()
+    gulp_cleaned = gulp_cleaned.astype(data_type)
 
     if return_mask:
-        return gulp_cleaned, mask.get()
+        return gulp_cleaned, mask
 
     return gulp_cleaned
 
 
 def zero_dm_fft(
-    dynamic_spectra: np.ndarray,
-    bandpass: np.ndarray = None,
+    dynamic_spectra: cp.ndarray,
+    bandpass: cp.ndarray = None,
     modes_to_zero: int = 2,
-) -> np.ndarray:
+) -> cp.ndarray:
     """
     This removes low frequency components from each spectra. This extends 0-DM
     subtraction. 0-DM subtraction as described in Eatough 2009, involves subtraction
@@ -288,4 +285,4 @@ def zero_dm_fft(
     # clip so astype doesn't wrap
     cp.clip(dynamic_spectra_cleaned, iinfo.min, iinfo.max, out=dynamic_spectra_cleaned)
 
-    return cp.around(dynamic_spectra_cleaned).astype(data_type).get()
+    return cp.around(dynamic_spectra_cleaned).astype(data_type)

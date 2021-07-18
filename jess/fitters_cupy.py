@@ -13,9 +13,9 @@ from jess.scipy_cupy.stats import median_abs_deviation_gpu
 logger = logging.getLogger()
 
 
-def bandpass_fitter(
-    bandpass: list, poly_order: int = 20, mask_sigma: float = 6
-) -> float:
+def poly_fitter(
+    bandpass: cp.ndarray, poly_order: int = 20, mask_sigma: float = 6
+) -> cp.ndarray:
     """
     Fits bandpasses by polyfitting the bandpass, looking for channels that
     are far from this fit, excluding these channels and refitting the bandpass
@@ -39,7 +39,7 @@ def bandpass_fitter(
     diff = bandpass - poly(channels)
     # find the difference between fitted and real bandpass
     std_diff = median_abs_deviation_gpu(diff, scale="normal")
-    logging.info(f"Standard Deviation of fit: {std_diff.get():.4}")
+    logging.debug("Standard Deviation of fit: %.2f", std_diff.get())
 
     if std_diff > 0.0:
         # if there is no variability in the channel, don't try to mask
@@ -53,7 +53,8 @@ def bandpass_fitter(
         best_fit_bandpass = poly_clean(channels)
     else:
         best_fit_bandpass = poly(channels)
-    logger.info(
-        f"chi^2: {stats.chisquare(bandpass.get(), best_fit_bandpass.get(), poly_order)[0]:.4}"
+    logger.debug(
+        "chi^2: %.2f",
+        stats.chisquare(bandpass.get(), best_fit_bandpass.get(), poly_order)[0],
     )
     return best_fit_bandpass
