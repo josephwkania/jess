@@ -287,7 +287,7 @@ def clean(
     """
 
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
-
+        logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
         else:
@@ -358,6 +358,7 @@ def clean_dispersion(
 
     # loop through all the data we can dedisperse
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+        logging.debug("Cleaning samples starting at %i", j)
 
         if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, 2 * samples_lost + gulp)
@@ -472,7 +473,8 @@ def mad_cleaner(
     )
     sigproc_object.write_header(out_file)
 
-    if dispersion_measure is not None:
+    if dispersion_measure > 0:
+        logging.debug("Cleaning at DM %f", dispersion_measure)
         clean_dispersion(
             yr_input,
             dispersion_measure=dispersion_measure,
@@ -485,6 +487,7 @@ def mad_cleaner(
             sigproc_object=sigproc_object,
         )
     else:
+        logging.debug("No DM given, cleaning at 0 DM")
         clean(
             yr_input=yr_input,
             sigma=sigma,
@@ -525,9 +528,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "-dm",
         "--dispersion_measure",
-        help="Dispersion Measure to process the data",
+        help="Dispersion Measure to process the data; if 0, doesn't dedisp",
         type=float,
-        required=True,
+        default=0,
+        required=False,
     )
     parser.add_argument(
         "-sig",
