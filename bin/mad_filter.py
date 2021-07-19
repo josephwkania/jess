@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Runs a MAD filter over dispersed data.
+Runs a MAD filter over fits/fil.
+
+Can dedisperse the data to a given DM to
+protect bright/narrow pulses.
 """
 
 import argparse
@@ -17,9 +20,10 @@ from your.formats.filwriter import make_sigproc_object
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
-from jess.dispersion import dedisperse, delay_lost
-from jess.fitters import get_fitter  # bspline_fitter, cheb_fitter, poly_fitter
-from jess.JESS_filters import mad_spectra
+from jess.dispersion_cupy import dedisperse, delay_lost
+
+# from jess.fitters import get_fitter
+from jess.JESS_filters_cupy import mad_spectra_flat
 
 # from your.utils.rfi import sk_sg_filter
 # from your.writer import Writer
@@ -250,14 +254,154 @@ def get_outfile(file: str, out_file: str) -> str:
     return out_file
 
 
+def clean(
+    yr_input: object,
+    sigma: float,
+    gulp: int,
+    flatten_to: int,
+    channels_per_subband: int,
+    out_file: str,
+    sigproc_object: object,
+) -> None:
+    """
+    Run the MAD filter on chunks of data without dedispersing it.
+
+     Args:
+        yr_input: the your object of the file you want to clean
+
+        sigma: Sigma at which to remove outliers
+
+        gulp: The amount of data to process.
+
+        flatten_to: make this the median out the out data.
+
+        channels_per_subband: the number of channels for each MAD
+                              subband
+
+        out_file: name of the file to write out
+
+        sigproc_obj: sigproc object to write out
+
+    Returns
+        None
+    """
+
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+        cleaned = mad_spectra_flat(
+            data, frame=channels_per_subband, sigma=sigma, flatten_to=flatten_to
+        )
+        sigproc_object.append_spectra(cleaned, out_file)
+
+
+def clean_dispersion(
+    yr_input: object,
+    dispersion_measure: float,
+    sigma: float,
+    gulp: int,
+    flatten_to: int,
+    channels_per_subband: int,
+    # remove_ends: bool,
+    out_file: str,
+    sigproc_object: object,
+) -> None:
+    """
+    Run the MAD filter on chunks of data without dedispersing it.
+
+     Args:
+        yr_input: the your object of the file you want to clean
+
+        dispersion_measure: The dispersion measure to dedisperse
+                            the data to
+
+        sigma: Sigma at which to remove outliers
+
+        gulp: The amount of data to process.
+
+        latten_to: make this the median out the out data.
+
+        channels_per_subband: the number of channels for each MAD
+                              subband
+
+        out_file: name of the file to write out
+
+        sigproc_obj: sigproc object to write out
+
+    Returns
+        None
+    """
+    samples_lost = delay_lost(
+        dispersion_measure, yr_input.chan_freqs, yr_input.your_header.tsamp
+    )
+    logging.debug(
+        "dispersion_measure: %f, yr_input.chan_freqs: %s",
+        dispersion_measure,
+        yr_input.chan_freqs,
+    )
+    logging.debug("yr_input.your_header.tsamp: %f", yr_input.your_header.tsamp)
+    logging.debug("samples_lost: %i", samples_lost)
+
+    # add data that can't be dispersed
+    # because its at the start
+    # if not remove_ends:
+    cleaned = mad_spectra_flat(
+        yr_input.get_data(0, samples_lost),
+        frame=channels_per_subband,
+        sigma=sigma,
+        flatten_to=flatten_to,
+    )
+    sigproc_object.append_spectra(cleaned, out_file)
+
+    # loop through all the data we can dedisperse
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+
+        if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, 2 * samples_lost + gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+        dedisp = dedisperse(
+            data, dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
+        )
+        dedisp[0:-samples_lost, :] = mad_spectra_flat(
+            dedisp[0:-samples_lost, :],
+            frame=channels_per_subband,
+            sigma=sigma,
+            flatten_to=flatten_to,
+        )
+        redisip = dedisperse(
+            dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
+        )
+        redisip = redisip.astype(yr_input.your_header.dtype)
+        sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
+
+    # add data that can't be dispersed
+    # because its at the end
+
+    # if not remove_ends:
+    cleaned = mad_spectra_flat(
+        yr_input.get_data(yr_input.your_header.nspectra - samples_lost, samples_lost),
+        frame=channels_per_subband,
+        sigma=sigma,
+        flatten_to=flatten_to,
+    )
+    sigproc_object.append_spectra(
+        cleaned,
+        out_file,
+    )
+
+
 def mad_cleaner(
     file: str,
     dispersion_measure: float,
     sigma: float = 3,
     gulp: int = 16384,
-    fitter: str = "poly_fitter",
+    flatten_to: int = 64,
     channels_per_subband: int = 256,
-    remove_ends: bool = False,
+    # remove_ends: bool = False,
     out_file: str = None,
 ) -> None:
     """
@@ -300,20 +444,9 @@ def mad_cleaner(
         raise ValueError(f"Tried file extention {file_ext}, which I can't write")
     """
 
-    fitter = get_fitter(fitter)
+    # fitter = get_fitter(fitter)
     out_file = get_outfile(file, out_file)
-
     yr_input = Your(file)
-    samples_lost = delay_lost(
-        dispersion_measure, yr_input.chan_freqs, yr_input.your_header.tsamp
-    )
-    logging.debug(
-        "dispersion_measure: %f, yr_input.chan_freqs: %s",
-        dispersion_measure,
-        yr_input.chan_freqs,
-    )
-    logging.debug("yr_input.your_header.tsamp: %f", yr_input.your_header.tsamp)
-    logging.debug("samples_lost: %i", samples_lost)
 
     sigproc_object = make_sigproc_object(
         rawdatafile=out_file,
@@ -339,47 +472,27 @@ def mad_cleaner(
     )
     sigproc_object.write_header(out_file)
 
-    # add data that can't be dispersed
-    # because its at the start
-    if not remove_ends:
-        cleaned = mad_spectra(
-            yr_input.get_data(0, samples_lost), frame=channels_per_subband, sigma=sigma
-        )
-        sigproc_object.append_spectra(cleaned, out_file)
-
-    # loop through all the data we can dedisperse
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
-
-        if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:
-            data = yr_input.get_data(j, 2 * samples_lost + gulp)
-        else:
-            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
-        dedisp = dedisperse(
-            data, dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
-        )
-        dedisp[0:-samples_lost, :] = mad_spectra(
-            dedisp[0:-samples_lost, :], frame=channels_per_subband, sigma=sigma
-        )
-        redisip = dedisperse(
-            dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
-        )
-        redisip = redisip.astype(yr_input.your_header.dtype)
-        sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
-
-    # add data that can't be dispersed
-    # because its at the end
-
-    if not remove_ends:
-        cleaned = mad_spectra(
-            yr_input.get_data(
-                yr_input.your_header.nspectra - samples_lost, samples_lost
-            ),
-            frame=channels_per_subband,
+    if dispersion_measure is not None:
+        clean_dispersion(
+            yr_input,
+            dispersion_measure=dispersion_measure,
             sigma=sigma,
+            gulp=gulp,
+            flatten_to=flatten_to,
+            channels_per_subband=channels_per_subband,
+            # remove_ends,
+            out_file=out_file,
+            sigproc_object=sigproc_object,
         )
-        sigproc_object.append_spectra(
-            cleaned,
-            out_file,
+    else:
+        clean(
+            yr_input=yr_input,
+            sigma=sigma,
+            gulp=gulp,
+            flatten_to=flatten_to,
+            channels_per_subband=channels_per_subband,
+            out_file=out_file,
+            sigproc_object=sigproc_object,
         )
 
 
@@ -432,10 +545,10 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--fitter",
-        help="fitter to you, [cheb_fitter, poly_fitter(default), bspline_fitter]",
-        type=str,
-        default="poly_fitter",
+        "--flatten_to",
+        help="Flatten data to this number",
+        type=int,
+        default=64,
         required=False,
     )
     parser.add_argument(
@@ -445,12 +558,12 @@ if __name__ == "__main__":
         default=16384,
         required=False,
     )
-    parser.add_argument(
-        "--remove_ends",
-        help="keep ends of file that cannot be cleaned",
-        action="store_true",
-        required=False,
-    )
+    # parser.add_argument(
+    #    "--remove_ends",
+    #    help="keep ends of file that cannot be cleaned",
+    #     action="store_true",
+    #     required=False,
+    # )
     parser.add_argument(
         "-o",
         "--out_file",
@@ -483,8 +596,8 @@ if __name__ == "__main__":
         args.dispersion_measure,
         args.sigma,
         args.gulp,
-        args.fitter,
+        args.flatten_to,
         args.channels_per_subband,
-        args.remove_ends,
+        # args.remove_ends,
         args.out_file,
     )

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dispersion Utilities using cupu
+Dispersion Utilities using cupy
 """
 
 import cupy as cp
