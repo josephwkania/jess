@@ -56,7 +56,7 @@ def delay_lost(dm: float, chan_freqs: cp.ndarray, tsamp: float) -> cp.int64:
     max_delay = (
         4148808.0 * dm * (1 / (chan_freqs[0]) ** 2 - 1 / (chan_freqs[-1]) ** 2) / 1000
     )
-    return cp.round(cp.abs(max_delay) / tsamp).astype(cp.int64)
+    return cp.around(cp.abs(max_delay) / tsamp).astype(cp.int64)
 
 
 def calc_dispersion_delays(dm: float, chan_freqs: cp.ndarray) -> cp.ndarray:

@@ -542,6 +542,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-channels_per_subband",
         "--channels_per_subband",
         help="Number of channels in each subband",
         type=int,
@@ -549,6 +550,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-flatten_to",
         "--flatten_to",
         help="Flatten data to this number",
         type=int,
@@ -556,6 +558,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-g",
         "--gulp",
         help="Number of samples to process at each loop",
         type=int,
