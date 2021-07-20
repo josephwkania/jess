@@ -11,6 +11,8 @@ import logging
 import os
 import textwrap
 
+import cupy as cp
+
 # import psutil
 from rich.logging import RichHandler
 from rich.progress import track
@@ -293,9 +295,12 @@ def clean(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         cleaned = mad_spectra_flat(
-            data, frame=channels_per_subband, sigma=sigma, flatten_to=flatten_to
+            cp.asarray(data),
+            frame=channels_per_subband,
+            sigma=sigma,
+            flatten_to=flatten_to,
         )
-        sigproc_object.append_spectra(cleaned, out_file)
+        sigproc_object.append_spectra(cleaned.get(), out_file)
 
 
 def clean_dispersion(
@@ -349,12 +354,12 @@ def clean_dispersion(
     # because its at the start
     # if not remove_ends:
     cleaned = mad_spectra_flat(
-        yr_input.get_data(0, samples_lost),
+        cp.asarray(yr_input.get_data(0, samples_lost)),
         frame=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
     )
-    sigproc_object.append_spectra(cleaned, out_file)
+    sigproc_object.append_spectra(cleaned.get(), out_file)
 
     # loop through all the data we can dedisperse
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
@@ -365,7 +370,10 @@ def clean_dispersion(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         dedisp = dedisperse(
-            data, dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
+            cp.asarray(data),
+            dispersion_measure,
+            yr_input.your_header.tsamp,
+            yr_input.chan_freqs,
         )
         dedisp[0:-samples_lost, :] = mad_spectra_flat(
             dedisp[0:-samples_lost, :],
@@ -377,20 +385,26 @@ def clean_dispersion(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
         redisip = redisip.astype(yr_input.your_header.dtype)
-        sigproc_object.append_spectra(redisip[samples_lost:-samples_lost, :], out_file)
+        sigproc_object.append_spectra(
+            redisip[samples_lost:-samples_lost, :].get(), out_file
+        )
 
     # add data that can't be dispersed
     # because its at the end
 
     # if not remove_ends:
     cleaned = mad_spectra_flat(
-        yr_input.get_data(yr_input.your_header.nspectra - samples_lost, samples_lost),
+        cp.asarray(
+            yr_input.get_data(
+                yr_input.your_header.nspectra - samples_lost, samples_lost
+            )
+        ),
         frame=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
     )
     sigproc_object.append_spectra(
-        cleaned,
+        cleaned.get(),
         out_file,
     )
 
