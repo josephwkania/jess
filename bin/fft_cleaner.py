@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 This runs two Fourier Filters.
-The first filter is mad_fft which removes narrow band RFI.
-For details see the docstring for jess.JESS_filters.mad_fft
+The first filter is fft_mad which removes narrow band RFI.
+For details see the docstring for jess.JESS_filters.fft_mad
 
 The second filter is zero_dm_fft which removes low frequency
 modes for each time series, reducing the effects of broadband rfi.
@@ -21,7 +21,7 @@ from your import Your
 from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
-from jess.JESS_filters_cupy import mad_fft, zero_dm_fft
+from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
 
 logger = logging.getLogger()
 
@@ -130,7 +130,7 @@ def fft_cleaner(
         if bandpass is None:
             logging.debug("Creating bandpass")
             bandpass = np.ma.mean(data, axis=0)
-        data = mad_fft(data, sigma=sigma)
+        data = fft_mad(data, sigma=sigma)
         if modes_to_zero is not None:
             logging.debug("Zero DMing")
             data = zero_dm_fft(data, bandpass, modes_to_zero=modes_to_zero)
