@@ -6,22 +6,29 @@ A somewhat robust way to fit bandpasses - cupy edition
 import logging
 
 import cupy as cp
-from scipy import stats
 
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
+
+# from scipy import stats
+
 
 logger = logging.getLogger()
 
 
 def poly_fitter(
-    bandpass: cp.ndarray, poly_order: int = 20, mask_sigma: float = 6
+    bandpass: cp.ndarray,
+    channels: cp.ndarray = None,
+    chans_per_fit: int = 200,
+    mask_sigma: float = 6,
 ) -> cp.ndarray:
     """
     Fits bandpasses by polyfitting the bandpass, looking for channels that
     are far from this fit, excluding these channels and refitting the bandpass
 
     Args:
-        channels: list of channels
+        bandpass: the bandpass (or any array) that you want to fit a polynomial to.
+
+        channels: list of channel numbers, if None, will create a list starting at zero
 
         bandpass: the bandpass to fit
 
@@ -31,9 +38,20 @@ def poly_fitter(
 
     Returns:
         Fit to bandpass
+
+    Example:
+        yr = Your(input_file)
+        data = cp.asarray(yr.get_data(0, 8192))
+        bandpass = cp.median(section, axis=0)
+        fit = poly_fitter(bandpass)
+        plt.plot(fit.get())
     """
     # xp = cp.get_array_module(bandpass)
-    channels = cp.arange(0, len(bandpass))
+    if channels is None:
+        channels = cp.arange(0, len(bandpass))
+    poly_order = len(bandpass) // chans_per_fit
+    logging.debug("Fitting with a %i order polynomial", poly_order)
+
     fit_values = cp.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = cp.poly1d(fit_values)  # get the values of the fitted bandpass
     diff = bandpass - poly(channels)
@@ -53,8 +71,10 @@ def poly_fitter(
         best_fit_bandpass = poly_clean(channels)
     else:
         best_fit_bandpass = poly(channels)
-    logger.debug(
-        "chi^2: %.2f",
-        stats.chisquare(bandpass.get(), best_fit_bandpass.get(), poly_order)[0],
-    )
+
+    # fails because of new tolerance test
+    # logger.debug(
+    #     "chi^2: %.2f",
+    #     stats.chisquare(bandpass.get(), best_fit_bandpass.get(), poly_order)[0],
+    # )
     return best_fit_bandpass

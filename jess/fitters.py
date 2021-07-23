@@ -307,6 +307,8 @@ def poly_fitter(
     Args:
         bandpass: the bandpass to fit
 
+        channels: list of channel numbers, if None, will create a list starting at zero
+
         chans_per_fit: Number of channels per polynomial
 
         mask_sigma: standard deviation at which to mask outlying channels
