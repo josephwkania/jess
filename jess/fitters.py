@@ -204,12 +204,12 @@ def bspline_fitter(
     # else:
     #     best_fit_bandpass = first_bspline_fit
     best_fit_bandpass = first_bspline_fit
-    logger.info(
-        "chi^2: %.4f",
-        stats.chisquare(
-            bandpass, best_fit_bandpass, int(3 * chans_per_fit * len(bandpass))
-        )[0],
-    )
+    # logger.info(
+    #     "chi^2: %.4f",
+    #     stats.chisquare(
+    #         bandpass, best_fit_bandpass, int(3 * chans_per_fit * len(bandpass))
+    #     )[0],
+    # )
     return best_fit_bandpass
 
 
@@ -262,9 +262,9 @@ def cheb_fitter(
     else:
         best_fit_bandpass = fit_values(channels)
 
-    logger.debug(
-        "chi^2: %.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
-    )
+    # logger.debug(
+    #    "chi^2: %.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
+    # )
     return best_fit_bandpass
 
 
@@ -343,7 +343,7 @@ def poly_fitter(
     else:
         best_fit_bandpass = poly(channels)
 
-    logger.debug(
-        "chi^2: %.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
-    )
+    # logger.debug(
+    #    "chi^2: %.4f", stats.chisquare(bandpass, best_fit_bandpass, poly_order)[0]
+    # )
     return best_fit_bandpass
