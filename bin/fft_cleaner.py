@@ -14,6 +14,7 @@ import logging
 import os
 import textwrap
 
+import cupy as cp
 import numpy as np
 from rich.logging import RichHandler
 from rich.progress import track
@@ -86,9 +87,10 @@ def fft_cleaner(
 
     if mask_file is not None:
         bad_chans = np.loadtxt(mask_file, dtype=int)
+        logging.debug("Bad Channels: %s", np.array2string(bad_chans))
         mask = np.zeros(yr_input.your_header.nchans, dtype=bool)
         mask[bad_chans] = True
-        logging.debug("Masking %i", mask)
+        logging.debug("Masking: %s", np.array2string(mask))
     else:
         bad_chans = None
         mask = np.zeros(yr_input.your_header.nchans, dtype=bool)
@@ -125,16 +127,18 @@ def fft_cleaner(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
+        # can't do this with the cupy zero dmer
+        # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
+
         # use one bandpass to prevent jumps
         if bandpass is None:
             logging.debug("Creating bandpass")
             bandpass = np.ma.mean(data, axis=0)
-        data = fft_mad(data, sigma=sigma)
+        data = fft_mad(cp.asarray(data), sigma=sigma, bad_chans=bad_chans)
         if modes_to_zero is not None:
             logging.debug("Zero DMing")
             data = zero_dm_fft(data, bandpass, modes_to_zero=modes_to_zero)
-        sigproc_object.append_spectra(data, out_file)
+        sigproc_object.append_spectra(data.get(), out_file)
     logging.info("Done!")
 
 
