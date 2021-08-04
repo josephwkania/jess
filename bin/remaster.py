@@ -298,17 +298,21 @@ def clean(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
+        # cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
         cleaned = mad_spectra_flat(
-            cleaned,
+            cp.asarray(data),
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
         )
+        cleaned = fft_mad(cleaned, sigma=sigma, frame=channels_per_subband)
+
         if modes_to_zero is not None:
             cleaned = zero_dm_fft(cleaned, modes_to_zero=modes_to_zero)
 
         sigproc_object.append_spectra(cleaned.get(), out_file)
+        # cp.get_default_memory_pool().free_all_blocks()
+        # cp.get_default_pinned_memory_pool().free_all_blocks()
 
 
 def clean_dispersion(
