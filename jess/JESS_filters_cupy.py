@@ -131,7 +131,10 @@ def fft_mad(
 
 
 def mad_spectra(
-    dynamic_spectra: cp.ndarray, frame: int = 256, sigma: float = 3, poly_order: int = 5
+    dynamic_spectra: cp.ndarray,
+    frame: int = 256,
+    sigma: float = 3,
+    chans_per_fit: int = 50,
 ) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -169,7 +172,8 @@ def mad_spectra(
 
     for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
         fit = poly_fitter(
-            cp.median(dynamic_spectra[:, j : j + frame], axis=0), poly_order=5
+            cp.median(dynamic_spectra[:, j : j + frame], axis=0),
+            chans_per_fit=chans_per_fit,
         )
         # .astype(data_type)
 
@@ -188,7 +192,7 @@ def mad_spectra(
                     ),
                     axis=0,
                 ),
-                poly_order=poly_order,
+                chans_per_fit=chans_per_fit,
             )
         except Exception as e:
             logging.warning("Failed to fit with Exception: %s, using original fit", e)
@@ -310,16 +314,16 @@ def mad_spectra_flat(
         )
 
         flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan
-        # want kernel size to be 1, so every channel get set,
-        # now that we've removed the worst RFI
-        flattened[:, j : j + frame] = flattner(
-            flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
-        )
-        # set the masked values to what we want to flatten to
-        # not obvus why this has to be done, because nans should be ok
-        # but it works better this way
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = flatten_to
 
+    # want kernel size to be 1, so every channel get set,
+    # now that we've removed the worst RFI
+    flattened = flattner(flattened, flatten_to=flatten_to, kernel_size=1)
+    # set the masked values to what we want to flatten to
+    # not obvus why this has to be done, because nans should be ok
+    # but it works better this way
+    flattened[mask] = flatten_to
+
+    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
         # Second iteration
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
