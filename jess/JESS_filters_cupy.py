@@ -126,7 +126,7 @@ def fft_mad(
 
     if window_length is not None:
         window = highpass_window(window_length)
-        gulp_fftd[:window_length] *= cp.asarray(window)[:, None]
+        gulp_fftd[:window_length] = 0 #*= cp.asarray(window)[:, None]
     else:
         # Consider changing this
         mask[0, :] = False  # set the row to false to preserve the power levels
