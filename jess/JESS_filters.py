@@ -8,6 +8,7 @@ import numpy as np
 from scipy import signal, stats
 from scipy.signal import savgol_filter as sg
 
+from jess.calculators import highpass_window
 from jess.fitters import poly_fitter
 
 
@@ -202,7 +203,7 @@ def kurtosis_time_thresh(
     Args:
         gulp: the dynamic spectum to be analyzed
 
-    `   threshhold: abs threashold to filter kurtosis values
+    `   threshhold: abs threshold to filter kurtosis values
 
         frame: number of time samples to calculate the kurtosis
 
@@ -350,6 +351,146 @@ def mad_spectra(
     return gulp.astype(data_type)
 
 
+def flattner(
+    dynamic_spectra: np.ndarray, flatten_to: int = 64, kernel_size: int = 1
+) -> np.ndarray:
+    """
+    This flattens the dynamic spectra by subtracting the medians of the time series
+    and then the medians of the of bandpass. Then add flatten_to to all the pixels
+    so that the data can be keep as the same data type.
+
+    args:
+        dynamic_spectra: The dynamic spectra you want to flatten
+
+        flatten_to: The number to set as the baseline
+
+        kernel_size: The size of the median filter to run over the medians
+
+    returns:
+        Dynamic spectra flattened in frequency and time
+    """
+    if kernel_size > 1:
+        ts_medians = signal.medfilt(
+            np.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
+        )
+        # break up into two subtractions so the final number comes out where we want it
+        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+        spectra_medians = signal.medfilt(
+            np.nanmedian(dynamic_spectra, axis=0), kernel_size=kernel_size
+        )
+        return dynamic_spectra - spectra_medians + flatten_to
+
+    ts_medians = np.nanmedian(dynamic_spectra, axis=1)
+    # break up into two subtractions so the final number comes out where we want it
+    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+    spectra_medians = np.nanmedian(dynamic_spectra, axis=0)
+    return dynamic_spectra - spectra_medians + flatten_to
+
+
+def mad_spectra_flat(
+    dynamic_spectra: np.ndarray,
+    frame: int = 256,
+    sigma: float = 3,
+    flatten_to: int = 64,
+    return_mask: bool = False,
+) -> np.ndarray:
+    """
+    Calculates Median Absolute Deviations along the spectral axis
+    (i.e. for each time sample across all channels). This flattens the
+    data by subtracting the rolling median of median of time and frequencies.
+    It then calculates the Median Absolute Deviation for every frame channels.
+    Outliers are removed based on the assumption of Gaussian data. The dynamic
+    spectra is then detrended again, masking the outliers. This process is then
+    repeated again. The data is returned centerned around flatten_to with removed
+    points set as flatten_to.
+
+    Args:
+       dynamic_spectra: a dynamic spectra with time on the vertical axis,
+                        and freq on the horizontal
+
+       frame: number of channels to calculate the MAD
+
+       sigma: sigma which to reject outliers
+
+       flatten_to: the median of the output data
+
+    Returns:
+       Dynamic Spectrum with values clipped
+
+    See:
+        https://github.com/rohinijoshi06/mad-filter-gpu
+
+        Kendrick Smith's talks about CHIME FRB
+
+    Note:
+        This has better performance than spectral_mad, you should probably use this one.
+    """
+    frame = int(frame)
+    data_type = dynamic_spectra.dtype
+    iinfo = np.iinfo(data_type)
+    min_value = iinfo.min
+    max_value = iinfo.max
+
+    if not min_value < flatten_to < max_value:
+        raise ValueError(
+            f"""Can't flatten {data_type}, which has a range
+            [{min_value}, {max_value}, to {flatten_to}"""
+        )
+
+    # I medfilt to try and stabalized the subtraction process against large RFI spikes
+    # I choose 7 empirically
+    flattened = flattner(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
+    mask = np.zeros_like(flattened, dtype=bool)
+
+    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+
+        cut = sigma * stats.median_abs_deviation(
+            flattened[:, j : j + frame], axis=1, scale="Normal"
+        )
+        medians = np.median(flattened[:, j : j + frame], axis=1)
+        mask[:, j : j + frame] = (
+            np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
+        )
+
+        flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
+
+    # want kernel size to be 1, so every channel get set,
+    # now that we've removed the worst RFI
+    flattened = flattner(flattened, flatten_to=flatten_to, kernel_size=1)
+    # set the masked values to what we want to flatten to
+    # not obvus why this has to be done, because nans should be ok
+    # but it works better this way
+    flattened[mask] = flatten_to
+
+    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+        # Second iteration
+        # flattened[:, j : j + frame] = flattner(
+        #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
+        # )
+        cut = sigma * stats.median_abs_deviation(
+            flattened[:, j : j + frame], axis=1, scale="Normal"
+        )
+
+        medians = np.median(flattened[:, j : j + frame], axis=1)
+        mask_new = np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
+        mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
+        flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
+        flattened[:, j : j + frame] = flattner(
+            flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
+        )
+        flattened[:, j : j + frame][mask[:, j : j + frame]] = flatten_to
+
+    logging.info("Masking %.2f %%", mask.mean() * 100)
+
+    np.clip(
+        flattened, min_value, max_value, out=flattened
+    )  # clip the values so they don't wrap when converted to ints
+
+    if return_mask:
+        return flattened.astype(data_type), mask
+    return flattened.astype(data_type)
+
+
 def mad_time(
     gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_values: bool = False
 ) -> np.ndarray:
@@ -495,6 +636,7 @@ def mad_fft(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
+    window_length: int = None,
     return_mask: bool = False,
 ) -> np.ndarray:
     """
@@ -555,6 +697,11 @@ def mad_fft(
     min_value = iinfo.min
     max_value = iinfo.max
 
+    # if we run the highpass filter, we will
+    # need to add the DC levels back in
+    if window_length is not None:
+        bandpass = gulp.mean(axis=0)
+
     gulp_fftd = np.fft.rfft(gulp, axis=0)
     gulp_fftd_abs = np.abs(gulp_fftd)
     mask = np.zeros_like(gulp_fftd_abs, dtype=bool)
@@ -582,13 +729,23 @@ def mad_fft(
         logging.debug("Applying channel mask %s", bad_chans)
         mask[1:, bad_chans] = True
 
-    mask[0, :] = False  # set the row to false to preserve the powser levels
+    if window_length is not None:
+        window = highpass_window(window_length)
+        gulp_fftd[:window_length] *= window[:, None]
+    else:
+        # Consider changing this
+        mask[0, :] = False  # set the row to false to preserve the powser levels
+
+    # zero masked values
     gulp_fftd[mask] = 0
 
     # We're flagging complex data, so multiply by 2
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
 
     gulp_cleaned = np.fft.irfft(gulp_fftd, axis=0)
+
+    if window_length is not None:
+        gulp_cleaned += bandpass
 
     np.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
 
@@ -806,7 +963,8 @@ def zero_dm_fft(
         :modes_to_zero,
     ] = True
 
-    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
+    # complex data, we are projecting two numbers
+    logging.info("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)
 
     # zero out the modes we don't want
     dynamic_spectra_fftd[np.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0

@@ -118,3 +118,17 @@ def preprocess(
     return (data - central_0) / dispersion_0, (
         data - central_1[:, None]
     ) / dispersion_1[:, None]
+
+
+def highpass_window(window_length: int) -> np.ndarray:
+    """
+    Calculates the coefficients to multiply the Fourier components
+    to make a highpass filter.
+
+    Args:
+        window_length: the length of the half window
+
+    Returns:
+        Half of an inverted blackman window, will bw window_length long
+    """
+    return 1 - np.blackman(2 * window_length)[window_length:]
