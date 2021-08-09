@@ -8,7 +8,7 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy.signal import medfilt
 
-from calculators_cupy import to_dtype
+from jess.calculators_cupy import to_dtype
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter

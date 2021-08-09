@@ -22,6 +22,7 @@ from your.formats.filwriter import make_sigproc_object
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
+from jess.calculators_cupy import to_dtype
 from jess.dispersion_cupy import dedisperse, delay_lost
 
 # from jess.fitters import get_fitter
@@ -304,11 +305,19 @@ def clean(
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
+            return_same_dtype=False,
         )
-        cleaned = fft_mad(cleaned, sigma=sigma, frame=channels_per_subband)
+        cleaned = fft_mad(
+            cleaned, sigma=sigma, frame=channels_per_subband, return_same_dtype=False
+        )
 
         if modes_to_zero is not None:
-            cleaned = zero_dm_fft(cleaned, modes_to_zero=modes_to_zero)
+            cleaned = zero_dm_fft(
+                cleaned, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+
+        # Keep full precision until done
+        cleaned = to_dtype(cleaned, dtype=yr_input.your_header.dtype)
 
         sigproc_object.append_spectra(cleaned.get(), out_file)
         # cp.get_default_memory_pool().free_all_blocks()
