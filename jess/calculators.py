@@ -4,7 +4,7 @@ The repository for all calculators
 """
 
 import logging
-from typing import List
+from typing import Tuple
 
 import numpy as np
 from scipy import signal
@@ -60,7 +60,7 @@ def highpass_window(window_length: int) -> np.ndarray:
 
 def preprocess(
     data: np.ndarray, central_value_calc: str = "mean", disperion_calc: str = "std"
-) -> List[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Preprocess the array for later statistical tests
 

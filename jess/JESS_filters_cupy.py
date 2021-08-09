@@ -429,7 +429,8 @@ def zero_dm_fft(
         :modes_to_zero,
     ] = True
 
-    logging.info("Masked Percentage: %.2f %%", mask.mean())
+    # masking complex number, multiply by two
+    logging.info("Masked Percentage: %.2f %%", 2 * 100 * mask.mean())
 
     # zero out the modes we don't want
     dynamic_spectra_fftd[cp.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0
