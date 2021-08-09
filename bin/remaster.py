@@ -297,11 +297,11 @@ def clean(
             data = yr_input.get_data(j, gulp)
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
-        data = cp.roll(data, gulp // 3, axis=0)
+        data = cp.roll(cp.asarray(data), gulp // 3, axis=0)
 
         # cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
         cleaned = mad_spectra_flat(
-            cp.asarray(data),
+            data,
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
