@@ -297,6 +297,7 @@ def clean(
             data = yr_input.get_data(j, gulp)
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+        data = cp.roll(data, gulp // 3, axis=0)
 
         # cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
         cleaned = mad_spectra_flat(
@@ -305,6 +306,7 @@ def clean(
             sigma=sigma,
             flatten_to=flatten_to,
         )
+        cleaned = cp.roll(cleaned, -gulp // 3, axis=0)
         cleaned = fft_mad(cleaned, sigma=sigma, frame=channels_per_subband)
 
         if modes_to_zero is not None:
