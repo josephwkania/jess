@@ -22,6 +22,7 @@ from your import Your
 from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
+from jess.calculators_cupy import to_dtype
 from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
 
 logger = logging.getLogger()
@@ -134,10 +135,16 @@ def fft_cleaner(
         if bandpass is None:
             logging.debug("Creating bandpass")
             bandpass = np.ma.mean(data, axis=0)
-        data = fft_mad(cp.asarray(data), sigma=sigma, bad_chans=bad_chans)
+        data = fft_mad(
+            cp.asarray(data), sigma=sigma, bad_chans=bad_chans, return_same_dtype=False
+        )
         if modes_to_zero is not None:
             logging.debug("Zero DMing")
-            data = zero_dm_fft(data, bandpass, modes_to_zero=modes_to_zero)
+            data = zero_dm_fft(
+                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+
+        data = to_dtype(data, dtype=yr_input.your_header.dtype)
         sigproc_object.append_spectra(data.get(), out_file)
     logging.info("Done!")
 
