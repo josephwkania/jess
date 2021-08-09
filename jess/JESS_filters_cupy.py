@@ -9,7 +9,6 @@ import numpy as np
 from cupyx.scipy.signal import medfilt
 
 # from jess.fitters import poly_fitter
-from jess.calculators import highpass_window
 from jess.fitters_cupy import poly_fitter
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
@@ -21,7 +20,6 @@ def fft_mad(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
-    window_length: int = None,
     return_mask: bool = False,
 ) -> cp.ndarray:
     """
@@ -47,7 +45,6 @@ def fft_mad(
        gulp: a dynamic with time on the vertical axis,
        and freq on the horizontal
 
-
        frame (int): number of frequency samples to calculate MAD, i.e. the
                     channels per subband
 
@@ -59,10 +56,6 @@ def fft_mad(
 
         bad_chans: list of bad channels - these have all information
                   removed except for the power
-
-        window_length: use a high pass filter in time with a Half Blackman window of
-                       this length. This will flatten slowely varying channels
-                       Will keep DC levels
 
         return_mask: return the bool mask of flagged frequencies
 
@@ -94,11 +87,6 @@ def fft_mad(
     min_value = iinfo.min
     max_value = iinfo.max
 
-    # if we run the highpass filter, we will
-    # need to add the DC levels back in
-    if window_length is not None:
-        bandpass = gulp.mean(axis=0)
-
     # gulp = cp.asarray(gulp)
     gulp_fftd = cp.fft.rfft(gulp, axis=0)
     gulp_fftd_abs = cp.abs(gulp_fftd)
@@ -124,23 +112,13 @@ def fft_mad(
         logging.debug("Applying channel mask %s", bad_chans)
         mask[1:, bad_chans] = True
 
-    if window_length is not None:
-        window = highpass_window(window_length)
-        gulp_fftd[:window_length] = 0 #*= cp.asarray(window)[:, None]
-    else:
-        # Consider changing this
-        mask[0, :] = False  # set the row to false to preserve the power levels
-
-    # zero masked values
+    mask[0, :] = False  # set the row to false to preserve the powser levels
     gulp_fftd[mask] = 0
 
     # We're flagging complex data, so multiply by 2
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
 
     gulp_cleaned = cp.fft.irfft(gulp_fftd, axis=0)
-
-    if window_length is not None:
-        gulp_cleaned += bandpass
 
     cp.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
 
@@ -320,7 +298,9 @@ def mad_spectra_flat(
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
     # I choose 7 empirically
-    flattened = flattner(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
+    flattened = flattner(
+        cp.asarray(dynamic_spectra), flatten_to=flatten_to, kernel_size=7
+    )
     mask = cp.zeros_like(flattened, dtype=bool)
 
     for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
@@ -443,8 +423,7 @@ def zero_dm_fft(
         :modes_to_zero,
     ] = True
 
-    # complex data, we are projecting two numbers
-    logging.info("Masked Percentage: %.2f %%", 2 * 100 * mask.mean())
+    logging.info("Masked Percentage: %.2f %%", mask.mean())
 
     # zero out the modes we don't want
     dynamic_spectra_fftd[cp.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0

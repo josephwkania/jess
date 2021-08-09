@@ -4,6 +4,7 @@ The repository for all calculators
 """
 
 import logging
+from typing import List
 
 import numpy as np
 from scipy import signal
@@ -43,43 +44,23 @@ def decimate(
     return dynamic_spectra - np.median(dynamic_spectra, axis=0)
 
 
-def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
+def highpass_window(window_length: int) -> np.ndarray:
     """
-    Calculates the Shannon Entropy along a given axis.
-
-    Return entropy in natural units.
+    Calculates the coefficients to multiply the Fourier components
+    to make a highpass filter.
 
     Args:
-        data: 2D Array to calculate entropy
-
-        axis: axis to calculate entropy
+        window_length: the length of the half window
 
     Returns:
-        Shannon Entropy along an axis
+        Half of an inverted blackman window, will bw window_length long
     """
-    if axis == 0:
-        data = data.T
-    elif axis > 1:
-        raise ValueError("Axis out of bounds, given axis=%i" % axis)
-    length, _ = data.shape
-
-    entropies = np.zeros(length, dtype=float)
-    # Need to loop because np.unique doesn't
-    # return counts for all
-    for j in range(0, length):
-        _, counts = np.unique(
-            data[
-                j,
-            ],
-            return_counts=True,
-        )
-        entropies[j] = entropy(counts)
-    return entropies
+    return 1 - np.blackman(2 * window_length)[window_length:]
 
 
 def preprocess(
     data: np.ndarray, central_value_calc: str = "mean", disperion_calc: str = "std"
-) -> [np.ndarray, np.ndarray]:
+) -> List[np.ndarray, np.ndarray]:
     """
     Preprocess the array for later statistical tests
 
@@ -120,15 +101,58 @@ def preprocess(
     ) / dispersion_1[:, None]
 
 
-def highpass_window(window_length: int) -> np.ndarray:
+def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     """
-    Calculates the coefficients to multiply the Fourier components
-    to make a highpass filter.
+    Calculates the Shannon Entropy along a given axis.
+
+    Return entropy in natural units.
 
     Args:
-        window_length: the length of the half window
+        data: 2D Array to calculate entropy
+
+        axis: axis to calculate entropy
 
     Returns:
-        Half of an inverted blackman window, will bw window_length long
+        Shannon Entropy along an axis
     """
-    return 1 - np.blackman(2 * window_length)[window_length:]
+    if axis == 0:
+        data = data.T
+    elif axis > 1:
+        raise ValueError("Axis out of bounds, given axis=%i" % axis)
+    length, _ = data.shape
+
+    entropies = np.zeros(length, dtype=float)
+    # Need to loop because np.unique doesn't
+    # return counts for all
+    for j in range(0, length):
+        _, counts = np.unique(
+            data[
+                j,
+            ],
+            return_counts=True,
+        )
+        entropies[j] = entropy(counts)
+    return entropies
+
+
+def to_dtype(data: np.ndarray, dtype: object) -> np.ndarray:
+    """
+    Takes a chunk of data and changes it to a given data type.
+
+    Args:
+        data: Array that you want to convert
+
+        dtype: The output data type
+
+    Returns:
+        data converted to dtype
+    """
+    iinfo = np.iinfo(dtype)
+
+    # Round the data
+    np.around(data, out=data)
+
+    # Clip to stop wrapping
+    np.clip(data, iinfo.min, iinfo.max, out=data)
+
+    return data.astype(dtype)

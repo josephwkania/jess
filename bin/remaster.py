@@ -263,7 +263,6 @@ def clean(
     flatten_to: int,
     channels_per_subband: int,
     modes_to_zero: int,
-    time_window_length: int,
     out_file: str,
     sigproc_object: object,
 ) -> None:
@@ -306,12 +305,7 @@ def clean(
             sigma=sigma,
             flatten_to=flatten_to,
         )
-        cleaned = fft_mad(
-            cleaned,
-            sigma=sigma,
-            frame=channels_per_subband,
-            window_length=time_window_length,
-        )
+        cleaned = fft_mad(cleaned, sigma=sigma, frame=channels_per_subband)
 
         if modes_to_zero is not None:
             cleaned = zero_dm_fft(cleaned, modes_to_zero=modes_to_zero)
@@ -436,7 +430,6 @@ def master_cleaner(
     channels_per_subband: int = 256,
     # remove_ends: bool = False,
     modes_to_zero: int = 6,
-    time_window_length: int = 6,
     out_file: str = None,
 ) -> None:
     """
@@ -530,7 +523,6 @@ def master_cleaner(
             flatten_to=flatten_to,
             channels_per_subband=channels_per_subband,
             modes_to_zero=modes_to_zero,
-            time_window_length=time_window_length,
             out_file=out_file,
             sigproc_object=sigproc_object,
         )
@@ -594,13 +586,6 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--time_window_length",
-        help="Window length of the Blackman window for a time highpass filter",
-        type=int,
-        default=6,
-        required=False,
-    )
-    parser.add_argument(
         "-flatten_to",
         "--flatten_to",
         help="Flatten data to this number",
@@ -650,14 +635,13 @@ if __name__ == "__main__":
         )
 
     master_cleaner(
-        file=args.file,
-        dispersion_measure=args.dispersion_measure,
-        sigma=args.sigma,
-        gulp=args.gulp,
-        flatten_to=args.flatten_to,
-        channels_per_subband=args.channels_per_subband,
-        modes_to_zero=args.modes_to_zero,
-        time_window_length=args.time_window_length,
+        args.file,
+        args.dispersion_measure,
+        args.sigma,
+        args.gulp,
+        args.flatten_to,
+        args.channels_per_subband,
+        args.modes_to_zero,
         # args.remove_ends,
-        out_file=args.out_file,
+        args.out_file,
     )

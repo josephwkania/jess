@@ -8,7 +8,7 @@ import numpy as np
 from scipy import signal, stats
 from scipy.signal import savgol_filter as sg
 
-from jess.calculators import highpass_window
+from jess.calculators import to_dtype
 from jess.fitters import poly_fitter
 
 
@@ -280,6 +280,7 @@ def mad_spectra(
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
+    return_same_dtype: bool = True,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -297,18 +298,22 @@ def mad_spectra(
 
        fitter: which fitter to use
 
+       return_same_dtype: return the same data type as given
+
+
     Returns:
 
        Dynamic Spectrum with values clipped
 
     See:
         https://github.com/rohinijoshi06/mad-filter-gpu
+
+    Notes:
+        mad_spectra_flat has better excision performance, you should consider that
+        unless you need to keep the bandpass shape
     """
     frame = int(frame)
     data_type = gulp.dtype
-    iinfo = np.iinfo(data_type)
-    min_value = iinfo.min
-    max_value = iinfo.max
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
         fit = fitter(
@@ -340,15 +345,12 @@ def mad_spectra(
         except Exception as e:
             logging.warning("Failed to fit with Exception: %f, using original fit", e)
             fit_clean = fit
-
-        np.clip(fit_clean, min_value, max_value, out=fit_clean)
-        # clip the values so they don't wrap
-        # when converted to ints
-        fit_clean = fit_clean.astype(data_type)
-        # convert to dtype of the original
         gulp[:, j : j + frame] = np.where(mask, fit_clean, gulp[:, j : j + frame])
 
-    return gulp.astype(data_type)
+    if return_same_dtype:
+        gulp = to_dtype(gulp, dtype=data_type)
+
+    return gulp
 
 
 def flattner(
@@ -392,6 +394,7 @@ def mad_spectra_flat(
     frame: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
+    return_same_dtype: bool = True,
     return_mask: bool = False,
 ) -> np.ndarray:
     """
@@ -413,6 +416,10 @@ def mad_spectra_flat(
        sigma: sigma which to reject outliers
 
        flatten_to: the median of the output data
+
+       return_same_dtype: return the same data type as given
+
+       return_mask: return the mask where True=masked_values
 
     Returns:
        Dynamic Spectrum with values clipped
@@ -482,13 +489,12 @@ def mad_spectra_flat(
 
     logging.info("Masking %.2f %%", mask.mean() * 100)
 
-    np.clip(
-        flattened, min_value, max_value, out=flattened
-    )  # clip the values so they don't wrap when converted to ints
+    if return_same_dtype:
+        flattened = to_dtype(flattened)
 
     if return_mask:
-        return flattened.astype(data_type), mask
-    return flattened.astype(data_type)
+        return flattened, mask
+    return flattened
 
 
 def mad_time(
@@ -636,7 +642,7 @@ def mad_fft(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
-    window_length: int = None,
+    return_same_dtype: bool = True,
     return_mask: bool = False,
 ) -> np.ndarray:
     """
@@ -674,6 +680,8 @@ def mad_fft(
        bad_chans: list of bad channels - these have all information
                   removed except for the power
 
+        return_same_dtype: return the same data type as given
+
         return_mask: return the bool mask of flagged frequencies
 
     Returns:
@@ -693,14 +701,6 @@ def mad_fft(
     """
     frame = int(frame)
     data_type = gulp.dtype
-    iinfo = np.iinfo(data_type)
-    min_value = iinfo.min
-    max_value = iinfo.max
-
-    # if we run the highpass filter, we will
-    # need to add the DC levels back in
-    if window_length is not None:
-        bandpass = gulp.mean(axis=0)
 
     gulp_fftd = np.fft.rfft(gulp, axis=0)
     gulp_fftd_abs = np.abs(gulp_fftd)
@@ -729,12 +729,7 @@ def mad_fft(
         logging.debug("Applying channel mask %s", bad_chans)
         mask[1:, bad_chans] = True
 
-    if window_length is not None:
-        window = highpass_window(window_length)
-        gulp_fftd[:window_length] *= window[:, None]
-    else:
-        # Consider changing this
-        mask[0, :] = False  # set the row to false to preserve the powser levels
+    mask[0, :] = False  # set the row to false to preserve the powser levels
 
     # zero masked values
     gulp_fftd[mask] = 0
@@ -744,12 +739,8 @@ def mad_fft(
 
     gulp_cleaned = np.fft.irfft(gulp_fftd, axis=0)
 
-    if window_length is not None:
-        gulp_cleaned += bandpass
-
-    np.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
-
-    gulp_cleaned = gulp_cleaned.astype(data_type)
+    if return_same_dtype:
+        gulp_cleaned = to_dtype(gulp_cleaned, dtype=data_type)
 
     if return_mask:
         return gulp_cleaned, mask
@@ -880,25 +871,21 @@ def zero_dm(
     if copy:
         dynamic_spectra = dynamic_spectra.copy()
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
 
     time_series = np.ma.mean(dynamic_spectra, axis=1)
     if bandpass is None:
         bandpass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
 
-    np.clip(
-        np.round(dynamic_spectra - time_series[:, None] + bandpass),
-        iinfo.min,
-        iinfo.max,
-        out=dynamic_spectra,
-    )
-    return dynamic_spectra.astype(data_type)
+    dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
+
+    return to_dtype(dynamic_spectra, dtype=data_type)
 
 
 def zero_dm_fft(
     dynamic_spectra: np.ndarray,
     bandpass: np.ndarray = None,
     modes_to_zero: int = 2,
+    return_same_dtype: bool = True,
 ) -> np.ndarray:
     """
     This removes low frequency components from each spectra. This extends 0-DM
@@ -931,7 +918,9 @@ def zero_dm_fft(
                    dynamic spectra given, this can cause jumps if you are processing
                    multiple chunks.
 
-        modes_to_zero - The number of modes to filter.
+        modes_to_zero - The number of modes to filter, starting at the lowest mode
+
+        return_same_dtype: return the same data type as given
 
     returns:
         dynamic spectra with low frequency modes filtered, same data type as given
@@ -952,7 +941,6 @@ def zero_dm_fft(
         bandpass = dynamic_spectra.mean(axis=0)
 
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
 
     dynamic_spectra_fftd = np.fft.rfft(dynamic_spectra, axis=1)
 
@@ -972,7 +960,7 @@ def zero_dm_fft(
     # Add the bandpass back so out values are in the correct range
     dynamic_spectra_cleaned = np.fft.irfft(dynamic_spectra_fftd, axis=1) + bandpass
 
-    # clip so astype doesn't wrap
-    np.clip(dynamic_spectra_cleaned, iinfo.min, iinfo.max, out=dynamic_spectra_cleaned)
+    if return_same_dtype:
+        dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
-    return np.round(dynamic_spectra_cleaned).astype(data_type)
+    return dynamic_spectra_cleaned
