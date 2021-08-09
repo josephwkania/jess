@@ -8,6 +8,8 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy.signal import medfilt
 
+from calculators_cupy import to_dtype
+
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
 from jess.scipy_cupy.stats import median_abs_deviation_gpu
@@ -20,6 +22,7 @@ def fft_mad(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
+    return_same_dtype: bool = True,
     return_mask: bool = False,
 ) -> cp.ndarray:
     """
@@ -57,6 +60,8 @@ def fft_mad(
         bad_chans: list of bad channels - these have all information
                   removed except for the power
 
+        return_same_dtype: return the same data type as given
+
         return_mask: return the bool mask of flagged frequencies
 
 
@@ -83,9 +88,6 @@ def fft_mad(
     """
     frame = int(frame)
     data_type = gulp.dtype
-    iinfo = np.iinfo(data_type)
-    min_value = iinfo.min
-    max_value = iinfo.max
 
     # gulp = cp.asarray(gulp)
     gulp_fftd = cp.fft.rfft(gulp, axis=0)
@@ -120,9 +122,8 @@ def fft_mad(
 
     gulp_cleaned = cp.fft.irfft(gulp_fftd, axis=0)
 
-    cp.clip(gulp_cleaned, min_value, max_value, out=gulp_cleaned)
-
-    gulp_cleaned = gulp_cleaned.astype(data_type)
+    if return_same_dtype:
+        gulp_cleaned = to_dtype(gulp_cleaned, dtype=data_type)
 
     if return_mask:
         return gulp_cleaned, mask
@@ -135,6 +136,7 @@ def mad_spectra(
     frame: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
+    return_same_dtype: bool = True,
 ) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -148,6 +150,8 @@ def mad_spectra(
        sigma (float): cutoff sigma
 
        poly_order (int): polynomial order to fit for the bandpass
+
+       return_same_dtype: return the same data type as given
 
     Returns:
 
@@ -164,9 +168,6 @@ def mad_spectra(
     """
     frame = int(frame)
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
-    min_value = iinfo.min
-    max_value = iinfo.max
 
     mask = cp.zeros_like(dynamic_spectra, dtype=bool)
 
@@ -197,9 +198,6 @@ def mad_spectra(
         except Exception as e:
             logging.warning("Failed to fit with Exception: %s, using original fit", e)
             fit_clean = fit
-        cp.clip(
-            fit_clean, min_value, max_value, out=fit_clean
-        )  # clip the values so they don't wrap when converted to ints
         dynamic_spectra[:, j : j + frame] = cp.where(
             mask[:, j : j + frame],
             dynamic_spectra[:, j : j + frame],
@@ -207,7 +205,11 @@ def mad_spectra(
         )
 
     logging.info("Masking %.2f %%", (1 - mask.mean()) * 100)
-    return dynamic_spectra.astype(data_type)
+
+    if return_same_dtype:
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
+
+    return dynamic_spectra
 
 
 def flattner(
@@ -252,6 +254,7 @@ def mad_spectra_flat(
     sigma: float = 3,
     flatten_to: int = 64,
     return_mask: bool = False,
+    return_same_dtype: bool = True,
 ) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -273,6 +276,10 @@ def mad_spectra_flat(
 
        flatten_to: the median of the output data
 
+       return_same_dtype: return the same data type as given
+
+        return_mask: return the mask where True=masked_values
+
     Returns:
        Dynamic Spectrum with values clipped
 
@@ -287,13 +294,11 @@ def mad_spectra_flat(
     frame = int(frame)
     data_type = dynamic_spectra.dtype
     iinfo = np.iinfo(data_type)
-    min_value = iinfo.min
-    max_value = iinfo.max
 
-    if not min_value < flatten_to < max_value:
+    if not iinfo.min < flatten_to < iinfo.max:
         raise ValueError(
             f"""Can't flatten {data_type}, which has a range
-            [{min_value}, {max_value}, to {flatten_to}"""
+            [{iinfo.min}, {iinfo.max}, to {flatten_to}"""
         )
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
@@ -343,19 +348,19 @@ def mad_spectra_flat(
 
     logging.info("Masking %.2f %%", mask.mean() * 100)
 
-    cp.clip(
-        flattened, min_value, max_value, out=flattened
-    )  # clip the values so they don't wrap when converted to ints
+    if return_same_dtype:
+        flattened = to_dtype(flattened, dtype=data_type)
 
     if return_mask:
-        return flattened.astype(data_type), mask
-    return flattened.astype(data_type)
+        return flattened, mask
+    return flattened
 
 
 def zero_dm_fft(
     dynamic_spectra: cp.ndarray,
     bandpass: cp.ndarray = None,
     modes_to_zero: int = 2,
+    return_same_dtype: bool = True,
 ) -> cp.ndarray:
     """
     This removes low frequency components from each spectra. This extends 0-DM
@@ -390,6 +395,8 @@ def zero_dm_fft(
 
         modes_to_zero - The number of modes to filter.
 
+        return_same_dtype: return the same data type as given
+
     returns:
         dynamic spectra with low frequency modes filtered, same data type as given
 
@@ -406,7 +413,6 @@ def zero_dm_fft(
         logging.warning("Only removing first mode, consider using standard zero-dm")
 
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
     # dynamic_spectra = cp.asarray(dynamic_spectra)
 
     if bandpass is None:
@@ -431,7 +437,7 @@ def zero_dm_fft(
     # Add the bandpass back so out values are in the correct range
     dynamic_spectra_cleaned = cp.fft.irfft(dynamic_spectra_fftd, axis=1) + bandpass
 
-    # clip so astype doesn't wrap
-    cp.clip(dynamic_spectra_cleaned, iinfo.min, iinfo.max, out=dynamic_spectra_cleaned)
+    if return_same_dtype:
+        dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
-    return cp.around(dynamic_spectra_cleaned).astype(data_type)
+    return dynamic_spectra_cleaned
