@@ -248,7 +248,7 @@ def flattner_median(
     return dynamic_spectra - spectra_medians + flatten_to
 
 
-def flattner_mean(
+def flattner_mix(
     dynamic_spectra: cp.ndarray, flatten_to: int = 64, kernel_size: int = 1
 ) -> cp.ndarray:
     """
@@ -268,7 +268,7 @@ def flattner_mean(
     """
     if kernel_size > 1:
         ts_medians = medfilt(
-            cp.nanmean(dynamic_spectra, axis=1), kernel_size=kernel_size
+            cp.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
         )
         # break up into two subtractions so the final number comes out where we want it
         dynamic_spectra = dynamic_spectra - ts_medians[:, None]
@@ -277,7 +277,7 @@ def flattner_mean(
         )
         return dynamic_spectra - spectra_medians + flatten_to
 
-    ts_medians = cp.nanmean(dynamic_spectra, axis=1)
+    ts_medians = cp.nanmedian(dynamic_spectra, axis=1)
     # break up into two subtractions so the final number comes out where we want it
     dynamic_spectra = dynamic_spectra - ts_medians[:, None]
     spectra_medians = cp.nanmean(dynamic_spectra, axis=0)
@@ -377,7 +377,7 @@ def mad_spectra_flat(
         mask_new = cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan
-        flattened[:, j : j + frame] = flattner_mean(
+        flattened[:, j : j + frame] = flattner_mix(
             flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
         )
         flattened[:, j : j + frame][mask[:, j : j + frame]] = flatten_to
