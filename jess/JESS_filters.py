@@ -466,7 +466,7 @@ def mad_spectra(
     return gulp
 
 
-def flattner(
+def flattner_median(
     dynamic_spectra: np.ndarray, flatten_to: int = 64, kernel_size: int = 1
 ) -> np.ndarray:
     """
@@ -499,6 +499,47 @@ def flattner(
     # break up into two subtractions so the final number comes out where we want it
     dynamic_spectra = dynamic_spectra - ts_medians[:, None]
     spectra_medians = np.nanmedian(dynamic_spectra, axis=0)
+    return dynamic_spectra - spectra_medians + flatten_to
+
+
+def flattner_mix(
+    dynamic_spectra: np.ndarray, flatten_to: int = 64, kernel_size: int = 1
+) -> np.ndarray:
+    """
+    This flattens the dynamic spectra by subtracting the medians of the time series
+    and then the medians of the of bandpass. Then add flatten_to to all the pixels
+    so that the data can be keep as the same data type.
+
+    This uses medians subtraction on the time series. This is less agressive and
+    leaved the mean subtraction for the zero-dm.
+
+    Mean subtraction across the spectrum allows for smoother transition between blocks.
+
+    args:
+        dynamic_spectra: The dynamic spectra you want to flatten
+
+        flatten_to: The number to set as the baseline
+
+        kernel_size: The size of the median filter to run over the medians
+
+    returns:
+        Dynamic spectra flattened in frequency and time
+    """
+    if kernel_size > 1:
+        ts_medians = signal.medfilt(
+            np.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
+        )
+        # break up into two subtractions so the final number comes out where we want it
+        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+        spectra_medians = signal.medfilt(
+            np.nanmean(dynamic_spectra, axis=0), kernel_size=kernel_size
+        )
+        return dynamic_spectra - spectra_medians + flatten_to
+
+    ts_medians = np.nanmedian(dynamic_spectra, axis=1)
+    # break up into two subtractions so the final number comes out where we want it
+    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+    spectra_medians = np.nanmean(dynamic_spectra, axis=0)
     return dynamic_spectra - spectra_medians + flatten_to
 
 
@@ -557,7 +598,7 @@ def mad_spectra_flat(
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
     # I choose 7 empirically
-    flattened = flattner(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
+    flattened = flattner_median(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
     mask = np.zeros_like(flattened, dtype=bool)
 
     for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
@@ -574,7 +615,7 @@ def mad_spectra_flat(
 
     # want kernel size to be 1, so every channel get set,
     # now that we've removed the worst RFI
-    flattened = flattner(flattened, flatten_to=flatten_to, kernel_size=1)
+    flattened = flattner_median(flattened, flatten_to=flatten_to, kernel_size=1)
     # set the masked values to what we want to flatten to
     # not obvus why this has to be done, because nans should be ok
     # but it works better this way
@@ -593,7 +634,9 @@ def mad_spectra_flat(
         mask_new = np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
-        flattened[:, j : j + frame] = flattner(
+        # mean frequency subtraction makes sure there is smooth
+        # transition between the blocks
+        flattened[:, j : j + frame] = flattner_mix(
             flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
         )
         flattened[:, j : j + frame][mask[:, j : j + frame]] = flatten_to
@@ -601,7 +644,7 @@ def mad_spectra_flat(
     logging.info("Masking %.2f %%", mask.mean() * 100)
 
     if return_same_dtype:
-        flattened = to_dtype(flattened)
+        flattened = to_dtype(flattened, dtype=data_type)
 
     if return_mask:
         return flattened, mask

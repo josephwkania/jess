@@ -100,12 +100,12 @@ def fft_mad(
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
         diff = gulp_fftd_abs[:, j : j + frame] - cp.array(fit)
-        cut = sigma * median_abs_deviation_gpu(diff, axis=None, scale="Normal")
+        cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
         medians = cp.median(diff, axis=1)
         # adds some resistance to jumps in medians
-        medians = medfilt(medians, 7)
+        # medians = medfilt(medians, 7)
 
-        mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut
+        mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut[:, None]
 
     # remove infomation for the bad channels, but leave power
     # this has no effect on the following filter
@@ -253,8 +253,13 @@ def flattner_mix(
 ) -> cp.ndarray:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the medians of the of bandpass. Then add flatten_to to all the pixels
+    and then the means of the of bandpass. Then add flatten_to to all the pixels
     so that the data can be keep as the same data type.
+
+    This uses medians subtraction on the time series. This is less agressive and
+    leaved the mean subtraction for the zero-dm.
+
+    Mean subtraction across the spectrum allows for smoother transition between blocks.
 
     args:
         dynamic_spectra: The dynamic spectra you want to flatten
@@ -264,7 +269,7 @@ def flattner_mix(
         kernel_size: The size of the median filter to run over the medians
 
     returns:
-        Dynamic spectra flattened in frequency and time
+        Dynamic spectra flattened with mean in frequency and median in time
     """
     if kernel_size > 1:
         ts_medians = medfilt(
@@ -377,6 +382,8 @@ def mad_spectra_flat(
         mask_new = cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan
+        # mean frequency subtraction makes sure there is smooth
+        # transition between the blocks
         flattened[:, j : j + frame] = flattner_mix(
             flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
         )
