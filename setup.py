@@ -13,5 +13,5 @@ setup(
     packages=find_packages(),
     author="Joseph W Kania",
     scripts=glob.glob("bin/*"),
-    install_requirements=required,
+    install_requires=required,
 )
