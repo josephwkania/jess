@@ -15,6 +15,7 @@ import os
 import textwrap
 
 import numpy as np
+
 from rich.logging import RichHandler
 from rich.progress import track
 from your import Your
@@ -26,12 +27,12 @@ try:
     from jess.calculators_cupy import to_dtype
     from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
 
-    BACKEND_GPU = True
+    GPU_BACKEND = True
 except ModuleNotFoundError:
     from jess.calculators import to_dtype
     from jess.JESS_filters import fft_mad, zero_dm_fft
 
-    BACKEND_GPU = False
+    GPU_BACKEND = False
 
 
 logger = logging.getLogger()
@@ -251,7 +252,7 @@ def fft_cleaner(
     )
     sigproc_object.write_header(out_file)
 
-    if BACKEND_GPU:
+    if GPU_BACKEND:
         gpu_backend(
             yr_input=yr_input,
             gulp=gulp,
@@ -262,7 +263,7 @@ def fft_cleaner(
             modes_to_zero=modes_to_zero,
         )
     else:
-        gpu_backend(
+        cpu_backend(
             yr_input=yr_input,
             gulp=gulp,
             sigproc_object=sigproc_object,
