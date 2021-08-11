@@ -14,7 +14,6 @@ import logging
 import os
 import textwrap
 
-import cupy as cp
 import numpy as np
 from rich.logging import RichHandler
 from rich.progress import track
@@ -22,8 +21,18 @@ from your import Your
 from your.formats.filwriter import make_sigproc_object
 from your.utils.misc import YourArgparseFormatter
 
-from jess.calculators_cupy import to_dtype
-from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
+try:
+    import cupy as cp
+    from jess.calculators_cupy import to_dtype
+    from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
+
+    BACKEND_GPU = True
+except ModuleNotFoundError:
+    from jess.calculators import to_dtype
+    from jess.JESS_filters import fft_mad, zero_dm_fft
+
+    BACKEND_GPU = False
+
 
 logger = logging.getLogger()
 
@@ -51,6 +60,127 @@ def get_outfile(file: str, out_file: str) -> str:
 
     out_file += ".fil"
     return out_file
+
+
+def cpu_backend(
+    yr_input: object,
+    gulp: int,
+    sigproc_object: object,
+    out_file: str,
+    sigma: float,
+    bad_chans: np.ndarray,
+    modes_to_zero: np.ndarray,
+) -> None:
+    """
+    Loops over the given yr_input file, cleans the data using CPU backend,
+    writes to the out_file
+
+    Args:
+        yr_input: the your object for the input file
+
+        gulp: amount of data to process each loop
+
+        sigproc_object: the object for the ourfile
+
+        out_file: name for the outfile
+
+        sigma: singa at which to clip narrowband Fourier Components
+
+        bad_chans: channels to be removed by zeroing non-DC components
+
+        modes_to_zero: number of Fourier modes to zero for zero-dm'ing
+
+
+    Returns:
+        None
+    """
+    logging.debug("Using CPU backend")
+    bandpass = None
+    # loop through all the data
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+
+        # can't do this with the cupy zero dmer
+        # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
+
+        # use one bandpass to prevent jumps
+        if bandpass is None:
+            logging.debug("Creating bandpass")
+            bandpass = np.ma.mean(data, axis=0)
+        data = fft_mad(data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False)
+        if modes_to_zero is not None:
+            logging.debug("Zero DMing")
+            data = zero_dm_fft(
+                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+
+        data = to_dtype(data, dtype=yr_input.your_header.dtype)
+        sigproc_object.append_spectra(data, out_file)
+
+
+def gpu_backend(
+    yr_input: object,
+    gulp: int,
+    sigproc_object: object,
+    out_file: str,
+    sigma: float,
+    bad_chans: np.ndarray,
+    modes_to_zero: np.ndarray,
+) -> None:
+    """
+    Loops over the given yr_input file, cleans the data using GPU backend,
+    writes to the out_file
+
+    Args:
+        yr_input: the your object for the input file
+
+        gulp: amount of data to process each loop
+
+        sigproc_object: the object for the ourfile
+
+        out_file: name for the outfile
+
+        sigma: singa at which to clip narrowband Fourier Components
+
+        bad_chans: channels to be removed by zeroing non-DC components
+
+        modes_to_zero: number of Fourier modes to zero for zero-dm'ing
+
+        outfile: file to write to
+
+    Returns:
+        None
+    """
+    logging.debug("Using GPU backend")
+    bandpass = None
+    # loop through all the data
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+
+        # can't do this with the cupy zero dmer
+        # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
+
+        # use one bandpass to prevent jumps
+        if bandpass is None:
+            logging.debug("Creating bandpass")
+            bandpass = np.ma.mean(data, axis=0)
+        data = fft_mad(
+            cp.asarray(data), sigma=sigma, bad_chans=bad_chans, return_same_dtype=False
+        )
+        if modes_to_zero is not None:
+            logging.debug("Zero DMing")
+            data = zero_dm_fft(
+                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+
+        data = to_dtype(data, dtype=yr_input.your_header.dtype)
+        sigproc_object.append_spectra(data.get(), out_file)
 
 
 def fft_cleaner(
@@ -120,32 +250,28 @@ def fft_cleaner(
         # za_start=yr_input.your_header.za_start,
     )
     sigproc_object.write_header(out_file)
-    bandpass = None
-    # loop through all the data
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
-        if j + gulp < yr_input.your_header.nspectra:
-            data = yr_input.get_data(j, gulp)
-        else:
-            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        # can't do this with the cupy zero dmer
-        # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
-
-        # use one bandpass to prevent jumps
-        if bandpass is None:
-            logging.debug("Creating bandpass")
-            bandpass = np.ma.mean(data, axis=0)
-        data = fft_mad(
-            cp.asarray(data), sigma=sigma, bad_chans=bad_chans, return_same_dtype=False
+    if BACKEND_GPU:
+        gpu_backend(
+            yr_input=yr_input,
+            gulp=gulp,
+            sigproc_object=sigproc_object,
+            out_file=out_file,
+            sigma=sigma,
+            bad_chans=bad_chans,
+            modes_to_zero=modes_to_zero,
         )
-        if modes_to_zero is not None:
-            logging.debug("Zero DMing")
-            data = zero_dm_fft(
-                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
-            )
+    else:
+        gpu_backend(
+            yr_input=yr_input,
+            gulp=gulp,
+            sigproc_object=sigproc_object,
+            out_file=out_file,
+            sigma=sigma,
+            bad_chans=bad_chans,
+            modes_to_zero=modes_to_zero,
+        )
 
-        data = to_dtype(data, dtype=yr_input.your_header.dtype)
-        sigproc_object.append_spectra(data.get(), out_file)
     logging.info("Done!")
 
 
@@ -184,6 +310,7 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "-g",
         "--gulp",
         help="Number of samples to process at each loop",
         type=int,
@@ -191,6 +318,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-sig",
         "--sigma",
         help="Sigma at which to excises FFT",
         type=float,
@@ -198,6 +326,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-modes_to_zero",
         "--modes_to_zero",
         help="Number of modes to zero",
         type=int,
@@ -232,10 +361,10 @@ if __name__ == "__main__":
         )
 
     fft_cleaner(
-        args.file,
-        args.mask,
-        args.gulp,
-        args.sigma,
-        args.modes_to_zero,
-        args.out_file,
+        file=args.file,
+        mask_file=args.mask,
+        gulp=args.gulp,
+        sigma=args.sigma,
+        modes_to_zero=args.modes_to_zero,
+        out_file=args.out_file,
     )
