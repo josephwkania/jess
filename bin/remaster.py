@@ -36,204 +36,6 @@ except ModuleNotFoundError:
 
 logger = logging.getLogger()
 
-"""
-class JessWriter(Writer):
-    def __init__(
-        self,
-        your_object,
-        dm,
-        sigma,
-        channels_per_subband,
-        remove_ends,
-        nstart=0,
-        nsamp=None,
-        c_min=None,
-        c_max=None,
-        npoln=1,
-        outdir=None,
-        outname=None,
-        flag_rfi=False,
-        progress=True,
-        spectral_kurtosis_sigma=4,
-        savgol_frequency_window=15,
-        savgol_sigma=4,
-        gulp=None,
-        zero_dm_subt=False,
-        time_decimation_factor=1,
-        frequency_decimation_factor=1,
-        replacement_policy="mean",
-    ):
-
-        super().__init__(
-            your_object,
-            nstart=nstart,
-            nsamp=nsamp,
-            c_min=c_min,
-            c_max=c_max,
-            npoln=npoln,
-            outdir=outdir,
-            outname=outname,
-            flag_rfi=flag_rfi,
-            progress=progress,
-            spectral_kurtosis_sigma=spectral_kurtosis_sigma,
-            savgol_frequency_window=savgol_frequency_window,
-            savgol_sigma=savgol_sigma,
-            gulp=gulp,
-            zero_dm_subt=zero_dm_subt,
-            time_decimation_factor=time_decimation_factor,
-            frequency_decimation_factor=frequency_decimation_factor,
-            replacement_policy=replacement_policy,
-        )
-
-        self.dm = dm
-        self.sigma = sigma
-        self.channels_per_subband = channels_per_subband
-        self.remove_ends = remove_ends
-
-        # self.your_object = your_object
-        self.samples_lost = delay_lost(
-            self.dm, your_object.chan_freqs, your_object.tsamp
-        )
-
-    def clean_data(self: object, data: np.ndarray) -> np.ndarray:
-        dedispersed = dedisperse(
-            data,
-            self.dm,
-            self.your_object.tsamp,
-            self.your_object.chan_freqs,
-        )
-        dedispersed[0 : -self.samples_lost, :] = spectral_mad(
-            dedispersed[0 : -self.samples_lost, :],
-            frame=self.channels_per_subband,
-            sigma=self.sigma,
-        )
-        redispersed = dedisperse(
-            dedispersed,
-            -self.dm,
-            self.your_object.tsamp,
-            self.your_object.chan_freqs,
-        )
-
-        return redispersed
-
-    def get_data_to_write(self: object, start_sample: int, nsamp: int):
-
-        # Read data to self.data, selects channels
-        # Optionally perform RFI filtering and zero-DM subtraction
-        # Args:
-        #    start_sample (int): Start sample number to read from
-        #    nsamp (int): Number of samples to read
-
-        proposed_end = start_sample + nsamp + 2 * self.samples_lost
-        if proposed_end > self.your_object.your_header.nspectra:
-            nsamp = self.your_object.your_header.nspectra
-            # something I don't know
-        data = self.your_object.get_data(
-            start_sample, nsamp + 2 * self.samples_lost, npoln=self.npoln
-        )
-
-        data = self.your_object.get_data(
-            start_sample, nsamp + 2 * self.samples_lost, npoln=self.npoln
-        )
-
-        if self.npoln == 1:
-            data = np.expand_dims(data, 1)
-
-        # shape of data is (nt, npoln, nf)
-        data = data[:, :, self.chan_min : self.chan_max]
-        if self.flag_rfi:
-            for i in range(data.shape[1]):
-                data_to_flag = data[:, i, :]
-                mask = sk_sg_filter(
-                    data_to_flag,
-                    self.your_object,
-                    self.sk_sig,
-                    self.sg_fw,
-                    self.sg_sig,
-                )
-
-                if self.replacement_policy == "mean":
-                    fill_value = np.mean(data_to_flag[:, ~mask])
-                elif self.replacement_policy == "median":
-                    fill_value = np.median(data_to_flag[:, ~mask])
-                else:
-                    fill_value = 0
-
-                if self.your_object.your_header.nbits < 32:
-                    fill_value = np.around(fill_value).astype(
-                        self.your_object.your_header.dtype
-                    )
-
-                data[:, i, mask] = fill_value
-
-        shape = data.shape
-
-        for i in range(data.shape[1]):
-            cleaned = self.clean_data(data[:, i, :])
-
-            if start_sample == 0 and not self.remove_ends:
-                data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
-                data_clean[:, i, :] = cleaned[: -2 * self.samples_lost]
-            elif (
-                start_sample + nsamp == self.your_object.your_header.nspectra
-                and not self.remove_ends
-            ):
-                print("In final if")
-                data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
-                data_clean[:, i, :] = cleaned[2 * self.samples_lost :]
-            else:
-                data_clean = np.zeros([nsamp, shape[1], shape[2]], dtype=data.dtype)
-                data_clean[:, i, :] = cleaned[self.samples_lost : -self.samples_lost]
-        data = data_clean
-        print(data.shape)
-
-        if self.zero_dm_subt:
-            if self.npoln > 1:
-                raise NotImplementedError(
-                    "0-DM subtraction is implemented only for 1 output pol."
-                )
-
-            logger.debug("Subtracting 0-DM time series from the data.")
-            min_value = np.iinfo(self.your_object.your_header.dtype).min
-            max_value = np.iinfo(self.your_object.your_header.dtype).max
-            nt, npoln, nf = data.shape
-            ts = data.mean(-1)
-            bp = data.mean(0).squeeze()
-
-            for channel in range(nf):
-                data[:, :, channel] = np.clip(
-                    data[:, :, channel].astype("float32") - ts + bp[channel],
-                    min_value,
-                    max_value,
-                )
-
-        data = data.astype(self.your_object.your_header.dtype)
-
-        # shape of data is (nt, npoln, nf)
-        self.data = data
-"""
-
-"""
-def get_gulp_size(your: object) -> int:
-
-    # This function calculates the number of samples that
-    # will fit the data and the mask while using 80% of
-    # the avaliable ram.
-
-    # Args:
-    #     Your object: for the file you are intersted in loading
-
-    # returns:
-    #     number of samples
-
-    available_ram = 0.80 * psutil.virtual_memory()[1]  # in bytes
-    # take up 80% of the avaliable memory
-    bytes_per_spectra = your.your_header.nchans * (your.your_header.nbits + 64) / 8
-    # the masks are 64 bit
-
-    return np.floor(available_ram / bytes_per_spectra).astype(int)
-"""
-
 
 def get_outfile(file: str, out_file: str) -> str:
     """
@@ -265,6 +67,7 @@ def clean_cpu(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
+    median_time_kernel: int,
     modes_to_zero: int,
     out_file: str,
     sigproc_object: object,
@@ -310,13 +113,14 @@ def clean_cpu(
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
+            median_time_kernel=median_time_kernel,
             return_same_dtype=False,
         )
         cleaned = fft_mad(
             cleaned, sigma=sigma, frame=channels_per_subband, return_same_dtype=False
         )
 
-        if modes_to_zero is not None:
+        if modes_to_zero > 0:
             cleaned = zero_dm_fft(
                 cleaned, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
@@ -333,6 +137,7 @@ def clean_gpu(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
+    median_time_kernel: int,
     modes_to_zero: int,
     out_file: str,
     sigproc_object: object,
@@ -378,13 +183,14 @@ def clean_gpu(
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
+            median_time_kernel=median_time_kernel,
             return_same_dtype=False,
         )
         cleaned = fft_mad(
             cleaned, sigma=sigma, frame=channels_per_subband, return_same_dtype=False
         )
 
-        if modes_to_zero is not None:
+        if modes_to_zero > 0:
             cleaned = zero_dm_fft(
                 cleaned, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
@@ -402,7 +208,7 @@ def clean_dispersion(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
-    # remove_ends: bool,
+    median_time_kernel: int,
     out_file: str,
     sigproc_object: object,
 ) -> None:
@@ -450,6 +256,7 @@ def clean_dispersion(
         frame=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
+        median_time_kernel=median_time_kernel,
     )
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
@@ -472,6 +279,7 @@ def clean_dispersion(
             frame=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
+            median_time_kernel=median_time_kernel,
         )
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
@@ -494,6 +302,7 @@ def clean_dispersion(
         frame=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
+        median_time_kernel=median_time_kernel,
     )
     sigproc_object.append_spectra(
         cleaned.get(),
@@ -508,7 +317,7 @@ def master_cleaner(
     gulp: int = 16384,
     flatten_to: int = 64,
     channels_per_subband: int = 256,
-    # remove_ends: bool = False,
+    median_time_kernel: int = 0,
     modes_to_zero: int = 6,
     out_file: str = None,
 ) -> None:
@@ -525,31 +334,6 @@ def master_cleaner(
 
         keep_ends: keep the ends of file that can't be cleaned
                    because they can't be dedispersed
-    """
-
-    """
-    if out_file:
-        path, file_ext = os.path.splitext(out_file[0])
-    else:
-        path, file_ext = os.path.splitext(file[0])
-        out_file = path + "_mad_cleaned" + "." + file_ext
-
-
-    original_yr_input = Your(file)
-    wr = JessWriter(
-        original_yr_input,ff
-        dm=dispersion_measure,
-        sigma=sigma,
-        channels_per_subband=channels_per_subband,
-        remove_ends=remove_ends,
-    )
-
-    if file_ext == ".fits":
-        wr.to_fits(npsub=4032)
-    elif file_ext == ".fil":
-        wr.to_fil()
-    else:
-        raise ValueError(f"Tried file extention {file_ext}, which I can't write")
     """
 
     # fitter = get_fitter(fitter)
@@ -590,7 +374,7 @@ def master_cleaner(
             gulp=gulp,
             flatten_to=flatten_to,
             channels_per_subband=channels_per_subband,
-            # remove_ends,
+            median_time_kernel=median_time_kernel,
             out_file=out_file,
             sigproc_object=sigproc_object,
         )
@@ -603,6 +387,7 @@ def master_cleaner(
                 gulp=gulp,
                 flatten_to=flatten_to,
                 channels_per_subband=channels_per_subband,
+                median_time_kernel=median_time_kernel,
                 modes_to_zero=modes_to_zero,
                 out_file=out_file,
                 sigproc_object=sigproc_object,
@@ -614,6 +399,7 @@ def master_cleaner(
                 gulp=gulp,
                 flatten_to=flatten_to,
                 channels_per_subband=channels_per_subband,
+                median_time_kernel=median_time_kernel,
                 modes_to_zero=modes_to_zero,
                 out_file=out_file,
                 sigproc_object=sigproc_object,
@@ -668,6 +454,14 @@ if __name__ == "__main__":
         help="Number of channels in each subband",
         type=int,
         default=256,
+        required=False,
+    )
+    parser.add_argument(
+        "-median_time_kernel",
+        "---median_time_kernel",
+        help="The length of kernel for median of median and median of MADs in time",
+        type=int,
+        default=0,
         required=False,
     )
     parser.add_argument(
@@ -732,6 +526,7 @@ if __name__ == "__main__":
         sigma=args.sigma,
         gulp=args.gulp,
         flatten_to=args.flatten_to,
+        median_time_kernel=args.median_time_kernel,
         channels_per_subband=args.channels_per_subband,
         modes_to_zero=args.modes_to_zero,
         # remove_ends=args.remove_ends,

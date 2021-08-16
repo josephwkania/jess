@@ -294,6 +294,7 @@ def mad_spectra_flat(
     frame: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
+    median_time_kernel=0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
 ) -> cp.ndarray:
@@ -355,6 +356,11 @@ def mad_spectra_flat(
             flattened[:, j : j + frame], axis=1, scale="Normal"
         )
         medians = cp.median(flattened[:, j : j + frame], axis=1)
+
+        if median_time_kernel > 2:
+            cut = medfilt(cut, kernel_size=median_time_kernel)
+            medians = medfilt(medians, kernel_size=median_time_kernel)
+
         mask[:, j : j + frame] = (
             cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         )
@@ -377,8 +383,12 @@ def mad_spectra_flat(
         cut = sigma * median_abs_deviation_gpu(
             flattened[:, j : j + frame], axis=1, scale="Normal"
         )
-
         medians = cp.median(flattened[:, j : j + frame], axis=1)
+
+        if median_time_kernel > 2:
+            cut = medfilt(cut, kernel_size=median_time_kernel)
+            medians = medfilt(medians, kernel_size=median_time_kernel)
+
         mask_new = cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan

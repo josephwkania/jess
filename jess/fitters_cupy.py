@@ -51,6 +51,11 @@ def poly_fitter(
         channels = cp.arange(0, len(bandpass))
     poly_order = len(bandpass) // chans_per_fit
     logging.debug("Fitting with a %i order polynomial", poly_order)
+    if poly_order >= 8:
+        raise RuntimeWarning(
+            """Cupy polyfit will sometime catastrophically fail above 7th order!
+        Consider using the numpy implementation"""
+        )
 
     fit_values = cp.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = cp.poly1d(fit_values)  # get the values of the fitted bandpass

@@ -326,13 +326,14 @@ def poly_fitter(
         channels = np.arange(0, len(bandpass))
     poly_order = len(bandpass) // chans_per_fit
     logging.debug("Fitting with a %i polynomial", poly_order)
+
     fit_values = np.polyfit(channels, bandpass, poly_order)  # fit a polynomial
     poly = np.poly1d(fit_values)  # get the values of the fitted bandpass
-    diff = bandpass - poly(
-        channels
-    )  # find the difference between fitted and real bandpass
+    diff = bandpass - poly(channels)
+    # find the difference between fitted and real bandpass
     std_diff = stats.median_abs_deviation(diff, scale="normal")
-    logging.debug("Standard Deviation of fit: %.4f", std_diff)
+    logging.debug("Standard Deviation of fit: %.2f", std_diff)
+
     if std_diff > 0.0:
         # if there is no variability in the channel, don't try to mask
         mask = np.abs(diff - np.ma.median(diff)) < mask_sigma * std_diff
