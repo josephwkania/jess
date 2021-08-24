@@ -634,12 +634,11 @@ def mad_spectra_flat(
         mask_new = np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
-        # mean frequency subtraction makes sure there is smooth
-        # transition between the blocks
-        flattened[:, j : j + frame] = flattner_mix(
-            flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=1
-        )
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = flatten_to
+
+    # mean frequency subtraction makes sure there is smooth
+    # transition between the blocks
+    flattened = flattner_mix(flattened, flatten_to=flatten_to, kernel_size=1)
+    flattened[mask] = flatten_to
 
     logging.info("Masking %.2f %%", mask.mean() * 100)
 
