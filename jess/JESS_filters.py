@@ -548,8 +548,9 @@ def mad_spectra_flat(
     frame: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
-    return_same_dtype: bool = True,
+    median_time_kernel: int = 0,
     return_mask: bool = False,
+    return_same_dtype: bool = True,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -607,6 +608,11 @@ def mad_spectra_flat(
             flattened[:, j : j + frame], axis=1, scale="Normal"
         )
         medians = np.median(flattened[:, j : j + frame], axis=1)
+
+        if median_time_kernel > 2:
+            cut = signal.medfilt(cut, kernel_size=median_time_kernel)
+            medians = signal.medfilt(medians, kernel_size=median_time_kernel)
+
         mask[:, j : j + frame] = (
             np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         )
@@ -631,6 +637,11 @@ def mad_spectra_flat(
         )
 
         medians = np.median(flattened[:, j : j + frame], axis=1)
+
+        if median_time_kernel > 2:
+            cut = signal.medfilt(cut, kernel_size=median_time_kernel)
+            medians = signal.medfilt(medians, kernel_size=median_time_kernel)
+
         mask_new = np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
         mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
         flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan

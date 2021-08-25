@@ -294,7 +294,7 @@ def mad_spectra_flat(
     frame: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
-    median_time_kernel=0,
+    median_time_kernel: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
 ) -> cp.ndarray:
