@@ -101,7 +101,7 @@ def decimate(
             freq_factor = int(freq_factor)
         logging.warning("freq_factor was not an int: now is %i", freq_factor)
         dynamic_spectra = backend(
-            dynamic_spectra - np.median(dynamic_spectra, axis=0), freq_factor
+            dynamic_spectra - np.median(dynamic_spectra, axis=0), freq_factor, axis=1
         )
     return dynamic_spectra - np.median(dynamic_spectra, axis=0)
 
