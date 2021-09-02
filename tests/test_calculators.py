@@ -12,6 +12,9 @@ import jess.calculators as calc
 
 
 def test_accumulate():
+    """
+    Accumulate a matrix on both axes
+    """
     to_accumulate = np.asarray([6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]])
     accumulates_vert = calc.accumulate(to_accumulate, factor=2, axis=0)
     assert np.array_equal(accumulates_vert, np.asarray([6 * [1], 6 * [5], 6 * [11]]))
@@ -33,6 +36,9 @@ def test_accumulate():
 
 
 def test_mean():
+    """
+    Take a mean along both axes
+    """
     to_mean = np.asarray([6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]])
     mean_vert = calc.mean(to_mean, factor=2, axis=0)
     assert np.array_equal(
@@ -56,6 +62,10 @@ def test_mean():
 
 
 def test_decimate():
+    """
+    Make random data, decimate using scipy.signal.decimate and
+    jess.calculator.mean
+    """
     random = np.random.normal(loc=10, size=512 * 512).reshape(512, 512)
     decimated = calc.decimate(random, time_factor=2, freq_factor=2)
     # random -= np.median(random, axis=0)
@@ -77,11 +87,18 @@ def test_decimate():
 
 
 def test_highpass_window():
+    """
+    Length 7 half blackman window
+    """
     window_7 = 1 - np.blackman(2 * 7)[7:]
     np.array_equal(window_7, calc.highpass_window(7))
 
 
 def test_preprocess():
+    """
+    Make random data, change mean/std and make
+    sure preprocess removes it
+    """
     random = np.random.normal(size=512 * 512).reshape(512, 512)
 
     random_0 = random.copy() - random.mean(axis=0)
@@ -100,6 +117,9 @@ def test_preprocess():
 
 
 def test_entropy():
+    """
+    Calculate entropy of random data
+    """
     random = np.random.normal(size=512 * 512).reshape(512, 512)
     entropies = np.zeros(512)
     for j in range(0, 512):
@@ -110,6 +130,9 @@ def test_entropy():
 
 
 def test_to_dtype():
+    """
+    Create some random data and turn it into uint8
+    """
     random = np.random.normal(scale=12, size=512 * 512).reshape(512, 512)
     random_8 = np.around(random)
     random_8 = np.clip(random_8, 0, 255)
