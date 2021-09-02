@@ -11,8 +11,67 @@ from scipy import signal
 from scipy.stats import entropy, median_abs_deviation
 
 
+def accumulate(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
+    """
+    Reduce the data along an axis by taking the mean of a 'factor' of rows along
+    the axis
+
+    args:
+        data_array: array of data to be reduces
+
+        factor: the factor to reduce the dimension by
+
+        axis: axis to operate on
+
+    returns:
+        array with axis reduced by factor
+    """
+    if axis == 0:
+        reshaped = data_array.reshape(
+            data_array.shape[0] // factor, factor, data_array.shape[1]
+        )
+        return reshaped.sum(axis=1)
+    if axis == 1:
+        reshaped = data_array.reshape(
+            data_array.shape[0], data_array.shape[1] // factor, factor
+        )
+        return reshaped.sum(axis=2)
+    raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
+
+def mean(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
+    """
+    Reduce the data along an axis by taking the mean of a 'factor' of rows along
+    the axis
+
+    args:
+        data_array: array of data to be reduces
+
+        factor: the factor to reduce the dimension by
+
+        axis: axis to operate on
+
+    returns:
+        array with axis reduced by factor
+    """
+    if axis == 0:
+        reshaped = data_array.reshape(
+            data_array.shape[0] // factor, factor, data_array.shape[1]
+        )
+        return reshaped.mean(axis=1)
+    if axis == 1:
+        reshaped = data_array.reshape(
+            data_array.shape[0], data_array.shape[1] // factor, factor
+        )
+        return reshaped.mean(axis=2)
+    raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
+
 def decimate(
-    dynamic_spectra: np.ndarray, time_factor: int = None, freq_factor: int = None
+    dynamic_spectra: np.ndarray,
+    time_factor: int = None,
+    freq_factor: int = None,
+    backend: object = signal.decimate,
 ) -> np.ndarray:
     """
     Makes decimates along either/both time and frequency axes.
@@ -26,6 +85,9 @@ def decimate(
 
         freq_factor: factor to reduce freqency channels
 
+        backend: backend to use to reduce the dimension, default is
+                 signal.decimate, consider using jess,calculator.mean
+
     returns:
         Flattened in frequency dynamic spectra, reduced in time and/or freqency
     """
@@ -33,12 +95,12 @@ def decimate(
         if not isinstance(time_factor, int):
             time_factor = int(time_factor)
         logging.warning("time_factor was not an int: now is %i", time_factor)
-        dynamic_spectra = signal.decimate(dynamic_spectra, time_factor, axis=0)
+        dynamic_spectra = backend(dynamic_spectra, time_factor, axis=0)
     if freq_factor is not None:
         if not isinstance(freq_factor, int):
             freq_factor = int(freq_factor)
         logging.warning("freq_factor was not an int: now is %i", freq_factor)
-        dynamic_spectra = signal.decimate(
+        dynamic_spectra = backend(
             dynamic_spectra - np.median(dynamic_spectra, axis=0), freq_factor
         )
     return dynamic_spectra - np.median(dynamic_spectra, axis=0)
