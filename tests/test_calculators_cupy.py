@@ -2,19 +2,16 @@
 """
 Tests for calculator_cupy.py
 """
-try:
-    import cupy as cp
 
-    CUPY_AVAL = True
-except ModuleNotFoundError:
-    CUPY_AVAL = False
 
 import pytest
 
-import jess.calculators_cupy as calc
+cp = pytest.importorskip("cupy")
+
+# pylint: disable=C0413
+import jess.calculators_cupy as calc  # isort:skip # noqa: E402
 
 
-@pytest.mark.skipif(not CUPY_AVAL, reason="cupy not available.")
 def test_to_dtype():
     """
     Create some random data and turn it into uint8

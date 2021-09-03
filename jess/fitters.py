@@ -163,7 +163,7 @@ def bspline_fitter(
     The Huber Regressor is a robust fitting function.
 
     This wraps bspline_fit, # running it twice to help it futher reject outliers
-    (Not implemnted)
+    (Not implemented)
 
     Args:
         Bandpass: the bandpass to fit
