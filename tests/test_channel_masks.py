@@ -6,7 +6,7 @@ Tests for channel_masks
 import numpy as np
 from scipy import stats
 
-from jess.calculators import preprocess
+from jess.calculators import preprocess, shannon_entropy
 from jess.channel_masks import stat_test
 
 # Can't use inits with pytest, this error is unavoidable
@@ -76,6 +76,7 @@ class TestStatTest:
         ad_stat = np.zeros(512)
         for j in range(0, 512):
             ad_stat[j], _, _ = stats.anderson(self.rand[:, j], dist="norm")
+        assert len(self.rand[:, j]) == 2000
         assert np.array_equal(ad_stat, stat_test(self.rand, "anderson-darling"))
 
     def test_ang(self):
@@ -139,3 +140,50 @@ class TestStatTest:
         mid = (bottom_quant + top_quant) / 2.0
         assert len(mid) == 512
         assert np.array_equal(mid, stat_test(self.rand, "midhing"))
+
+    def test_shannon_entropy(self):
+        """
+        Entropy
+        """
+        entropy = shannon_entropy(self.rand, axis=0)
+        assert len(entropy) == 512
+        assert np.array_equal(entropy, stat_test(self.rand, "shannon-entropy"))
+
+    def test_shpiro_wilk(self):
+        """
+        Shapiro-wilk
+        """
+        s_w = np.zeros(512)
+        for j in range(512):
+            s_w[j] = stats.shapiro(self.rand[:, j]).statistic
+
+        assert np.array_equal(s_w, stat_test(self.rand, "shapiro-wilk"))
+
+    def test_skew(self):
+        """ "
+        Skew
+        """
+        skew = stats.skew(self.rand, axis=0)
+        assert len(skew) == 512
+        assert np.array_equal(skew, stat_test(self.rand, "skew"))
+
+    def test_stand_dev(self):
+        """
+        Stand dev
+        """
+        std = np.std(self.rand, axis=0)
+        assert len(std) == 512
+        assert np.array_equal(std, stat_test(self.rand, "stand-dev"))
+
+    def test_trimean(self):
+        """
+        trimean
+        """
+        top, middle, bottom = np.quantile(self.rand, [0.75, 0.50, 0.25], axis=0)
+        # not sure why the below does not work
+        # assert np.all(top > middle)
+        assert np.all(middle > bottom)
+        assert np.all(top > bottom)
+        assert len(top) == 512
+        tri = (top + 2 * middle + bottom) / 4
+        assert np.array_equal(tri, stat_test(self.rand, "trimean"))
