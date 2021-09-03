@@ -34,3 +34,7 @@ jobs:
         run: |
           pip install black
           black . --check
+      - name: Pytest + Coverage Report
+        run: |
+          pip install pytest pytest-cov
+          python -m pytest --cov=jess --cov-report=xml
