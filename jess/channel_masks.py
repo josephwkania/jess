@@ -38,7 +38,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         top_quant, bottom_quant = np.quantile(data, [0.91, 0.09], axis=0)
         test = top_quant - bottom_quant
     elif which_test == "90-10":
-        top_quant, bottom_quant = np.quantile(data, [0.90, 0.01], axis=0)
+        top_quant, bottom_quant = np.quantile(data, [0.90, 0.10], axis=0)
         test = top_quant - bottom_quant
     elif which_test == "75-25":
         test = stats.iqr(data, axis=0)
@@ -49,7 +49,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         for ichan in range(0, num_freq):
             test[ichan], _, _ = stats.anderson(data[:, ichan], dist="norm")
     elif which_test == "d'angostino":
-        test, _ = stats.normaltest(data, axis=1)
+        test, _ = stats.normaltest(data, axis=0)
     elif which_test == "jarque-bera":
         _, num_freq = data.shape
         if num_freq < 2000:
@@ -66,11 +66,11 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
     elif which_test == "lilliefors":
         # I don't take into account the change of dof when calculating the p_value
         # The test stattic is the same as statsmodels lilliefors
-        num_freq, _ = data.shape
+        _, num_freq = data.shape
         test = np.zeros(num_freq)
         data_0, _ = preprocess(data)
         for ichan in range(0, num_freq):
-            test[ichan], _ = stats.kstest(data_0[ichan, :], "norm")
+            test[ichan], _ = stats.kstest(data_0[:, ichan], "norm")
     elif which_test == "mad":
         test = stats.median_abs_deviation(data, axis=0)
     elif which_test == "mean":
