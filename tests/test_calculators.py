@@ -3,12 +3,14 @@
 Tests for calculator.py
 """
 
-# import pytest
 import numpy as np
 from scipy import signal
 from scipy.stats import entropy
 
 import jess.calculators as calc
+
+# Can't use inits with pytest, this error is unavoidable
+# pylint: disable=W0201
 
 
 class TestAccumulate:
@@ -16,28 +18,28 @@ class TestAccumulate:
     Accumulate a matrix on both axes
     """
 
-    @staticmethod
-    def test_vert_accumulate():
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.to_accumulate = np.asarray(
+            [6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]]
+        )
+
+    def test_vert_accumulate(self):
         """
         Accumulate along axis=0
         """
-        to_accumulate = np.asarray(
-            [6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]]
-        )
-        accumulates_vert = calc.accumulate(to_accumulate, factor=2, axis=0)
+        accumulates_vert = calc.accumulate(self.to_accumulate, factor=2, axis=0)
         assert np.array_equal(
             accumulates_vert, np.asarray([6 * [1], 6 * [5], 6 * [11]])
         )
 
-    @staticmethod
-    def test_hor_accumulate():
+    def test_hor_accumulate(self):
         """
         Accumulate on axis=1
         """
-        to_accumulate = np.asarray(
-            [6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]]
-        )
-        accumulates_hor = calc.accumulate(to_accumulate, factor=2, axis=1)
+        accumulates_hor = calc.accumulate(self.to_accumulate, factor=2, axis=1)
         assert np.array_equal(
             accumulates_hor,
             np.asarray(
@@ -58,24 +60,30 @@ class TestMean:
     Take a mean along both axes
     """
 
-    @staticmethod
-    def test_vert_mean():
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.to_mean = np.asarray(
+            [6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]]
+        )
+
+    def test_vert_mean(self):
         """
         Mean along axis=0
         """
-        to_mean = np.asarray([6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]])
-        mean_vert = calc.mean(to_mean, factor=2, axis=0)
+
+        mean_vert = calc.mean(self.to_mean, factor=2, axis=0)
         assert np.array_equal(
             mean_vert, np.asarray([6 * [1 / 2], 6 * [5 / 2], 6 * [11 / 2]])
         )
 
-    @staticmethod
-    def test_hor_mean():
+    def test_hor_mean(self):
         """
         Mean along axis=1
         """
-        to_mean = np.asarray([6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]])
-        mean_hor = calc.mean(to_mean, factor=2, axis=1)
+
+        mean_hor = calc.mean(self.to_mean, factor=2, axis=1)
         assert np.array_equal(
             mean_hor,
             np.asarray(
@@ -97,32 +105,35 @@ class TestDecimate:
     jess.calculator.mean
     """
 
-    @staticmethod
-    def test_decimate_singal():
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.random = np.random.normal(loc=10, size=512 * 512).reshape(512, 512)
+
+    def test_decimate_singal(self):
         """
         Test decimate using scipy.singal.decimate backend
         """
-        random = np.random.normal(loc=10, size=512 * 512).reshape(512, 512)
-        decimated = calc.decimate(random, time_factor=2, freq_factor=2)
+
+        decimated = calc.decimate(self.random, time_factor=2, freq_factor=2)
         # random -= np.median(random, axis=0)
-        test = signal.decimate(random, 2, axis=0)
+        test = signal.decimate(self.random, 2, axis=0)
 
         test -= np.median(test, axis=0)
         test = signal.decimate(test, 2, axis=1)
         test -= np.median(test, axis=0)
         assert np.allclose(test, decimated)
 
-    @staticmethod
-    def test_decimage_mean():
+    def test_decimage_mean(self):
         """
         Test decimate using jess.calculators.mean backend
         """
-        random = np.random.normal(loc=10, size=512 * 512).reshape(512, 512)
         decimated = calc.decimate(
-            random, time_factor=2, freq_factor=2, backend=calc.mean
+            self.random, time_factor=2, freq_factor=2, backend=calc.mean
         )
         # random -= np.median(random, axis=0)
-        test = calc.mean(random, 2, axis=0)
+        test = calc.mean(self.random, 2, axis=0)
 
         test -= np.median(test, axis=0)
         test = calc.mean(test, 2, axis=1)
@@ -144,29 +155,30 @@ class TestPreprocess:
     sure preprocess removes it
     """
 
-    @staticmethod
-    def test_hor():
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.random = np.random.normal(size=512 * 512).reshape(512, 512)
+
+    def test_hor(self):
         """
         Test change in row of data
         """
-        random = np.random.normal(size=512 * 512).reshape(512, 512)
-
-        random_0 = random.copy() - random.mean(axis=0)
+        random_0 = self.random.copy() - self.random.mean(axis=0)
         random_0 /= np.std(random_0, axis=0, ddof=1)
-        modified_0 = random.copy()
+        modified_0 = self.random.copy()
         modified_0[:, 12] += 12
         modified_0[:, 24] *= 24
         assert np.allclose(random_0, calc.preprocess(modified_0)[0])
 
-    @staticmethod
-    def test_vert():
+    def test_vert(self):
         """
         Test change in column of data
         """
-        random = np.random.normal(size=512 * 512).reshape(512, 512)
-        random_1 = random - random.mean(axis=1)[:, None]
+        random_1 = self.random - self.random.mean(axis=1)[:, None]
         random_1 /= np.std(random_1, axis=1, ddof=1)[:, None]
-        modified_1 = random.copy()
+        modified_1 = self.random.copy()
         modified_1[12, :] += 12
         modified_1[24, :] *= 24
         assert np.allclose(random_1, calc.preprocess(modified_1)[1])

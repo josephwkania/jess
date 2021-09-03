@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""
+Tests for median_abs_deviation
+Stolen from scipy.stats.tests.test_stats.py
+and subject to the scipy license
+"""
+import numpy as np
+import pytest
+from numpy.testing import (
+    assert_allclose,
+    assert_almost_equal,
+    assert_array_almost_equal,
+    assert_equal,
+)
+
+cp = pytest.importorskip("cupy")
+
+# pylint: disable=C0413
+from jess.scipy_cupy.stats import median_abs_deviation_gpu  # isort:skip # noqa: E402
+
+
+class TestMedianAbsDeviation:
+    def setup_class(self):
+        self.dat_nan = cp.array(
+            [
+                2.20,
+                2.20,
+                2.4,
+                2.4,
+                2.5,
+                2.7,
+                2.8,
+                2.9,
+                3.03,
+                3.03,
+                3.10,
+                3.37,
+                3.4,
+                3.4,
+                3.4,
+                3.5,
+                3.6,
+                3.7,
+                3.7,
+                3.7,
+                3.7,
+                3.77,
+                5.28,
+                np.nan,
+            ]
+        )
+        self.dat = cp.array(
+            [
+                2.20,
+                2.20,
+                2.4,
+                2.4,
+                2.5,
+                2.7,
+                2.8,
+                2.9,
+                3.03,
+                3.03,
+                3.10,
+                3.37,
+                3.4,
+                3.4,
+                3.4,
+                3.5,
+                3.6,
+                3.7,
+                3.7,
+                3.7,
+                3.7,
+                3.77,
+                5.28,
+                28.95,
+            ]
+        )
+
+    def test_median_abs_deviation(self):
+        assert_almost_equal(median_abs_deviation_gpu(self.dat, axis=None).get(), 0.355)
+        dat = self.dat.reshape(6, 4)
+        mad = median_abs_deviation_gpu(dat, axis=0)
+        mad_expected = cp.asarray([0.435, 0.5, 0.45, 0.4])
+        assert_array_almost_equal(mad.get(), mad_expected.get())
+
+    def test_mad_nan_omit(self):
+        mad = median_abs_deviation_gpu(self.dat_nan, nan_policy="omit")
+        assert_almost_equal(mad.get(), 0.34)
+
+    def test_axis_and_nan(self):
+        x = cp.array([[1.0, 2.0, 3.0, 4.0, cp.nan], [1.0, 4.0, 5.0, 8.0, 9.0]])
+        mad = median_abs_deviation_gpu(x, axis=1)
+        assert_equal(mad.get(), np.array([np.nan, 3.0]))
+
+    def test_nan_policy_omit_with_inf(self):
+        z = cp.array([1, 3, 4, 6, 99, cp.nan, cp.inf])
+        mad = median_abs_deviation_gpu(z, nan_policy="omit")
+        assert_equal(mad.get(), 3.0)
+
+    @pytest.mark.parametrize("axis", [0, 1, 2, None])
+    def test_size_zero_with_axis(self, axis):
+        x = np.zeros((3, 0, 4))
+        mad = median_abs_deviation_gpu(cp.asarray(x), axis=axis)
+        mad = cp.asarray(mad).get()
+        assert_equal(mad, np.full_like(x.sum(axis=axis), fill_value=np.nan))
+
+    @pytest.mark.parametrize(
+        "nan_policy, expected",
+        [
+            ("omit", np.array([np.nan, 1.5, 1.5])),
+            ("propagate", np.array([np.nan, np.nan, 1.5])),
+        ],
+    )
+    def test_nan_policy_with_axis(self, nan_policy, expected):
+        x = cp.array(
+            [
+                [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
+                [1, 5, 3, 6, np.nan, np.nan],
+                [5, 6, 7, 9, 9, 10],
+            ]
+        )
+        mad = median_abs_deviation_gpu(x, nan_policy=nan_policy, axis=1)
+        assert_equal(mad.get(), expected)
+
+    @pytest.mark.parametrize("axis, expected", [(1, [2.5, 2.0, 12.0]), (None, 4.5)])
+    def test_center_mean_with_nan(self, axis, expected):
+        x = cp.array([[1, 2, 4, 9, np.nan], [0, 1, 1, 1, 12], [-10, -10, -10, 20, 20]])
+        mad = median_abs_deviation_gpu(x, center=cp.mean, nan_policy="omit", axis=axis)
+        assert_allclose(mad.get(), expected, rtol=1e-15, atol=1e-15)
+
+    def test_center_not_callable(self):
+        with pytest.raises(TypeError, match="callable"):
+            median_abs_deviation_gpu([1, 2, 3, 5], center=99)
