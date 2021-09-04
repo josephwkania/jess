@@ -180,7 +180,7 @@ def dbscan_flagger(
     eps: float = 0.3,
     min_clust_frac: float = 0.14,
     show_plot: bool = False,
-):
+) -> np.ndarray:
     """
     Use DBScan to look for outliers
 
@@ -301,7 +301,7 @@ def channel_masker(
     show_plots: bool = False,
 ) -> List[bool]:
     """
-    Reads data from the given file, does the given statistical test.
+    Does the given statistical test on a given data array.
     Then a curve is fitted to the resulting test-bandpass, this removes large effects
     of the receiver. Z-scores are calculated and channels that decide
     x-score*sigma are flagged.

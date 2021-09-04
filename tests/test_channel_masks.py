@@ -7,7 +7,12 @@ import numpy as np
 from scipy import stats
 
 from jess.calculators import preprocess, shannon_entropy
-from jess.channel_masks import stat_test
+from jess.channel_masks import (
+    channel_masker,
+    dbscan_flagger,
+    stat_test,
+    z_score_flagger,
+)
 
 # Can't use inits with pytest, this error is unavoidable
 # pylint: disable=W0201
@@ -187,3 +192,64 @@ class TestStatTest:
         assert len(top) == 512
         tri = (top + 2 * middle + bottom) / 4
         assert np.array_equal(tri, stat_test(self.rand, "trimean"))
+
+
+def test_dbscan_flagger():
+    """
+    Make some fake data, add spikes.
+    See if spikes get flagged
+    """
+    rand = np.random.normal(size=512)
+    rand[50] += 30
+    rand[100] += 60
+    rand[300] -= 40
+
+    should_mask = np.zeros(512, dtype=bool)
+    should_mask[50] = True
+    should_mask[100] = True
+    should_mask[300] = True
+
+    mask = dbscan_flagger(rand, eps=0.8)
+
+    assert np.array_equal(should_mask, mask)
+
+
+def test_z_score_flagger():
+    """
+    Make some fake data, add spikes
+    see if they get removed
+    """
+    rand = np.random.normal(size=512)
+    rand[50] += 30
+    rand[100] += 60
+    rand[300] -= 40
+
+    should_mask = np.zeros(512, dtype=bool)
+    should_mask[50] = True
+    should_mask[100] = True
+    should_mask[300] = True
+
+    mask = z_score_flagger(rand)
+
+    assert np.array_equal(should_mask, mask)
+
+
+def test_channel_masker():
+    """
+    Make a fake array and add spikes in std
+    see if they get removed
+    """
+    rand = np.random.normal(size=512 * 200).reshape(200, 512)
+    rand[:, 50] *= 30
+    rand[:, 100] *= 60
+    rand[:, 300] /= 40
+    assert len(rand[:, 300]) == 200
+
+    should_mask = np.zeros(512, dtype=bool)
+    should_mask[50] = True
+    should_mask[100] = True
+    should_mask[300] = True
+
+    # At three sigma some random channels will get flagged
+    mask = channel_masker(rand, "stand-dev", sigma=3.5)
+    assert np.array_equal(should_mask, mask)
