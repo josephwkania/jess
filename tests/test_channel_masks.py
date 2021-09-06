@@ -251,5 +251,6 @@ def test_channel_masker():
     should_mask[300] = True
 
     # At three sigma some random channels will get flagged
-    mask = channel_masker(rand, "stand-dev", sigma=3.5)
+    # 512*4test = 2048 random channels, @6simga this should never happen.
+    mask = channel_masker(rand, "stand-dev", sigma=6)
     assert np.array_equal(should_mask, mask)
