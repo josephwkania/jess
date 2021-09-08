@@ -38,3 +38,10 @@ jobs:
       - name: Pytest + Coverage Report
         run: |
           python -m pytest --cov=jess --cov-report=xml
+      - name: Upoaed to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          name: codecov-umbrella
+          fail_ci_if_error: true
