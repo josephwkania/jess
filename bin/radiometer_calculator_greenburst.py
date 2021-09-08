@@ -49,8 +49,8 @@ def get_stds(input_file, headless):
 
     assert (
         len(timeseries) < 2 ** 7
-    ), f"""The file length of 
-	{len(timeseries)} is shorter than the max boxcar width of {2**7}"""
+    ), f"""The file length of
+    {len(timeseries)} is shorter than the max boxcar width of {2**7}"""
 
     # powers_of_two = [2, 4, 7] # get boxcars for 2^0, 2^2, 2^4, 2^7
     powers_of_two = np.arange(1, 7, 1)  # get boxcars for 2**[0,1, ... , 7]
@@ -62,7 +62,7 @@ def get_stds(input_file, headless):
 
     widths = 2 ** np.insert(powers_of_two, [0], 0)
 
-    stds_dic = {J: K for J, K in zip(widths, stds)}
+    stds_dic = {j: k for j, k in zip(widths, stds)}
     logging.debug(f"Boxcarwidths: stad dev {stds_dic}")
 
     return stds_dic
@@ -71,7 +71,8 @@ def get_stds(input_file, headless):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="your_header.py",
-        description="Read header from psrfits/filterbank files and print the unified header",
+        description="""Read header from psrfits/filterbank files
+         and print the unified header""",
     )
     parser.add_argument(
         "-f",

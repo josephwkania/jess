@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+"""  # noqa: W605
 Takes from Dynamic Spectra from filterbank/fits files
 and displays in a GUI.
 Shows time series above spectra and bandpass to the right.
@@ -30,7 +30,7 @@ Key Binds:
 Arrangement
 
 ### \################\  \################\ ###
-### \Time Series ax01\  \Time Series ax02\ ### 
+### \Time Series ax01\  \Time Series ax02\ ###
 ### \################\  \################\ ###
 
 \##\ \###############\  \################\ \##\
