@@ -6,7 +6,6 @@ The repository for all calculators
 import logging
 
 import cupy as cp
-from scipy import signal
 
 
 def mean(data_array: cp.ndarray, factor: int, axis: int) -> cp.ndarray:
@@ -41,7 +40,6 @@ def decimate(
     dynamic_spectra: cp.ndarray,
     time_factor: int = None,
     freq_factor: int = None,
-    backend: object = signal.decimate,
 ) -> cp.ndarray:
     """
     Makes decimates along either/both time and frequency axes.
@@ -70,7 +68,7 @@ def decimate(
         if not isinstance(freq_factor, int):
             freq_factor = int(freq_factor)
         logging.warning("freq_factor was not an int: now is %i", freq_factor)
-        dynamic_spectra = backend(
+        dynamic_spectra = mean(
             dynamic_spectra - cp.median(dynamic_spectra, axis=0), freq_factor, axis=1
         )
     return dynamic_spectra - cp.median(dynamic_spectra, axis=0)
