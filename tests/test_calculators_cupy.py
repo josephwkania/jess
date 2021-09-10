@@ -72,9 +72,7 @@ class TestDecimate:
         """
         Test decimate using jess.calculators_cupy.mean backend (only one available)
         """
-        decimated = calc.decimate(
-            self.random, time_factor=2, freq_factor=2, backend=calc.mean
-        )
+        decimated = calc.decimate(self.random, time_factor=2, freq_factor=2)
         # random -= np.median(random, axis=0)
         test = calc.mean(self.random, 2, axis=0)
 
