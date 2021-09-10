@@ -12,6 +12,78 @@ cp = pytest.importorskip("cupy")
 import jess.calculators_cupy as calc  # isort:skip # noqa: E402
 
 
+class TestMean:
+    """
+    Take a mean along both axes
+    """
+
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.to_mean = cp.asarray(
+            [6 * [0], 6 * [1], 6 * [2], 6 * [3], 6 * [5], 6 * [6]]
+        )
+
+    def test_vert_mean(self):
+        """
+        Mean along axis=0
+        """
+
+        mean_vert = calc.mean(self.to_mean, factor=2, axis=0)
+        assert cp.array_equal(
+            mean_vert, cp.asarray([6 * [1 / 2], 6 * [5 / 2], 6 * [11 / 2]])
+        )
+
+    def test_hor_mean(self):
+        """
+        Mean along axis=1
+        """
+
+        mean_hor = calc.mean(self.to_mean, factor=2, axis=1)
+        assert cp.array_equal(
+            mean_hor,
+            cp.asarray(
+                [
+                    3 * [2 * 0 / 2],
+                    3 * [2 * 1 / 2],
+                    3 * [2 * 2 / 2],
+                    3 * [2 * 3 / 2],
+                    3 * [2 * 5 / 2],
+                    3 * [2 * 6 / 2],
+                ]
+            ),
+        )
+
+
+class TestDecimate:
+    """
+    Make random data, decimate using scipy.signal.decimate and
+    jess.calculator.mean
+    """
+
+    def setup_class(self):
+        """
+        Holds shared array
+        """
+        self.random = cp.random.normal(loc=10, size=512 * 512).reshape(512, 512)
+
+    def test_decimate(self):
+        """
+        Test decimate using jess.calculators_cupy.mean backend (only one available)
+        """
+        decimated = calc.decimate(
+            self.random, time_factor=2, freq_factor=2, backend=calc.mean
+        )
+        # random -= np.median(random, axis=0)
+        test = calc.mean(self.random, 2, axis=0)
+
+        test -= cp.median(test, axis=0)
+        test = calc.mean(test, 2, axis=1)
+        test -= cp.median(test, axis=0)
+        assert cp.allclose(test, decimated)
+
+
 def test_to_dtype():
     """
     Create some random data and turn it into uint8

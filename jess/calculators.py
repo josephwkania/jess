@@ -86,7 +86,7 @@ def decimate(
         freq_factor: factor to reduce freqency channels
 
         backend: backend to use to reduce the dimension, default is
-                 signal.decimate, consider using jess,calculator.mean
+                 signal.decimate, consider using jess.calculator.mean
 
     returns:
         Flattened in frequency dynamic spectra, reduced in time and/or freqency
