@@ -197,6 +197,32 @@ def test_entropy():
     assert np.array_equal(entropies, calc.shannon_entropy(random))
 
 
+class DivideRange:
+    """
+    Divide range into chunks, should be close to even
+    """
+
+    @staticmethod
+    def test_even():
+        """
+        Test if array is evenly divided
+        """
+        assert np.array_equal(
+            np.array([0, 512, 1024, 1536, 2048]), calc.divide_range(2048, 4)
+        )
+
+    @staticmethod
+    def test_uneven():
+        """
+        test if array with remainder get divided nearly evenly
+
+        Make it 2 shorter, the last two subarrays should be 1 smaller
+        """
+        assert np.array_equal(
+            np.array([0, 512, 1024, 1535, 2046]), calc.divide_range(2046, 4)
+        )
+
+
 def test_to_dtype():
     """
     Create some random data and turn it into uint8

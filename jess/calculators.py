@@ -197,6 +197,29 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     return entropies
 
 
+def divide_range(length, num_sections: int) -> np.ndarray:
+    """
+    Divide range as evenly as possiable.
+
+    Args:
+        length: lenght of array
+
+        num_sections: number of sections to divide array
+
+    return:
+        array with start and stops of each of the subsections
+
+    note:
+        Adapted from numpy.lib.shape_base.array_split
+        and subject to the numpy license
+    """
+    neach_section, extras = divmod(length, num_sections)
+    section_sizes = (
+        [0] + extras * [neach_section + 1] + (num_sections - extras) * [neach_section]
+    )
+    return np.array(section_sizes, dtype=int).cumsum()
+
+
 def to_dtype(data: np.ndarray, dtype: object) -> np.ndarray:
     """
     Takes a chunk of data and changes it to a given data type.
