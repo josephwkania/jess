@@ -82,6 +82,34 @@ class TestDecimate:
         assert cp.allclose(test, decimated)
 
 
+def test_flattner_median():
+    """
+    Flatten a 2D array with a trend
+    """
+    rands = cp.random.normal(size=512 * 256).reshape(512, 256)
+    line = 5 + 10 * cp.arange(512)
+    rands_with_trend = rands + line[:, None]
+    flattened = calc.flattner_median(rands_with_trend)
+    rands -= cp.median(rands, axis=0)
+    rands -= cp.median(rands, axis=1)[:, None]
+    rands += 64
+    assert cp.allclose(rands, flattened, rtol=0.1)
+
+
+def test_flattner_mix():
+    """
+    Flatten a 2D array with a trend
+    """
+    rands = cp.random.normal(size=512 * 256).reshape(512, 256)
+    line = 5 + 10 * cp.arange(512)
+    rands_with_trend = rands + line[:, None]
+    flattened = calc.flattner_mix(rands_with_trend)
+    rands -= cp.median(rands, axis=0)
+    rands -= cp.mean(rands, axis=1)[:, None]
+    rands += 64
+    assert cp.allclose(rands, flattened, rtol=0.1)
+
+
 def test_to_dtype():
     """
     Create some random data and turn it into uint8

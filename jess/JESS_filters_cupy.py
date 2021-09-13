@@ -8,7 +8,7 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy.signal import medfilt
 
-from jess.calculators_cupy import to_dtype
+from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
@@ -210,83 +210,6 @@ def mad_spectra(
         dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
     return dynamic_spectra
-
-
-def flattner_median(
-    dynamic_spectra: cp.ndarray, flatten_to: int = 64, kernel_size: int = 1
-) -> cp.ndarray:
-    """
-    This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the medians of the of bandpass. Then add flatten_to to all the pixels
-    so that the data can be keep as the same data type.
-
-    args:
-        dynamic_spectra: The dynamic spectra you want to flatten
-
-        flatten_to: The number to set as the baseline
-
-        kernel_size: The size of the median filter to run over the medians
-
-    returns:
-        Dynamic spectra flattened in frequency and time
-    """
-    if kernel_size > 1:
-        ts_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
-        )
-        # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=0), kernel_size=kernel_size
-        )
-        return dynamic_spectra - spectra_medians + flatten_to
-
-    ts_medians = cp.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = cp.nanmedian(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
-
-
-def flattner_mix(
-    dynamic_spectra: cp.ndarray, flatten_to: int = 64, kernel_size: int = 1
-) -> cp.ndarray:
-    """
-    This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the means of the of bandpass. Then add flatten_to to all the pixels
-    so that the data can be keep as the same data type.
-
-    This uses medians subtraction on the time series. This is less agressive and
-    leaved the mean subtraction for the zero-dm.
-
-    Mean subtraction across the spectrum allows for smoother transition between blocks.
-
-    args:
-        dynamic_spectra: The dynamic spectra you want to flatten
-
-        flatten_to: The number to set as the baseline
-
-        kernel_size: The size of the median filter to run over the medians
-
-    returns:
-        Dynamic spectra flattened with mean in frequency and median in time
-    """
-    if kernel_size > 1:
-        ts_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
-        )
-        # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = medfilt(
-            cp.nanmean(dynamic_spectra, axis=0), kernel_size=kernel_size
-        )
-        return dynamic_spectra - spectra_medians + flatten_to
-
-    ts_medians = cp.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = cp.nanmean(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
 
 
 def mad_spectra_flat(

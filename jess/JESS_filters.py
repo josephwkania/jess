@@ -5,59 +5,116 @@ The repository for all my filters
 import logging
 
 import numpy as np
+from rich.progress import track
 from scipy import signal, stats
-from scipy.signal import savgol_filter as sg
+from your import Your
 
-from jess.calculators import to_dtype
+from jess.calculators import divide_range, flattner_median, flattner_mix, to_dtype
 from jess.fitters import poly_fitter
 
 
-def anderson_darling_time(
-    gulp: np.ndarray,
-    critical_cut: float = 1e-22,
-    frame: int = 128,
-    return_values: bool = False,
+def run_filter(file: str, filter: str, window: int = 64, time_median_kernel: int = 0):
+    """
+    Runs filter on a file
+    """
+    yr_file = Your(file)
+    filter = filter.casefold()
+
+    if filter == "anderson":
+        test_values = anderson_calculate_values(
+            yr_file, window=window, time_median_kernel=time_median_kernel
+        )
+    else:
+        raise NotImplementedError(f"You asked for {filter}, which is not available!")
+
+    mask = central_limit_masker(test_values, window=window)
+
+
+def central_limit_masker(
+    test_values: np.ndarray, window: int, sigma: float = 5, num_subbands: int = 4
 ) -> np.ndarray:
     """
-    UNDER CONSTRUCTION !!!
-    Calculates the Anderson Darling test along the time axis
+    Uses the central limit theorem to look for outliers in each subband.
+    When looking at a large amount of values, the central limit theorem
+    says the values should start to be Guassian distributed. We can use
+    this to flag outliers.
+
+    Using subbands we can take into account changes in sensitively across
+    the band/cavity filters.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        test_values: the values from a statistical test
 
-        p_cut: blocks with a pvalue below this number get cut
+        window: the window size of the test
 
-        frame: number of time samples to calculate the kurtosis
+        sigma: sigma at which to flag values
 
-        rerturn_values: return the test values
+        num_subbands: number of subbands
 
-    Returns:
+    return:
+        bool array with outliers get set as true, this will be the same
+        size as the data.
 
-       Mask based on Critical value cut
+    notes:
+        see "Spectral Kurtosis-Based RFI Mitigation for CHIME"
+        https://arxiv.org/abs/1808.10365
 
-       optional: return the test values for each block
+        and
+
+        "High cadence kurtosis based RFI excision for CHIME"
+        https://open.library.ubc.ca/soa/cIRcle/collections/ubctheses/24/items/1.0394838?o=5
     """
-    frame = int(frame)
-    test_values = np.zeros_like(gulp, dtype=np.float)
-    p_values = np.zeros_like(gulp, dtype=np.float)
-    mask = np.full_like(gulp, True, dtype=bool)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        for k in range(0, gulp.shape[1]):
-            # Loop over the channels
-            test_vec, p_vec = stats.kstest(
-                (gulp[j : j + frame, k] - np.median(gulp[j : j + frame, k]))
-                / np.std(gulp[j : j + frame, k]),
-                "norm",
-            )
-            test_values[j : j + frame, k] = test_vec
-            p_values[j : j + frame, k] = p_vec
-
-    mask = p_values < critical_cut
-
-    if return_values:
-        return mask, p_values
+    mask = np.zeros((test_values.shape[0] * window, test_values.shape[1]), dtype=bool)
+    limits = divide_range(test_values.shape[1], num_subbands)
+    for jsub in range(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
+        median = np.median(test_values[subband])
+        std = stats.median_abs_deviation(
+            test_values[subband], scale="normal", axis=None
+        )
+        mask[subband] = np.repeat(
+            np.abs(test_values[subband] - median) > sigma * std, window, axis=0
+        )
 
     return mask
+
+
+def anderson_calculate_values(yr_file, window=64, time_median_kernel=0):
+    """
+    Run a Anderson Darling test on a Fits/Filterbank
+
+    Args:
+        yr_file: Your object
+
+        window: window size for the test
+
+        time_median_kernel: remove baseline by subtracting a running median
+                            of time_median_kernel length long. Default is
+                            no subtraction
+
+        returns:
+            array of anderson darling values for each window.
+    """
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    anderson = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
+
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
+
+        for kchan in range(nchan):
+            anderson[j, kchan] = stats.anderson(chunk[:, kchan]).statistic
+
+    return anderson
 
 
 def dagostino_time(
@@ -466,83 +523,6 @@ def mad_spectra(
     return gulp
 
 
-def flattner_median(
-    dynamic_spectra: np.ndarray, flatten_to: int = 64, kernel_size: int = 1
-) -> np.ndarray:
-    """
-    This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the medians of the of bandpass. Then add flatten_to to all the pixels
-    so that the data can be keep as the same data type.
-
-    args:
-        dynamic_spectra: The dynamic spectra you want to flatten
-
-        flatten_to: The number to set as the baseline
-
-        kernel_size: The size of the median filter to run over the medians
-
-    returns:
-        Dynamic spectra flattened in frequency and time
-    """
-    if kernel_size > 1:
-        ts_medians = signal.medfilt(
-            np.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
-        )
-        # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = signal.medfilt(
-            np.nanmedian(dynamic_spectra, axis=0), kernel_size=kernel_size
-        )
-        return dynamic_spectra - spectra_medians + flatten_to
-
-    ts_medians = np.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = np.nanmedian(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
-
-
-def flattner_mix(
-    dynamic_spectra: np.ndarray, flatten_to: int = 64, kernel_size: int = 1
-) -> np.ndarray:
-    """
-    This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the medians of the of bandpass. Then add flatten_to to all the pixels
-    so that the data can be keep as the same data type.
-
-    This uses medians subtraction on the time series. This is less agressive and
-    leaved the mean subtraction for the zero-dm.
-
-    Mean subtraction across the spectrum allows for smoother transition between blocks.
-
-    args:
-        dynamic_spectra: The dynamic spectra you want to flatten
-
-        flatten_to: The number to set as the baseline
-
-        kernel_size: The size of the median filter to run over the medians
-
-    returns:
-        Dynamic spectra flattened in frequency and time
-    """
-    if kernel_size > 1:
-        ts_medians = signal.medfilt(
-            np.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
-        )
-        # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = signal.medfilt(
-            np.nanmean(dynamic_spectra, axis=0), kernel_size=kernel_size
-        )
-        return dynamic_spectra - spectra_medians + flatten_to
-
-    ts_medians = np.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = np.nanmean(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
-
-
 def mad_spectra_flat(
     dynamic_spectra: np.ndarray,
     frame: int = 256,
@@ -724,7 +704,9 @@ def sad_time(gulp, frame=128, window=65, sigma=3, clip=True):  # runs in time
     # savgol_array = sg(gulp, window, 2, axis=0)
 
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        savgol_sub_array = sg(gulp[j : j + frame, :], window, 2, axis=0)
+        savgol_sub_array = signal.savgol_filter(
+            gulp[j : j + frame, :], window, 2, axis=0
+        )
         cut = np.tile(
             np.array(
                 1.4826
@@ -768,9 +750,11 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     gulp = gulp.copy()
     frame = int(frame)
     data_type = gulp.dtype
-    savgol_array = sg(gulp, window, 2, axis=1)
+    savgol_array = signal.savgol_filter(gulp, window, 2, axis=1)
     for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
-        savgol_sub_array = sg(savgol_array[:, j : j + frame], window, 2, axis=1)
+        savgol_sub_array = signal.savgol_filter(
+            savgol_array[:, j : j + frame], window, 2, axis=1
+        )
         print("test1")
         cut = np.tile(
             np.array(

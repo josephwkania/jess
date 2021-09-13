@@ -141,6 +141,34 @@ class TestDecimate:
         assert np.allclose(test, decimated)
 
 
+def test_flattner_median():
+    """
+    Flatten a 2D array with a trend
+    """
+    rands = np.random.normal(size=512 * 256).reshape(512, 256)
+    line = 5 + 10 * np.arange(512)
+    rands_with_trend = rands + line[:, None]
+    flattened = calc.flattner_median(rands_with_trend)
+    rands -= np.median(rands, axis=0)
+    rands -= np.median(rands, axis=1)[:, None]
+    rands += 64
+    assert np.allclose(rands, flattened, rtol=0.1)
+
+
+def test_flattner_mix():
+    """
+    Flatten a 2D array with a trend
+    """
+    rands = np.random.normal(size=512 * 256).reshape(512, 256)
+    line = 5 + 10 * np.arange(512)
+    rands_with_trend = rands + line[:, None]
+    flattened = calc.flattner_mix(rands_with_trend)
+    rands -= np.median(rands, axis=0)
+    rands -= np.mean(rands, axis=1)[:, None]
+    rands += 64
+    assert np.allclose(rands, flattened, rtol=0.1)
+
+
 def test_highpass_window():
     """
     Length 7 half blackman window
