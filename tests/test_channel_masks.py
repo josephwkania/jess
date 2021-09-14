@@ -4,6 +4,7 @@ Tests for channel_masks
 """
 
 import numpy as np
+import pytest
 from scipy import stats
 
 from jess.calculators import preprocess, shannon_entropy
@@ -192,6 +193,13 @@ class TestStatTest:
         assert len(top) == 512
         tri = (top + 2 * middle + bottom) / 4
         assert np.array_equal(tri, stat_test(self.rand, "trimean"))
+
+    def test_raise_not_implemented(self):
+        """
+        Raise for a test that does not exist
+        """
+        with pytest.raises(ValueError):
+            stat_test(self.rand, "joe")
 
 
 def test_dbscan_flagger():

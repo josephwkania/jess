@@ -4,6 +4,7 @@ Test for jess.fitters
 """
 
 import numpy as np
+import pytest
 
 from jess.fitters import (
     bspline_fit,
@@ -23,6 +24,8 @@ def test_get_fitter():
     assert cheb_fitter == get_fitter("cheb_fitter")
     assert median_fitter == get_fitter("median_fitter")
     assert poly_fitter == get_fitter("poly_fitter")
+    with pytest.raises(ValueError):
+        get_fitter("joe")
 
 
 def test_bspline_fit():

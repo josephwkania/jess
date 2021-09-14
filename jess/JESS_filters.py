@@ -117,45 +117,41 @@ def anderson_calculate_values(yr_file, window=64, time_median_kernel=0):
     return anderson
 
 
-def dagostino_time(
-    gulp: np.ndarray,
-    p_cut: float = 0.001,
-    frame: int = 128,
-    return_values: bool = False,
-) -> np.ndarray:
+def dagostino_calculate_values(yr_file, window=64, time_median_kernel=0):
     """
-    Calculates the D’Agostino test along the time axis
+    Run a D'Agostino test on a Fits/Filterbank
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: Your object
 
-        p_cut: blocks with a pvalue below this number get cut
+        window: window size for the test
 
-        frame: number of time samples to calculate the kurtosis
+        time_median_kernel: remove baseline by subtracting a running median
+                            of time_median_kernel length long. Default is
+                            no subtraction
 
-        rerturn_values: return the test values
-
-    Returns:
-
-       Mask based on bad iqr sections
-
-       optional: return the test values for each block
+        returns:
+            array of D'Agostino values for each window.
     """
-    frame = int(frame)
-    test_values = np.zeros_like(gulp, dtype=np.float)
-    p_values = np.zeros_like(gulp, dtype=np.float)
-    mask = np.full_like(gulp, True, dtype=bool)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        test_vec, p_vec = stats.normaltest(gulp[j : j + frame], axis=0)
-        test_values[j : j + frame, :] = test_vec
-        p_values[j : j + frame, :] = p_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    dagostino = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    mask = p_values < p_cut
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    if return_values:
-        return mask, p_values
+        dagostino[j, :] = stats.normaltest(chunk, axis=0).statistic
 
-    return mask
+    return dagostino
 
 
 def fft_mad(
