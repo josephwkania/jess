@@ -218,7 +218,7 @@ class TestFlattener:
         rands = np.random.normal(size=512 * 256).reshape(512, 256)
         line = 5 + 10 * np.arange(512)
         rands_with_trend = rands + line[:, None]
-        flattened = calc.flattner_median(rands_with_trend, kernel_size=3)
+        flattened = calc.flattner_mix(rands_with_trend, kernel_size=3)
 
         rands -= signal.medfilt(np.median(rands, axis=1), kernel_size=3)[:, None]
         rands -= signal.medfilt(np.mean(rands, axis=0), kernel_size=3)
@@ -345,7 +345,7 @@ class TestEntropy:
             calc.shannon_entropy(self.random, axis=3)
 
 
-class DivideRange:
+class TestDivideRange:
     """
     Divide range into chunks, should be close to even
     """
