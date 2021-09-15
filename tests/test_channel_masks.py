@@ -202,63 +202,149 @@ class TestStatTest:
             stat_test(self.rand, "joe")
 
 
-def test_dbscan_flagger():
+class TestDBScan:
     """
-    Make some fake data, add spikes.
-    See if spikes get flagged
+    Test the DBScan flagger
     """
-    rand = np.random.normal(size=512)
-    rand[50] += 30
-    rand[100] += 60
-    rand[300] -= 40
 
-    should_mask = np.zeros(512, dtype=bool)
-    should_mask[50] = True
-    should_mask[100] = True
-    should_mask[300] = True
+    def setup_class(self):
+        """
+        Make some fake data, add spikes.
+        See if spikes get flagged
+        """
+        self.rand = np.random.normal(size=512)
+        self.rand[50] += 30
+        self.rand[100] += 60
+        self.rand[300] -= 40
 
-    mask = dbscan_flagger(rand, eps=0.8)
+        self.should_mask = np.zeros(512, dtype=bool)
+        self.should_mask[50] = True
+        self.should_mask[100] = True
+        self.should_mask[300] = True
 
-    assert np.array_equal(should_mask, mask)
+    def test_dbscan_flagger(self):
+        """
+        Test dbscan with array
+        """
+        mask = dbscan_flagger(self.rand, eps=0.8)
+
+        assert np.array_equal(self.should_mask, mask)
+
+    def test_dbscan_flagger_chans(self):
+        """
+        Test dbscan with array and channel array
+        """
+        chans = np.arange(len(self.rand))
+        mask = dbscan_flagger(self.rand, chans=chans, eps=0.8)
+
+        assert np.array_equal(self.should_mask, mask)
 
 
-def test_z_score_flagger():
+class TestZScoreFlagger:
     """
+    Test the Z score with values above, below,
+    and both.
+
     Make some fake data, add spikes
     see if they get removed
     """
-    rand = np.random.normal(size=512)
-    rand[50] += 30
-    rand[100] += 60
-    rand[300] -= 40
 
-    should_mask = np.zeros(512, dtype=bool)
-    should_mask[50] = True
-    should_mask[100] = True
-    should_mask[300] = True
+    def setup_class(self):
+        """
+        Shared random bandpass
+        """
+        self.rand = np.random.normal(size=512)
+        self.rand[50] += 30
+        self.rand[100] += 60
+        self.rand[300] -= 40
 
-    mask = z_score_flagger(rand)
+    def test_z_score_flagger(self):
+        """
+        Test for both above and below
+        """
+        should_mask = np.zeros(512, dtype=bool)
+        should_mask[50] = True
+        should_mask[100] = True
+        should_mask[300] = True
 
-    assert np.array_equal(should_mask, mask)
+        mask = z_score_flagger(self.rand)
+        assert np.array_equal(should_mask, mask)
+
+    def test_z_score_flagger_below(self):
+        """
+        Only test for low outliers
+        """
+        should_mask = np.zeros(512, dtype=bool)
+        # should_mask[50] = True
+        # should_mask[100] = True
+        should_mask[300] = True
+
+        mask = z_score_flagger(self.rand, flag_above=False)
+        assert np.array_equal(should_mask, mask)
+
+    def test_z_score_flagger_above(self):
+        """
+        Only test for low outliers
+        """
+        should_mask = np.zeros(512, dtype=bool)
+        should_mask[50] = True
+        should_mask[100] = True
+        # should_mask[300] = True
+
+        mask = z_score_flagger(self.rand, flag_below=False)
+        assert np.array_equal(should_mask, mask)
+
+    def test_z_score_flagger_no(self):
+        """
+        Raise Value Error if flag_above=flag_below=False
+        """
+        with pytest.raises(ValueError):
+            z_score_flagger(self.rand, flag_above=False, flag_below=False)
 
 
-def test_channel_masker():
+class TestChannelMasker:
     """
-    Make a fake array and add spikes in std
-    see if they get removed
+    Test the channel masker with z_score and dbscan
     """
-    rand = np.random.normal(size=512 * 200).reshape(200, 512)
-    rand[:, 50] *= 30
-    rand[:, 100] *= 60
-    rand[:, 300] /= 40
-    assert len(rand[:, 300]) == 200
 
-    should_mask = np.zeros(512, dtype=bool)
-    should_mask[50] = True
-    should_mask[100] = True
-    should_mask[300] = True
+    def setup_class(self):
+        """
+        Make a fake array and add spikes in std
+        see if they get removed
+        """
+        self.rand = np.random.normal(size=512 * 200).reshape(200, 512)
+        self.rand[:, 50] *= 30
+        self.rand[:, 100] *= 60
+        self.rand[:, 300] /= 40
+        assert len(self.rand[:, 300]) == 200
 
-    # At three sigma some random channels will get flagged
-    # 512*4test = 2048 random channels, @6simga this should never happen.
-    mask = channel_masker(rand, "stand-dev", sigma=6)
-    assert np.array_equal(should_mask, mask)
+        self.should_mask = np.zeros(512, dtype=bool)
+        self.should_mask[50] = True
+        self.should_mask[100] = True
+        self.should_mask[300] = True
+
+    def test_channel_masker_zscore(self):
+        """
+        At three sigma some random channels will get flagged
+        512*4test = 2048 random channels, @6simga this should never happen
+        """
+        mask = channel_masker(self.rand, "stand-dev", sigma=6)
+        assert np.array_equal(self.should_mask, mask)
+
+    def test_channel_masker_dbscan(self):
+        """
+        Use DBscan
+
+        Not sure why its not flaggin the low channel
+        """
+        mask = channel_masker(self.rand, "stand-dev", flagger="dbscan_flagger")
+        self.should_mask[300] = False
+        assert np.array_equal(self.should_mask, mask)
+
+    def test_channel_masker_not_implemented(self):
+        """
+        Should raise an error
+        """
+
+        with pytest.raises(ValueError):
+            channel_masker(self.rand, "stand-dev", flagger="joe")

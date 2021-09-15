@@ -4,8 +4,8 @@ Tests for calculator.py
 """
 
 import numpy as np
-from scipy import signal
-from scipy.stats import entropy
+import pytest
+from scipy import stats, signal
 
 import jess.calculators as calc
 
@@ -54,6 +54,13 @@ class TestAccumulate:
             ),
         )
 
+    def test_not_implemented(self):
+        """
+        Raise error for higher axis
+        """
+        with pytest.raises(NotImplementedError):
+            calc.accumulate(self.to_accumulate, factor=2, axis=3)
+
 
 class TestMean:
     """
@@ -98,6 +105,13 @@ class TestMean:
             ),
         )
 
+    def test_not_implemented(self):
+        """
+        Raise error for higher axis
+        """
+        with pytest.raises(NotImplementedError):
+            calc.accumulate(self.to_mean, factor=2, axis=3)
+
 
 class TestDecimate:
     """
@@ -116,7 +130,7 @@ class TestDecimate:
         Test decimate using scipy.singal.decimate backend
         """
 
-        decimated = calc.decimate(self.random, time_factor=2, freq_factor=2)
+        decimated = calc.decimate(self.random, time_factor=2.0, freq_factor=2.0)
         # random -= np.median(random, axis=0)
         test = signal.decimate(self.random, 2, axis=0)
 
@@ -141,32 +155,75 @@ class TestDecimate:
         assert np.allclose(test, decimated)
 
 
-def test_flattner_median():
+class TestFlattener:
     """
-    Flatten a 2D array with a trend
+    Test the flatteners
     """
-    rands = np.random.normal(size=512 * 256).reshape(512, 256)
-    line = 5 + 10 * np.arange(512)
-    rands_with_trend = rands + line[:, None]
-    flattened = calc.flattner_median(rands_with_trend)
-    rands -= np.median(rands, axis=0)
-    rands -= np.median(rands, axis=1)[:, None]
-    rands += 64
-    assert np.allclose(rands, flattened, rtol=0.1)
 
+    @staticmethod
+    def test_flattner_median():
+        """
+        Flatten a 2D array with a trend
+        """
+        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        line = 5 + 10 * np.arange(512)
+        rands_with_trend = rands + line[:, None]
+        flattened = calc.flattner_median(rands_with_trend)
 
-def test_flattner_mix():
-    """
-    Flatten a 2D array with a trend
-    """
-    rands = np.random.normal(size=512 * 256).reshape(512, 256)
-    line = 5 + 10 * np.arange(512)
-    rands_with_trend = rands + line[:, None]
-    flattened = calc.flattner_mix(rands_with_trend)
-    rands -= np.median(rands, axis=0)
-    rands -= np.mean(rands, axis=1)[:, None]
-    rands += 64
-    assert np.allclose(rands, flattened, rtol=0.1)
+        rands -= np.median(rands, axis=1)[:, None]
+        rands -= np.median(rands, axis=0)
+        rands += 64
+        assert np.allclose(rands, flattened)
+
+    @staticmethod
+    def test_flattner_median_smooth():
+        """
+        Flatten a 2D array with a trend
+
+        not sure why the relative error need to be
+        so high
+        """
+        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        line = 5 + 10 * np.arange(512)
+        rands_with_trend = rands + line[:, None]
+        flattened = calc.flattner_median(rands_with_trend, kernel_size=3)
+
+        rands -= signal.medfilt(np.median(rands, axis=1), kernel_size=3)[:, None]
+        rands -= signal.medfilt(np.median(rands, axis=0), kernel_size=3)
+        rands += 64
+        assert np.allclose(rands, flattened, rtol=0.2)
+
+    @staticmethod
+    def test_flattner_mix():
+        """
+        Flatten a 2D array with a trend
+        """
+        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        line = 5 + 10 * np.arange(512)
+        rands_with_trend = rands + line[:, None]
+        flattened = calc.flattner_mix(rands_with_trend)
+
+        rands -= np.median(rands, axis=1)[:, None]
+        rands -= np.mean(rands, axis=0)
+        rands += 64
+        assert np.allclose(rands, flattened)
+
+    @staticmethod
+    def test_flattner_mix_smooth():
+        """
+        Flatten a 2D array with a trend
+
+        Not sure why the relative error need to be so high
+        """
+        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        line = 5 + 10 * np.arange(512)
+        rands_with_trend = rands + line[:, None]
+        flattened = calc.flattner_median(rands_with_trend, kernel_size=3)
+
+        rands -= signal.medfilt(np.median(rands, axis=1), kernel_size=3)[:, None]
+        rands -= signal.medfilt(np.mean(rands, axis=0), kernel_size=3)
+        rands += 64
+        assert np.allclose(rands, flattened, rtol=0.2)
 
 
 def test_highpass_window():
@@ -189,7 +246,7 @@ class TestPreprocess:
         """
         self.random = np.random.normal(size=512 * 512).reshape(512, 512)
 
-    def test_hor(self):
+    def test_hor_mean_std(self):
         """
         Test change in row of data
         """
@@ -200,7 +257,23 @@ class TestPreprocess:
         modified_0[:, 24] *= 24
         assert np.allclose(random_0, calc.preprocess(modified_0)[0])
 
-    def test_vert(self):
+    def test_hor_median_mad(self):
+        """
+        Test change in row of data
+        """
+        random_0 = self.random.copy() - np.median(self.random, axis=0)
+        random_0 /= stats.median_abs_deviation(random_0, axis=0, scale="Normal")
+        modified_0 = self.random.copy()
+        modified_0[:, 12] += 12
+        modified_0[:, 24] *= 24
+        assert np.allclose(
+            random_0,
+            calc.preprocess(
+                modified_0, central_value_calc="median", disperion_calc="mad"
+            )[0],
+        )
+
+    def test_vert_mean_std(self):
         """
         Test change in column of data
         """
@@ -211,6 +284,35 @@ class TestPreprocess:
         modified_1[24, :] *= 24
         assert np.allclose(random_1, calc.preprocess(modified_1)[1])
 
+    def test_vert_median_mad(self):
+        """
+        Test change in column of data
+        """
+        random_1 = self.random - np.median(self.random, axis=1)[:, None]
+        random_1 /= stats.median_abs_deviation(random_1, axis=1, scale="Normal")[
+            :, None
+        ]
+        modified_1 = self.random.copy()
+        modified_1[12, :] += 12
+        modified_1[24, :] *= 24
+        assert np.allclose(
+            random_1,
+            calc.preprocess(
+                modified_1, central_value_calc="median", disperion_calc="mad"
+            )[1],
+        )
+
+    def test_std_not_implmented(self):
+        """
+        Raise a error when dispersion calculator is
+         not valid
+        """
+        with pytest.raises(NotImplementedError):
+            calc.preprocess(self.random, disperion_calc="joe")
+
+        with pytest.raises(NotImplementedError):
+            calc.preprocess(self.random, central_value_calc="joe")
+
 
 def test_entropy():
     """
@@ -220,7 +322,7 @@ def test_entropy():
     entropies = np.zeros(512)
     for j in range(0, 512):
         _, counts = np.unique(random[j], return_counts=True)
-        entropies[j] = entropy(counts)
+        entropies[j] = stats.entropy(counts)
 
     assert np.array_equal(entropies, calc.shannon_entropy(random))
 

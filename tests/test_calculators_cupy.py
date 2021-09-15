@@ -55,6 +55,13 @@ class TestMean:
             ),
         )
 
+    def test_not_implemented(self):
+        """
+        Raise error for higher axis
+        """
+        with pytest.raises(NotImplementedError):
+            calc.mean(self.to_mean, factor=2, axis=3)
+
 
 class TestDecimate:
     """

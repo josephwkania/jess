@@ -164,10 +164,10 @@ def z_score_flagger(
     # flag based on z value
     if flag_above and flag_below:
         mask = np.abs(flat_bandpass - median) > sigma * stand_dev
-    elif flag_above:
+    elif flag_above and not flag_below:
         mask = flat_bandpass - median > sigma * stand_dev
-    elif flag_below:
-        mask = flat_bandpass - median < sigma * stand_dev
+    elif flag_below and not flag_above:
+        mask = flat_bandpass - median < -sigma * stand_dev
     else:
         raise ValueError("You must flag above or below, you set both to false")
 
