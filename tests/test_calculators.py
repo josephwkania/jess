@@ -5,7 +5,7 @@ Tests for calculator.py
 
 import numpy as np
 import pytest
-from scipy import stats, signal
+from scipy import signal, stats
 
 import jess.calculators as calc
 
@@ -314,17 +314,35 @@ class TestPreprocess:
             calc.preprocess(self.random, central_value_calc="joe")
 
 
-def test_entropy():
+class TestEntropy:
     """
-    Calculate entropy of random data
+    Tests for entropy
     """
-    random = np.random.normal(size=512 * 512).reshape(512, 512)
-    entropies = np.zeros(512)
-    for j in range(0, 512):
-        _, counts = np.unique(random[j], return_counts=True)
-        entropies[j] = stats.entropy(counts)
 
-    assert np.array_equal(entropies, calc.shannon_entropy(random))
+    def setup_class(self):
+        """ "
+        Holds random
+        """
+        self.random = np.random.normal(size=512 * 512).reshape(512, 512)
+
+    def test_entropy(self):
+        """
+        Calculate entropy of random data
+        """
+        entropies = np.zeros(512)
+        for j in range(0, 512):
+            _, counts = np.unique(self.random[j], return_counts=True)
+            entropies[j] = stats.entropy(counts)
+
+        assert np.array_equal(entropies, calc.shannon_entropy(self.random))
+
+    def test_no_axisself(self):
+        """
+        Raise a error when dispersion calculator is
+         not valid
+        """
+        with pytest.raises(ValueError):
+            calc.shannon_entropy(self.random, axis=3)
 
 
 class DivideRange:
