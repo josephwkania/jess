@@ -3,9 +3,16 @@
 Tests for dedispersion.py
 """
 
-import cupy as cp
+import pytest
 
-from jess.dispersion_cupy import calc_dispersion_delays, dedisperse, delay_lost
+cp = pytest.importorskip("cupy")
+
+# pylint: disable=C0413
+from jess.dispersion_cupy import (  # isort:skip # noqa: E402
+    calc_dispersion_delays,
+    dedisperse,
+    delay_lost,
+)
 
 # Can't use inits with pytest, this error is unavoidable
 # pylint: disable=W0201

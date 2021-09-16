@@ -9,7 +9,12 @@ from rich.progress import track
 from scipy import signal, stats
 from your import Your
 
-from jess.calculators import divide_range, flattner_median, flattner_mix, to_dtype
+from jess.calculators import (
+    balance_chans_per_subband,
+    flattner_median,
+    flattner_mix,
+    to_dtype,
+)
 from jess.fitters import poly_fitter
 
 
@@ -31,7 +36,11 @@ def run_filter(file: str, filter: str, window: int = 64, time_median_kernel: int
 
 
 def central_limit_masker(
-    test_values: np.ndarray, window: int, sigma: float = 5, num_subbands: int = 4
+    test_values: np.ndarray,
+    window: int,
+    sigma: float = 5,
+    chans_per_subband: int = 512,
+    remove_lower=True,
 ) -> np.ndarray:
     """
     Uses the central limit theorem to look for outliers in each subband.
@@ -65,16 +74,23 @@ def central_limit_masker(
         https://open.library.ubc.ca/soa/cIRcle/collections/ubctheses/24/items/1.0394838?o=5
     """
     mask = np.zeros((test_values.shape[0] * window, test_values.shape[1]), dtype=bool)
-    limits = divide_range(test_values.shape[1], num_subbands)
+    num_subbands, limits = balance_chans_per_subband(
+        test_values.shape[1], chans_per_subband
+    )
     for jsub in range(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         median = np.median(test_values[subband])
         std = stats.median_abs_deviation(
             test_values[subband], scale="normal", axis=None
         )
-        mask[subband] = np.repeat(
-            np.abs(test_values[subband] - median) > sigma * std, window, axis=0
-        )
+        if remove_lower:
+            mask[subband] = np.repeat(
+                np.abs(test_values[subband] - median) > sigma * std, window, axis=0
+            )
+        else:
+            mask[subband] = np.repeat(
+                test_values[subband] - median > sigma * std, window, axis=0
+            )
 
     return mask
 

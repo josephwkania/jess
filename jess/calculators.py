@@ -274,19 +274,35 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     return entropies
 
 
-def divide_range(length, num_sections: int) -> np.ndarray:
+def balance_chans_per_subband(num_chans: int, chans_per_subband: int) -> np.ndarray:
     """
-    Divide range as evenly as possiable.
+    Balance chan_per_subband when they are not evenly dividable
 
     Args:
-        length: lenght of array
+        num_chans: total number of channels
+
+        num_subbands: number of subbands
+
+    Return:
+        [number of sections, array with start and stops of each of the subband]
+    """
+    num_sections = num_chans // chans_per_subband
+    return num_sections, divide_range(num_chans, num_sections)
+
+
+def divide_range(length: int, num_sections: int) -> np.ndarray:
+    """
+    Divide range as evenly as possible.
+
+    Args:
+        length: length of array
 
         num_sections: number of sections to divide array
 
-    return:
+    Return:
         array with start and stops of each of the subsections
 
-    note:
+    Note:
         Adapted from numpy.lib.shape_base.array_split
         and subject to the numpy license
     """

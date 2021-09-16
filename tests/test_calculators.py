@@ -345,6 +345,31 @@ class TestEntropy:
             calc.shannon_entropy(self.random, axis=3)
 
 
+class TestBalanceChansPerSubband:
+    """
+    Test Balance by trying dividable and not dividable subbands
+    """
+
+    @staticmethod
+    def test_even():
+        """
+        Test evenly divisible
+        """
+        num_section, limits = calc.balance_chans_per_subband(2048, 512)
+        assert num_section == 4
+        assert np.array_equal(np.array([0, 512, 1024, 1536, 2048]), limits)
+
+    @staticmethod
+    def test_uneven():
+        """
+        Test unevenly divisible,
+        should be the same as before
+        """
+        num_section, limits = calc.balance_chans_per_subband(2048, 500)
+        assert num_section == 4
+        assert np.array_equal(np.array([0, 512, 1024, 1536, 2048]), limits)
+
+
 class TestDivideRange:
     """
     Divide range into chunks, should be close to even
