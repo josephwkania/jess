@@ -110,7 +110,7 @@ class TestMean:
         Raise error for higher axis
         """
         with pytest.raises(NotImplementedError):
-            calc.accumulate(self.to_mean, factor=2, axis=3)
+            calc.mean(self.to_mean, factor=2, axis=3)
 
 
 class TestDecimate:
@@ -232,6 +232,15 @@ def test_highpass_window():
     """
     window_7 = 1 - np.blackman(2 * 7)[7:]
     np.array_equal(window_7, calc.highpass_window(7))
+
+
+def test_guassian_noise_adder():
+    """
+    Add some standard deviations
+    """
+    stds = np.array([1, 1, 2, 2])
+    combined = np.sqrt(np.sum(stds ** 2)) / 4
+    assert combined == calc.guassian_noise_adder(stds)
 
 
 class TestPreprocess:

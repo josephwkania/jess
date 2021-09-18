@@ -4,11 +4,14 @@ The repository for all calculators
 """
 
 import logging
+import random
 from typing import Tuple
 
 import numpy as np
-from scipy import signal
+from scipy import signal, stats
 from scipy.stats import entropy, median_abs_deviation
+
+random.seed(2021)
 
 
 def accumulate(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
@@ -195,6 +198,104 @@ def highpass_window(window_length: int) -> np.ndarray:
         Half of an inverted blackman window, will bw window_length long
     """
     return 1 - np.blackman(2 * window_length)[window_length:]
+
+
+def guassian_noise_adder(standard_deviations: np.ndarray) -> float:
+    """
+    Add Gaussian noise from multiple channels to estimate the time series
+
+    Args:
+        standard_deviation: Standard Deviations along the bandpass
+
+    Returns:
+        time series standard deviation
+
+    Notes:
+        https://en.wikipedia.org/wiki/Sum_of_normally_distributed_random_variables#Independent_random_variables
+
+        Variances add at the sum of squares, we are interested in Standard deviation,
+        so talk the square root.
+
+        We are taking the mean, do divide by the number of channels
+        (=number of standard deviations)
+    """
+    squares = standard_deviations ** 2
+    summed = np.sum(squares)
+    return np.sqrt(summed) / len(standard_deviations)
+
+
+def ideal_noise_calculator(
+    yr_obj: object,
+    num_samples: int = 1000,
+    len_block: int = 128,
+    detrend: bool = True,
+    kernel_size: int = 17,
+):
+    """
+    Calculate the ideal noise of a file
+
+    1) Get num_samples random start samples of len_block
+
+    2) Optionally detrend the data in time to remove power level trends
+
+    3) Use a robust measure to estimate the noise in each channel
+       Here we use IQR that is then scared
+
+    4) Optionally use a Median filter to filter channels that are
+       contaminated at at the 25th to 75th level
+
+    5) Add up these standard deviations to find the time series standard
+       deviations
+
+    Args:
+        yr_object: your object for the file to process
+
+        num_samples: number of samples to take
+
+        detrend: detrend along the time axis before finding the dispersion
+
+        kernel_size: the kernel size for the median filter. If 0 or 1
+                     no filter is applied
+
+    Returns:
+        Ideal standard deviation of time series.
+
+    Notes:
+        detrend would be useful if there are power level changes in the data. This will
+        cause the Standard deviation to be to high. This will remove random trends
+        as well, so this could lead to underestimating the noise level
+
+        IQR and MAD do a reasonable job at estimating the dispersion of a channel
+        as long as the channel is not filled with RFI. If there is RFI power
+        at all the percentiles this will cause the IQR to be too high,
+        so we use a median filter to remove these channels.
+        By using smallish blocks, we hope to avoid trends that can't
+        be detrened linearly
+
+        By calculating all the channels independently, then adding the
+        standard deviations we should avoid correlated (zero dm)
+        noise that shows up across off the channels
+    """
+    start_sample_range = yr_obj.your_header.nspectra - len_block
+    starts = [random.randrange(0, start_sample_range) for _ in range(num_samples)]
+    iqrs = np.zeros((num_samples, yr_obj.your_header.nchans), dtype=np.float64)
+
+    for j, jstart in enumerate(starts):
+        data = yr_obj.get_data(jstart, len_block)
+
+        if detrend:
+            # detrend in time
+            signal.detrend(data, axis=0, overwrite_data=True)
+
+        iqr = stats.iqr(data, axis=0, scale="normal")
+        if kernel_size > 1:
+            iqr = signal.medfilt(iqr, kernel_size=kernel_size)
+
+        iqrs[j] = iqr
+
+    stds = np.median(iqrs, axis=0)
+
+    return guassian_noise_adder(stds)
 
 
 def preprocess(
