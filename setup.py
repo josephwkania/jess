@@ -14,4 +14,5 @@ setup(
     author="Joseph W Kania",
     scripts=glob.glob("bin/*"),
     install_requires=required,
+    extras_require={"cupy": ["cupy>=9.2"]},
 )
