@@ -13,6 +13,7 @@ from jess.calculators import (
     balance_chans_per_subband,
     flattner_median,
     flattner_mix,
+    shannon_entropy,
     to_dtype,
 )
 from jess.fitters import poly_fitter
@@ -170,6 +171,44 @@ def dagostino_calculate_values(yr_file, window=64, time_median_kernel=0):
     return dagostino
 
 
+def entropy_calculate_values(yr_file, window=64, time_median_kernel=0):
+    """
+    Calculate Shannon Entropy for blocks of length window.
+
+    Args:
+        yr_file: The Your object for a FITS/fil file to process
+
+        window: window length in number of time samples
+
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
+
+        bandpass_kernel: bandpass kernel to smooth bandpass
+
+    Returns:
+        Shannon values for each block in the file
+    """
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    entropy = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
+
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
+
+        entropy[j, :] = shannon_entropy(chunk, axis=0)
+
+    return entropy
+
+
 def fft_mad(
     gulp: np.ndarray,
     frame: int = 256,
@@ -283,177 +322,177 @@ def fft_mad(
     return gulp_cleaned
 
 
-def iqr_time(
-    gulp: np.ndarray, sigma: float = 6, frame: int = 128, return_values: bool = False
-) -> np.ndarray:
+def jarque_bera_calculate_values(yr_file, window=64, time_median_kernel=0):
     """
-    Calculates the spectral Kurtosis along the time axis
+    Calculate the Jaque Bera statistic.
+    Use robust ways to normalize the blocks.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: The Your object for a FITS/fil file to process
 
-    `   sigma on to cut kurtosis values
+        window: window length in number of time samples
 
-        frame: number of time samples to calculate the kurtosis
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
 
-        apply_mask: Apply the mask to the data, replacing bad values with zeros
+        bandpass_kernel: bandpass kernel to smooth bandpass
 
     Returns:
-
-       Mask based on bad iqr sections
-
-       optional: apply mask as replace with zeros
+        Jarque Bera statistic
     """
-    frame = int(frame)
-    iqr_values = np.zeros_like(gulp, dtype=np.float)
-    mask = np.full_like(gulp, True, dtype=bool)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        iqr_vec = stats.iqr(gulp[j : j + frame], axis=0)
-        iqr_values[j : j + frame, :] = iqr_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    jarque_bera = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    # iqr_bandpass =
-    iqr_fit = poly_fitter(iqr_values.mean(axis=0))
-    iqr_flat = iqr_values - iqr_fit
-    stds_iqr = stats.median_abs_deviation(iqr_flat, scale="normal")
-    meds_iqr = np.median(iqr_flat)
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    mask = iqr_flat - meds_iqr < sigma * stds_iqr
+        for kchan in range(nchan):
+            jarque_bera[j, kchan] = stats.jarque_bera(chunk[:, kchan]).statistic
 
-    if return_values:
-        return mask, iqr_values
-
-    return mask
+    return jarque_bera
 
 
-def ks_time(
-    gulp: np.ndarray,
-    p_cut: float = 1e-22,
-    frame: int = 128,
-    return_values: bool = False,
-) -> np.ndarray:
+def lilliefors_calculate_values(yr_file, window=64, time_median_kernel=0):
     """
-    UNDER CONSTRUCTION !!!
-    Calculates the KS test along the time axis
+    Calculate the Lilliefors statistic.
+    Use robust ways to normalize the blocks.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: The Your object for a FITS/fil file to process
 
-        p_cut: blocks with a pvalue below this number get cut
+        window: window length in number of time samples
 
-        frame: number of time samples to calculate the kurtosis
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
 
-        rerturn_values: return the test values
+        bandpass_kernel: bandpass kernel to smooth bandpass
 
     Returns:
-
-       Mask based on p value cut
-
-       optional: return the test values for each block
+        Lilliefors statistic
     """
-    frame = int(frame)
-    test_values = np.zeros_like(gulp, dtype=np.float)
-    p_values = np.zeros_like(gulp, dtype=np.float)
-    mask = np.full_like(gulp, True, dtype=bool)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        for k in range(0, gulp.shape[1]):
-            # Loop over the channels
-            test_vec, p_vec = stats.kstest(
-                (gulp[j : j + frame, k] - np.median(gulp[j : j + frame, k]))
-                / np.std(gulp[j : j + frame, k]),
-                "norm",
-            )
-            test_values[j : j + frame, k] = test_vec
-            p_values[j : j + frame, k] = p_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    lilliefors = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    mask = p_values < p_cut
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    if return_values:
-        return mask, p_values
+        chunk -= np.median(chunk, axis=0)
+        chunk = chunk / stats.median_abs_deviation(chunk, axis=0)
+        for kchan in range(nchan):
+            lilliefors[j, kchan] = stats.kstest(
+                chunk[:, kchan], stats.norm.cdf
+            ).statistic
 
-    return mask
+    return lilliefors
 
 
-def kurtosis_time_thresh(
-    gulp: np.ndarray,
-    threshhold: float = 20,
-    frame: int = 128,
-    return_values: bool = False,
+def std_iqr_calculate_values(
+    yr_file: object,
+    window: int = 64,
+    time_median_kernel: int = 0,
+    bandpass_kernel: int = 7,
 ) -> np.ndarray:
     """
-    Calculates the spectral Kurtosis along the time axis
+    Take the difference between Standard Deviation and Inter Quatile Range
+    (scaled to give STD) This is the difference between a robust measure
+    and non-robust measure of scale.
+    For Gaussian data then should agree, with outliers, this will differ.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: The Your object for a FITS/fil file to process
 
-    `   threshhold: abs threshold to filter kurtosis values
+        window: window length in number of time samples
 
-        frame: number of time samples to calculate the kurtosis
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
 
-        return_mask: bool
+        bandpass_kernel: bandpass kernel to smooth bandpass
+
     Returns:
+        Distances for each block
 
-       Dynamic Spectrum with bad Kurtosis values removed
-
-       optional: masked values
+    Notes:
+        Kevin's idea
     """
-    frame = int(frame)
-    kvalues = np.zeros_like(gulp)
-    mask = np.zeros_like(gulp)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        kurtosis_vec = stats.kurtosis(gulp[j : j + frame], axis=0)
-        kvalues[j : j + frame, :] = kurtosis_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    distance = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    mask = kvalues < threshhold
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    if return_values:
-        return mask, kvalues
+        distance[j, :] = np.std(chunk, axis=0) - signal.medfilt(
+            stats.iqr(chunk, axis=0, scale="normal"), kernel_size=bandpass_kernel
+        )
 
-    return mask
+    return distance
 
 
-def kurtosis_time(
-    gulp: np.ndarray,
-    p_cut: float = 0.001,
-    frame: int = 128,
-    return_values: bool = False,
-) -> np.ndarray:
+def kurtosis_calculate_values(yr_file, window=64, time_median_kernel=0):
     """
-    Calculates the spectral Kurtosis along the time axis
+    Calculate Kurtosis for blocks of length window.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: The Your object for a FITS/fil file to process
 
-        p_cut: blocks with a pvalue below this number get cut
+        window: window length in number of time samples
 
-        frame: number of time samples to calculate the kurtosis
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
 
-        return_mask: bool
+        bandpass_kernel: bandpass kernel to smooth bandpass
+
     Returns:
-
-       mask
-
-       optional: pvalues for each of the blocks
+        Kurtosis
     """
-    frame = int(frame)
-    kvalues = np.zeros_like(gulp, dtype=np.float)
-    mask = np.zeros_like(gulp, dtype=bool)
-    p_values = np.zeros_like(gulp, dtype=np.float)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        kurtosis_vec, p_vec = stats.kurtosistest(gulp[j : j + frame], axis=0)
-        kvalues[j : j + frame, :] = kurtosis_vec
-        p_values[j : j + frame, :] = p_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    kurtosis = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    mask = p_values < p_cut
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    # stds_kurt = np.std(kvalues, axis=0)
-    # meds_kurt = np.median(kvalues, axis=0)
+        kurtosis[j, :] = stats.kurtosis(chunk, axis=0)
 
-    # mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
-
-    if return_values:
-        return mask, p_values
-
-    return mask
+    return kurtosis
 
 
 def mad_spectra(
@@ -822,49 +861,42 @@ def mad_time_cutter(gulp, frame=256, sigma=10):
     return gulp.as_type(data_type)
 
 
-def skew_time(
-    gulp: np.ndarray,
-    p_cut: float = 0.001,
-    frame: int = 128,
-    return_values: bool = False,
-) -> np.ndarray:
+def skew_calculate_values(yr_file, window=64, time_median_kernel=0):
     """
-    Calculates the spectral Skew on blocks along the time axis
+    Calculate Skew for blocks of length window.
 
     Args:
-        gulp: the dynamic spectum to be analyzed
+        yr_file: The Your object for a FITS/fil file to process
 
-        p_cut: blocks with a pvalue below this number get cut
+        window: window length in number of time samples
 
-        frame: number of time samples to calculate the skew
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
 
-        return_mask: bool
+        bandpass_kernel: bandpass kernel to smooth bandpass
+
     Returns:
-
-       mask
-
-       optional: pvalues for each of the blocks
+        Skew values for each block in the file
     """
-    frame = int(frame)
-    svalues = np.zeros_like(gulp, dtype=np.float)
-    mask = np.zeros_like(gulp, dtype=bool)
-    p_values = np.zeros_like(gulp, dtype=np.float)
-    for j in np.arange(0, len(gulp) - frame + 1, frame):
-        skew_vec, p_vec = stats.skewtest(gulp[j : j + frame], axis=0)
-        svalues[j : j + frame, :] = skew_vec
-        p_values[j : j + frame, :] = p_vec
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    skew = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
 
-    mask = p_values < p_cut
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
 
-    # stds_kurt = np.std(kvalues, axis=0)
-    # meds_kurt = np.median(kvalues, axis=0)
+        skew[j, :] = stats.skew(chunk, axis=0)
 
-    # mask = np.abs(kvalues - meds_kurt) < sigma * stds_kurt
-
-    if return_values:
-        return mask, p_values
-
-    return mask
+    return skew
 
 
 def zero_dm(
