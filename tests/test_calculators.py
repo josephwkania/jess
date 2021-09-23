@@ -62,6 +62,54 @@ class TestAccumulate:
             calc.accumulate(self.to_accumulate, factor=2, axis=3)
 
 
+class TestAutoCorrelate:
+    """
+    Test autocorrelate against np.correlate
+    """
+
+    def setup_class(self):
+        """
+        Random array to autocorrelate
+        """
+        self.rand = np.random.normal(size=51 * 256).reshape(51, 256)
+
+    @staticmethod
+    def np_autocorrelate(data):
+        """
+        Auto correlation along a single array
+        """
+        data -= data.mean()
+        correlation = np.correlate(data, data, mode="same")[len(data) // 2 :]
+        return correlation / np.max(correlation)
+
+    def test_array(self):
+        """
+        Test on a array
+        """
+        auto_corralate = calc.autocorrelate(self.rand[:, 0])
+        assert np.allclose(auto_corralate, self.np_autocorrelate(self.rand[:, 0]))
+
+    def test_2d_zero(self):
+        """
+        Test matrix along axis=0
+        """
+        auto_corralate = calc.autocorrelate(self.rand, axis=0)
+        assert np.allclose(auto_corralate[:, 0], self.np_autocorrelate(self.rand[:, 0]))
+        assert np.allclose(
+            auto_corralate[:, 20], self.np_autocorrelate(self.rand[:, 20])
+        )
+
+    def test_2d_one(self):
+        """
+        Test matrix along axis=1
+        """
+        auto_corralate = calc.autocorrelate(self.rand, axis=1)
+        assert np.allclose(auto_corralate[0, :], self.np_autocorrelate(self.rand[0, :]))
+        assert np.allclose(
+            auto_corralate[20, :], self.np_autocorrelate(self.rand[20, :])
+        )
+
+
 class TestMean:
     """
     Take a mean along both axes

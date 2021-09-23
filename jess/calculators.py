@@ -42,6 +42,43 @@ def accumulate(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
     raise NotImplementedError(f"Asked for axis {axis} which is not available")
 
 
+def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
+    """
+    Auto correlation along an axis
+
+    Args:
+        data: data to find the autocorrelaton
+
+        axis: axis to find the autocorrlation, -1, 0, 1 available
+
+    Returns:
+        Auto correlation along an axis
+
+    Notes:
+        Uses mean to flatten, if complex structure, should do a better
+        detrend
+
+    """
+    if axis > 1:
+        raise NotImplementedError(f"Not Aviabliable for axis {axis}")
+    if axis == 1:
+        data = data.T
+        axis = 0
+        transpose = True
+    else:
+        transpose = False
+
+    data = data - data.mean(axis=axis)
+    correlation = signal.fftconvolve(
+        data, np.flip(data, axis=axis), mode="same", axes=axis
+    )[len(data) // 2 :]
+    correlation /= np.max(correlation, axis=axis)
+
+    if transpose:
+        return correlation.T
+    return correlation
+
+
 def mean(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
     """
     Reduce the data along an axis by taking the mean of a 'factor' of rows along
