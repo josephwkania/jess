@@ -10,6 +10,7 @@ from scipy import signal, stats
 from your import Your
 
 from jess.calculators import (
+    autocorrelate,
     balance_chans_per_subband,
     flattner_median,
     flattner_mix,
@@ -132,6 +133,63 @@ def anderson_calculate_values(yr_file, window=64, time_median_kernel=0):
             anderson[j, kchan] = stats.anderson(chunk[:, kchan]).statistic
 
     return anderson
+
+
+def autocorrelation_calculate_values(yr_file, window=64, time_median_kernel=0):
+    """
+    Calculate Autocorrelation for blocks of length window.
+
+    Args:
+        yr_file: The Your object for a FITS/fil file to process
+
+        window: window length in number of time samples
+
+        time_median_kernel: Detrend in time by subtracting a smoothed running
+                            median, smoothed bt time_median_kernel
+
+        bandpass_kernel: bandpass kernel to smooth bandpass
+
+    Returns:
+        Autocorrelation values for each block in the file
+
+    Notes:
+        Not sure what the best test for autocorrelation.
+
+        https://arxiv.org/pdf/2108.12434.pdf uses the absolute magnitude of
+        of a one sample delay.
+
+        The Durbin-Watson statistic also uses the first lag
+        https://en.wikipedia.org/wiki/Durbin%E2%80%93Watson_statistic
+
+        I've tried some other tests,
+            - the sum of the absolute values of all the correlations
+            - (std - iqr) to look for outliers
+            - the absolute value of the first lag
+    """
+    nspectra = yr_file.your_header.nspectra
+    nchan = yr_file.your_header.nchans
+    num_stat_samples = np.ceil(nspectra / window).astype(int)
+    autocorr = np.zeros((num_stat_samples, nchan), dtype=np.float64)
+    for j in track(range(num_stat_samples)):
+        if j * window + window > nspectra:
+            gulp = nspectra - j * window
+        else:
+            gulp = window
+        chunk = yr_file.get_data(j * window, gulp)
+
+        if time_median_kernel > 0:
+            time_series = np.nanmean(chunk, axis=1)
+            time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
+            chunk = chunk - time_series[:, None]
+
+        autocorr_abs = autocorrelate(chunk, axis=0)
+        autocorr[j, :] = autocorr_abs.sum(axis=0)
+        # ac = autocorrelate(chunk, axis=0) #[1:]
+        # print(ac[1].shape)
+        # autocorr[j, :] = np.abs(ac[1])
+        # autocorr[j, :] = np.std(ac, axis=0) - stats.iqr(ac, axis=0, scale="normal")
+
+    return autocorr
 
 
 def dagostino_calculate_values(yr_file, window=64, time_median_kernel=0):

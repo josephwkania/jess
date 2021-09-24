@@ -3,9 +3,11 @@
 Tests for calculator.py
 """
 
+
 import numpy as np
 import pytest
 from scipy import signal, stats
+from your import Your
 
 import jess.calculators as calc
 
@@ -108,6 +110,13 @@ class TestAutoCorrelate:
         assert np.allclose(
             auto_corralate[20, :], self.np_autocorrelate(self.rand[20, :])
         )
+
+    def test_not_implemented(self):
+        """
+        Raise error for higher axis
+        """
+        with pytest.raises(NotImplementedError):
+            calc.autocorrelate(self.rand, axis=3)
 
 
 class TestMean:
@@ -289,6 +298,53 @@ def test_guassian_noise_adder():
     stds = np.array([1, 1, 2, 2])
     combined = np.sqrt(np.sum(stds ** 2)) / 4
     assert combined == calc.guassian_noise_adder(stds)
+
+
+class TestIdealNoiseCalculator:
+    """
+    Test the ideal noise calculator on random
+    Guassian noise.
+
+    The relative tolerances seem a bit high
+    """
+
+    def setup_class(self):
+        """
+        Read data in, get standard deviations
+        """
+        data = np.load("tests/fake.npy")
+        self.stds = np.std(data, axis=0)
+
+        self.yr_object = Your("tests/fake.fil")
+
+    def test_ideal_noise(self):
+        """
+        Test the default case
+        """
+
+        ideal_noises = calc.ideal_noise_calculator(self.yr_object, num_samples=4)
+
+        assert np.allclose(self.stds, ideal_noises, rtol=0.15)
+
+    def test_ideal_noise_no_detrend(self):
+        """
+        Test with no detrend
+        """
+        ideal_noises_no_detrend = calc.ideal_noise_calculator(
+            self.yr_object, num_samples=4, detrend=False
+        )
+        assert np.allclose(self.stds, ideal_noises_no_detrend, rtol=0.15)
+
+    def test_ideal_noise_no_kernel(self):
+        """
+        Test without median filter
+        """
+        ideal_noises_no_kernel = calc.ideal_noise_calculator(
+            self.yr_object, num_samples=4, kernel_size=0
+        )
+        print(self.stds)
+        print(ideal_noises_no_kernel)
+        assert np.allclose(self.stds, ideal_noises_no_kernel, rtol=0.30)
 
 
 class TestPreprocess:

@@ -60,7 +60,7 @@ def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
 
     """
     if axis > 1:
-        raise NotImplementedError(f"Not Aviabliable for axis {axis}")
+        raise NotImplementedError(f"Not Available for axis {axis}")
     if axis == 1:
         data = data.T
         axis = 0
@@ -332,7 +332,7 @@ def ideal_noise_calculator(
 
     stds = np.median(iqrs, axis=0)
 
-    return guassian_noise_adder(stds)
+    return stds
 
 
 def preprocess(
