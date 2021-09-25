@@ -182,7 +182,7 @@ def autocorrelation_calculate_values(yr_file, window=64, time_median_kernel=0):
             time_series = signal.medfilt(time_series, kernel_size=time_median_kernel)
             chunk = chunk - time_series[:, None]
 
-        autocorr_abs = autocorrelate(chunk, axis=0)
+        autocorr_abs = np.abs(autocorrelate(chunk, axis=0))
         autocorr[j, :] = autocorr_abs.sum(axis=0)
         # ac = autocorrelate(chunk, axis=0) #[1:]
         # print(ac[1].shape)

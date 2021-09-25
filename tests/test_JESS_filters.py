@@ -11,7 +11,7 @@ from scipy import signal, stats
 from your import Your
 
 import jess.JESS_filters as Jf
-from jess.calculators import shannon_entropy
+from jess.calculators import autocorrelate, shannon_entropy
 
 # class TestRunFilter:
 #     """
@@ -51,7 +51,7 @@ class TestCentralLimit:
         should_mask[244, 244] += 30
         should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
-        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=6)
+        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=6.5)
 
         assert np.array_equal(should_mask, mask)
 
@@ -66,7 +66,7 @@ class TestCentralLimit:
         # should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
         mask = Jf.central_limit_masker(
-            self.rand, window=self.window, remove_lower=False, sigma=6
+            self.rand, window=self.window, remove_lower=False, sigma=6.5
         )
 
         assert np.array_equal(should_mask, mask)
@@ -111,6 +111,30 @@ class TestStatTest:
         )
         assert np.array_equal(anderson, ad_calcululate)
 
+    def test_autocorrelation(self):
+        """
+        Test autocorrelation
+        """
+
+        autocorrelation = np.zeros(
+            (self.nsamps // self.window, self.nchans), dtype=float
+        )
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+            autocorr_abs = np.abs(autocorrelate(chunk, axis=0))
+            autocorrelation[j, :] = autocorr_abs.sum(axis=0)
+
+        autocorrelate_calculate = Jf.autocorrelation_calculate_values(
+            self.yr_file, window=self.window, time_median_kernel=self.kernel_size
+        )
+        assert np.array_equal(autocorrelation, autocorrelate_calculate)
+
     def test_dagostino(self):
         """
         Test D'Agostino
@@ -152,3 +176,116 @@ class TestStatTest:
             self.yr_file, window=self.window, time_median_kernel=self.kernel_size
         )
         assert np.array_equal(entropy, entropy_calculate)
+
+    def test_jarque_bera(self):
+        """
+        Test Jarque Bera
+        """
+        jarque_bera = np.zeros((self.nsamps // self.window, self.nchans), dtype=float)
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+            for kchan in range(self.nchans):
+                jarque_bera[j, kchan] = stats.jarque_bera(chunk[:, kchan]).statistic
+
+        jb_calcululate = Jf.jarque_bera_calculate_values(
+            self.yr_file, window=self.window, time_median_kernel=self.kernel_size
+        )
+        assert np.array_equal(jarque_bera, jb_calcululate)
+
+    def test_lilliefors(self):
+        """
+        Test Lilliefors
+        """
+        lilliefors = np.zeros((self.nsamps // self.window, self.nchans), dtype=float)
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+            chunk -= np.median(chunk, axis=0)
+            chunk = chunk / stats.median_abs_deviation(chunk, axis=0)
+            for kchan in range(self.nchans):
+                lilliefors[j, kchan] = stats.kstest(chunk[:, kchan], "norm").statistic
+
+        lilliefors_calcululate = Jf.lilliefors_calculate_values(
+            self.yr_file, window=self.window, time_median_kernel=self.kernel_size
+        )
+        assert np.array_equal(lilliefors, lilliefors_calcululate)
+
+    def test_std_iqr(self):
+        """
+        Test Std-IQR
+        """
+        bandpass_kernel = 7
+        std_iqr = np.zeros((self.nsamps // self.window, self.nchans), dtype=float)
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+
+            std_iqr[j, :] = np.std(chunk, axis=0) - signal.medfilt(
+                stats.iqr(chunk, axis=0, scale="normal"), kernel_size=bandpass_kernel
+            )
+
+        std_calcululate = Jf.std_iqr_calculate_values(
+            self.yr_file,
+            window=self.window,
+            time_median_kernel=self.kernel_size,
+            bandpass_kernel=bandpass_kernel,
+        )
+        assert np.array_equal(std_iqr, std_calcululate)
+
+    def test_skew(self):
+        """
+        Test skew
+        """
+        skew = np.zeros((self.nsamps // self.window, self.nchans), dtype=float)
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+
+            skew[j, :] = stats.skew(chunk, axis=0)
+
+        skew_calculate = Jf.skew_calculate_values(
+            self.yr_file, window=self.window, time_median_kernel=self.kernel_size
+        )
+        assert np.array_equal(skew, skew_calculate)
+
+    def test_kurtosis(self):
+        """
+        Test kurtosis
+        """
+        kurtosis = np.zeros((self.nsamps // self.window, self.nchans), dtype=float)
+        for j, jstart in enumerate(range(0, self.nsamps, self.window)):
+            chunk = self.data[jstart : jstart + self.window]
+            chunk = (
+                chunk
+                - signal.medfilt(np.mean(chunk, axis=1), kernel_size=self.kernel_size)[
+                    :, None
+                ]
+            )
+
+            kurtosis[j, :] = stats.kurtosis(chunk, axis=0)
+
+        kurtosis_calculate = Jf.kurtosis_calculate_values(
+            self.yr_file, window=self.window, time_median_kernel=self.kernel_size
+        )
+        assert np.array_equal(kurtosis, kurtosis_calculate)
