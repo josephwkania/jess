@@ -554,34 +554,35 @@ def kurtosis_calculate_values(yr_file, window=64, time_median_kernel=0):
 
 
 def mad_spectra(
-    gulp: np.ndarray,
-    frame: int = 256,
+    dynamic_spectra: np.ndarray,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     return_same_dtype: bool = True,
+    return_mask: bool = False,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
     (i.e. for each time sample across all channels)
 
     Args:
-       gulp: a dynamic with time on the vertical axis,
+       dynamic_spectra: dynamic spectra with time on the vertical axis,
        and freq on the horizontal
 
-       frame (int): number of frequency samples to calculate MAD
+       frame: number of frequency samples to calculate MAD
 
-       sigma (float): cutoff sigma
+       sigma: cutoff sigma
 
-       chans_per_fit (int): polynomial/spline knots per channel to fit the bandpass
+       chans_per_fit: polynomial/spline knots per channel to fit the bandpass
 
-       fitter: which fitter to use
+       fitter: which fitter to use, see jess.fitters
 
        return_same_dtype: return the same data type as given
 
+       return_mask: return the mask
 
     Returns:
-
        Dynamic Spectrum with values clipped
 
     See:
@@ -591,14 +592,18 @@ def mad_spectra(
         mad_spectra_flat has better excision performance, you should consider that
         unless you need to keep the bandpass shape
     """
-    frame = int(frame)
-    data_type = gulp.dtype
+    data_type = dynamic_spectra.dtype
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
+    mask = np.zeros_like(dynamic_spectra, dtype=bool)
 
-    for j in np.arange(0, len(gulp[1]) - frame + 1, frame):
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = fitter(
-            np.median(gulp[:, j : j + frame], axis=0), chans_per_fit=chans_per_fit
+            np.median(dynamic_spectra[subband], axis=0), chans_per_fit=chans_per_fit
         )  # .astype(data_type)
-        diff = gulp[:, j : j + frame] - fit
+        diff = dynamic_spectra[subband] - fit
         cut = sigma * stats.median_abs_deviation(diff, axis=1, scale="Normal")
         medians = np.median(diff, axis=1)
 
@@ -611,25 +616,35 @@ def mad_spectra(
         # medians = np.tile(medians, (frame, 1)).T
         # mask = np.abs(diff - medians) > thresh
 
-        mask = np.abs(diff - medians[:, None]) > cut[:, None]
-
-        logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
+        mask[subband] = np.abs(diff - medians[:, None]) > cut[:, None]
 
         try:  # sometimes this fails to converge, if happens use original fit
-            masked_arr = np.ma.masked_array(gulp[:, j : j + frame], mask=mask)
+            masked_arr = np.ma.masked_array(
+                dynamic_spectra[subband], mask=mask[subband]
+            )
             fit_clean = fitter(
                 np.ma.median(masked_arr, axis=0),
                 chans_per_fit=chans_per_fit,
             )
-        except Exception as e:
-            logging.warning("Failed to fit with Exception: %f, using original fit", e)
+        except Exception as excpt:
+            logging.warning(
+                "Failed to fit with Exception: %f, using original fit", excpt
+            )
             fit_clean = fit
-        gulp[:, j : j + frame] = np.where(mask, fit_clean, gulp[:, j : j + frame])
+        dynamic_spectra[subband] = np.where(
+            mask[subband], fit_clean, dynamic_spectra[subband]
+        )
+        # dynamic_spectra[subband][mask[subband]] = fit_clean[mask[subband]]
+
+    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
 
     if return_same_dtype:
-        gulp = to_dtype(gulp, dtype=data_type)
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
-    return gulp
+    if return_mask:
+        return dynamic_spectra, mask
+
+    return dynamic_spectra
 
 
 def mad_spectra_flat(

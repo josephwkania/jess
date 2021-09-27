@@ -51,7 +51,7 @@ class TestCentralLimit:
         should_mask[244, 244] += 30
         should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
-        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=6.5)
+        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=7.5)
 
         assert np.array_equal(should_mask, mask)
 
@@ -66,7 +66,7 @@ class TestCentralLimit:
         # should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
         mask = Jf.central_limit_masker(
-            self.rand, window=self.window, remove_lower=False, sigma=6.5
+            self.rand, window=self.window, remove_lower=False, sigma=7.5
         )
 
         assert np.array_equal(should_mask, mask)
@@ -289,3 +289,47 @@ class TestStatTest:
             self.yr_file, window=self.window, time_median_kernel=self.kernel_size
         )
         assert np.array_equal(kurtosis, kurtosis_calculate)
+
+
+class TestMadSpectra:
+    """
+    Remove outliers from random data
+    """
+
+    def setup_class(self):
+        """
+        Set up some random data, add spikes
+        """
+        self.fake = np.random.normal(loc=64, scale=5, size=256 * 32).reshape(256, 32)
+        self.fake = np.around(self.fake).astype("uint8")
+        self.fake_with_rfi = self.fake.copy()
+
+        self.fake_with_rfi[200, 10] += 140
+        self.fake_with_rfi[12, 12] += 140
+        self.fake_with_rfi[0, 0] += 140
+
+    def test_mad_spectra(self):
+        """
+        Test if clean data is close to original data
+        """
+        clean = Jf.mad_spectra(
+            self.fake_with_rfi.copy(), chans_per_subband=16, sigma=15
+        )
+
+        assert np.allclose(self.fake, clean, rtol=0.20)
+
+    def test_mad_mask(self):
+        """
+        Test if mask is correct
+        """
+        _, mask = Jf.mad_spectra(
+            self.fake_with_rfi, chans_per_subband=16, sigma=15, return_mask=True
+        )
+
+        mask_true = np.zeros_like(mask, dtype=bool)
+        mask_true[200, 10] = True
+        mask_true[12, 12] = True
+        mask_true[0, 0] = True
+        print(mask)
+        print(mask_true)
+        assert np.array_equal(mask, mask_true)
