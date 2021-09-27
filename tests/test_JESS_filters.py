@@ -11,7 +11,9 @@ from scipy import signal, stats
 from your import Your
 
 import jess.JESS_filters as Jf
-from jess.calculators import autocorrelate, shannon_entropy
+from jess.calculators import autocorrelate, shannon_entropy, to_dtype
+
+rs = np.random.RandomState(1)
 
 # class TestRunFilter:
 #     """
@@ -33,7 +35,7 @@ class TestCentralLimit:
         """
         Make the array with some outliers
         """
-        self.rand = np.random.normal(size=1024 * 512).reshape(1024, 512)
+        self.rand = rs.normal(size=1024 * 512).reshape(1024, 512)
         self.rand[200, 200] += 8
         self.rand[300, 300] -= 8
         self.rand[244, 244] += 30
@@ -51,7 +53,7 @@ class TestCentralLimit:
         should_mask[244, 244] += 30
         should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
-        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=7.5)
+        mask = Jf.central_limit_masker(self.rand, window=self.window, sigma=6.5)
 
         assert np.array_equal(should_mask, mask)
 
@@ -66,7 +68,7 @@ class TestCentralLimit:
         # should_mask[333, 333] -= 30
         should_mask = np.repeat(should_mask, self.window, axis=0)
         mask = Jf.central_limit_masker(
-            self.rand, window=self.window, remove_lower=False, sigma=7.5
+            self.rand, window=self.window, remove_lower=False, sigma=6.5
         )
 
         assert np.array_equal(should_mask, mask)
@@ -300,7 +302,7 @@ class TestMadSpectra:
         """
         Set up some random data, add spikes
         """
-        self.fake = np.random.normal(loc=64, scale=5, size=256 * 32).reshape(256, 32)
+        self.fake = rs.normal(loc=64, scale=5, size=256 * 32).reshape(256, 32)
         self.fake = np.around(self.fake).astype("uint8")
         self.fake_with_rfi = self.fake.copy()
 
@@ -330,6 +332,50 @@ class TestMadSpectra:
         mask_true[200, 10] = True
         mask_true[12, 12] = True
         mask_true[0, 0] = True
-        print(mask)
-        print(mask_true)
+
+        assert np.array_equal(mask, mask_true)
+
+
+class TestFftMad:
+    """
+    Put sine wave into fake data, and then remove it
+    """
+
+    def setup_class(self):
+        """
+        Load data
+        """
+        self.fake = np.load("tests/fake.npy")
+        self.fake_with_rfi = self.fake.copy()
+
+        sin = to_dtype(
+            15 * np.sin(np.linspace(0, 12 * np.pi, self.fake.shape[0])) + 15, "uint8"
+        )
+        self.total_power = sin.mean()
+        self.mid = self.fake.shape[1] // 2
+        self.fake_with_rfi[:, self.mid] += sin
+
+        # remove power so no DC spike
+        sin_fftd = np.fft.rfft(sin - np.mean(sin))
+        sin_fftd_abs = np.abs(sin_fftd)
+        self.max_bin = np.argmax(sin_fftd_abs)
+
+    def test_power(self):
+        """
+        Test removing sine wave
+        """
+
+        fake_clean = Jf.fft_mad(self.fake_with_rfi, chans_per_subband=32, sigma=6)
+        fake_clean[:, self.mid] = fake_clean[:, self.mid] - self.total_power
+        assert np.allclose(self.fake, fake_clean, rtol=0.05)
+
+    def test_mask(self):
+        """
+        Test if mask is correct
+        """
+        _, mask = Jf.fft_mad(
+            self.fake_with_rfi, chans_per_subband=32, return_mask=True, sigma=6
+        )
+        mask_true = np.zeros_like(mask, dtype=bool)
+        mask_true[self.max_bin, self.mid] = True
         assert np.array_equal(mask, mask_true)

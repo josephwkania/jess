@@ -268,8 +268,8 @@ def entropy_calculate_values(yr_file, window=64, time_median_kernel=0):
 
 
 def fft_mad(
-    gulp: np.ndarray,
-    frame: int = 256,
+    dynamic_spectra: np.ndarray,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
@@ -297,19 +297,18 @@ def fft_mad(
     data type.
 
     Args:
-       gulp: a dynamic with time on the vertical axis,
-       and freq on the horizontal
+        dynamic_spectra: spectra block with time on the vertical axis,
+                         and freq on the horizontal
 
-       frame (int): number of frequency samples to calculate MAD, i.e. the
-                    channels per subband
+        chans_per_subband: number of frequency samples to calculate MAD
 
-       sigma (float): cutoff sigma
+        sigma: cutoff sigma
 
-       chans_per_fit (int): polynomial/spline knots per channel to fit the bandpass
+        chans_per_fit: polynomial/spline knots per channel to fit the bandpass
 
-       fitter: which fitter to use, see jess.fitters for options
+        fitter: which fitter to use, see jess.fitters for options
 
-       bad_chans: list of bad channels - these have all information
+        bad_chans: list of bad channels - these have all information
                   removed except for the power
 
         return_same_dtype: return the same data type as given
@@ -317,10 +316,9 @@ def fft_mad(
         return_mask: return the bool mask of flagged frequencies
 
     Returns:
+        Dynamic Spectrum with narrow band perodic RFI removed.
 
-       Dynamic Spectrum with narrow band perodic RFI removed.
-
-       (optional) bool mask of frequencies where bad=True
+        (optional) bool mask of frequencies where bad=True
 
     See:
 
@@ -331,24 +329,29 @@ def fft_mad(
         https://arxiv.org/abs/2012.11630 & https://github.com/ymaan4/RFIClean
 
     """
-    frame = int(frame)
-    data_type = gulp.dtype
 
-    gulp_fftd = np.fft.rfft(gulp, axis=0)
-    gulp_fftd_abs = np.abs(gulp_fftd)
-    mask = np.zeros_like(gulp_fftd_abs, dtype=bool)
+    data_type = dynamic_spectra.dtype
 
-    for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
+    dynamic_spectra_fftd = np.fft.rfft(dynamic_spectra, axis=0)
+    dynamic_spectra_fftd_abs = np.abs(dynamic_spectra_fftd)
+    mask = np.zeros_like(dynamic_spectra_fftd_abs, dtype=bool)
+
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
+
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = fitter(
-            np.median(gulp_fftd_abs[:, j : j + frame], axis=0),
+            np.median(dynamic_spectra_fftd_abs[subband], axis=0),
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
 
-        diff = gulp_fftd_abs[:, j : j + frame] - fit
+        diff = dynamic_spectra_fftd_abs[subband] - fit
         cut = sigma * stats.median_abs_deviation(diff, axis=None, scale="Normal")
         # adds some resistance to jumps in medians
         medians = signal.medfilt(np.median(diff, axis=1), 7)
-        mask[:, j : j + frame] = np.abs(diff - medians[:, None]) > cut
+        mask[subband] = np.abs(diff - medians[:, None]) > cut
 
     # maybe some lekage into the nearby channels
     # but this doesn't seem to help much
@@ -364,20 +367,20 @@ def fft_mad(
     mask[0, :] = False  # set the row to false to preserve the powser levels
 
     # zero masked values
-    gulp_fftd[mask] = 0
+    dynamic_spectra_fftd[mask] = 0
 
     # We're flagging complex data, so multiply by 2
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
 
-    gulp_cleaned = np.fft.irfft(gulp_fftd, axis=0)
+    dynamic_spectra_cleaned = np.fft.irfft(dynamic_spectra_fftd, axis=0)
 
     if return_same_dtype:
-        gulp_cleaned = to_dtype(gulp_cleaned, dtype=data_type)
+        dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
     if return_mask:
-        return gulp_cleaned, mask
+        return dynamic_spectra_cleaned, mask
 
-    return gulp_cleaned
+    return dynamic_spectra_cleaned
 
 
 def jarque_bera_calculate_values(yr_file, window=64, time_median_kernel=0):
