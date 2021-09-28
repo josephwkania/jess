@@ -8,8 +8,8 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy.signal import medfilt
 
-from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
 from jess.calculators import balance_chans_per_subband
+from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
@@ -243,7 +243,7 @@ def mad_spectra_flat(
        dynamic_spectra: a dynamic spectra with time on the vertical axis,
                         and freq on the horizontal
 
-       frame: number of channels to calculate the MAD
+       chans_per_subband: number of channels to calculate the MAD
 
        sigma: sigma which to reject outliers
 

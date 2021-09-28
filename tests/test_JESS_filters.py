@@ -379,3 +379,47 @@ class TestFftMad:
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[self.max_bin, self.mid] = True
         assert np.array_equal(mask, mask_true)
+
+
+class TestMadSpectraFlat:
+    """ "
+    Test Mad Spectra Flat on some random data
+    """
+
+    def setup_class(self):
+        """
+        Random matrix with impulse rfi
+        """
+        fake = rs.normal(loc=64, scale=5, size=128 * 64).reshape(128, 64)
+        self.fake = to_dtype(fake, "uint8")
+
+        self.fake_with_rfi = self.fake.copy()
+        self.fake_with_rfi[12, 12] += 55
+        self.fake_with_rfi[20, 20] += 44
+        self.fake_with_rfi[40, 40] += 75
+
+    def test_power(self):
+        """
+        Test to see if impulse noise is removed
+        """
+        fake_clean = Jf.mad_spectra_flat(
+            self.fake_with_rfi, chans_per_subband=32, sigma=7
+        )
+        print(fake_clean - self.fake)
+        assert np.allclose(fake_clean, self.fake, rtol=0.2)
+
+    def test_mask(self):
+        """
+        Test if returned mask is correct
+        """
+        _, mask = Jf.mad_spectra_flat(
+            self.fake_with_rfi, chans_per_subband=32, sigma=7, return_mask=True
+        )
+        mask_true = np.zeros_like(mask, dtype=bool)
+        mask_true[12, 12] = True
+        mask_true[20, 20] = True
+        mask_true[40, 40] = True
+
+        print(mask)
+        print(mask_true)
+        assert np.array_equal(mask, mask_true)

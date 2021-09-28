@@ -573,7 +573,7 @@ def mad_spectra(
        dynamic_spectra: dynamic spectra with time on the vertical axis,
        and freq on the horizontal
 
-       frame: number of frequency samples to calculate MAD
+       chans_per_subband: number of channels to calculate the MAD
 
        sigma: cutoff sigma
 
@@ -652,7 +652,7 @@ def mad_spectra(
 
 def mad_spectra_flat(
     dynamic_spectra: np.ndarray,
-    frame: int = 256,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
     median_time_kernel: int = 0,
@@ -673,7 +673,7 @@ def mad_spectra_flat(
        dynamic_spectra: a dynamic spectra with time on the vertical axis,
                         and freq on the horizontal
 
-       frame: number of channels to calculate the MAD
+       chans_per_subband: number of channels to calculate the MAD
 
        sigma: sigma which to reject outliers
 
@@ -694,7 +694,7 @@ def mad_spectra_flat(
     Note:
         This has better performance than spectral_mad, you should probably use this one.
     """
-    frame = int(frame)
+
     data_type = dynamic_spectra.dtype
     iinfo = np.iinfo(data_type)
 
@@ -708,23 +708,24 @@ def mad_spectra_flat(
     # I choose 7 empirically
     flattened = flattner_median(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
     mask = np.zeros_like(flattened, dtype=bool)
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
 
-    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
-
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         cut = sigma * stats.median_abs_deviation(
-            flattened[:, j : j + frame], axis=1, scale="Normal"
+            flattened[subband], axis=1, scale="Normal"
         )
-        medians = np.median(flattened[:, j : j + frame], axis=1)
+        medians = np.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
             cut = signal.medfilt(cut, kernel_size=median_time_kernel)
             medians = signal.medfilt(medians, kernel_size=median_time_kernel)
 
-        mask[:, j : j + frame] = (
-            np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
-        )
+        mask[subband] = np.abs(flattened[subband] - medians[:, None]) > cut[:, None]
 
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
+        flattened[subband][mask[subband]] = np.nan
 
     # want kernel size to be 1, so every channel get set,
     # now that we've removed the worst RFI
@@ -734,24 +735,25 @@ def mad_spectra_flat(
     # but it works better this way
     flattened[mask] = flatten_to
 
-    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         # Second iteration
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
         # )
         cut = sigma * stats.median_abs_deviation(
-            flattened[:, j : j + frame], axis=1, scale="Normal"
+            flattened[subband], axis=1, scale="Normal"
         )
 
-        medians = np.median(flattened[:, j : j + frame], axis=1)
+        medians = np.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
             cut = signal.medfilt(cut, kernel_size=median_time_kernel)
             medians = signal.medfilt(medians, kernel_size=median_time_kernel)
 
-        mask_new = np.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
-        mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = np.nan
+        mask_new = np.abs(flattened[subband] - medians[:, None]) > cut[:, None]
+        mask[subband] = mask[subband] + mask_new
+        flattened[subband][mask[subband]] = np.nan
 
     # mean frequency subtraction makes sure there is smooth
     # transition between the blocks

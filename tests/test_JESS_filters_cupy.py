@@ -139,7 +139,7 @@ class TestMadSpectraFlat:
             self.fake_with_rfi, chans_per_subband=32, sigma=7
         )
 
-        assert np.allclose(fake_clean, self.fake, rtol=0.1)
+        assert cp.allclose(fake_clean, self.fake, rtol=0.1)
 
     def test_mask(self):
         """
@@ -148,9 +148,9 @@ class TestMadSpectraFlat:
         _, mask = Jf.mad_spectra_flat(
             self.fake_with_rfi, chans_per_subband=32, sigma=7, return_mask=True
         )
-        mask_true = np.zeros_like(mask, dtype=bool)
+        mask_true = cp.zeros_like(mask, dtype=bool)
         mask_true[12, 12] = True
         mask_true[20, 20] = True
         mask_true[40, 40] = True
 
-        assert np.array_equal(mask, mask_true)
+        assert cp.array_equal(mask, mask_true)
