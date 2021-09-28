@@ -406,7 +406,7 @@ class TestMadSpectraFlat:
             self.fake_with_rfi, chans_per_subband=32, sigma=7
         )
         print(fake_clean - self.fake)
-        assert np.allclose(fake_clean, self.fake, rtol=0.2)
+        assert np.allclose(fake_clean, self.fake, rtol=0.1)
 
     def test_mask(self):
         """

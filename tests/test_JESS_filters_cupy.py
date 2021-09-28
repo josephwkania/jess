@@ -3,13 +3,15 @@
 Tests for dedispersion.py
 """
 # pylint: disable=C0413,W0201
+
 import numpy as np
 import pytest
 
-import jess.JESS_filters_cupy as Jf
 from jess.calculators import to_dtype
 
 cp = pytest.importorskip("cupy")
+
+import jess.JESS_filters_cupy as Jf  # isort:skip # noqa: E402
 
 rs = cp.random.RandomState(1)
 
