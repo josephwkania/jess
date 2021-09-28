@@ -9,6 +9,7 @@ import numpy as np
 from cupyx.scipy.signal import medfilt
 
 from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
+from jess.calculators import balance_chans_per_subband
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
@@ -16,8 +17,8 @@ from jess.scipy_cupy.stats import median_abs_deviation_gpu
 
 
 def fft_mad(
-    gulp: cp.ndarray,
-    frame: int = 256,
+    dynamic_spectra: cp.ndarray,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
@@ -45,17 +46,16 @@ def fft_mad(
     data type.
 
     Args:
-       gulp: a dynamic with time on the vertical axis,
-       and freq on the horizontal
+        dynamic_spectra: spectra block with time on the vertical axis,
+                         and freq on the horizontal
 
-       frame (int): number of frequency samples to calculate MAD, i.e. the
-                    channels per subband
+        chans_per_subband: number of frequency samples to calculate MAD
 
-       sigma (float): cutoff sigma
+        sigma: cutoff sigma
 
-       chans_per_fit (int): polynomial/spline knots per channel to fit the bandpass
+        chans_per_fit: polynomial/spline knots per channel to fit the bandpass
 
-       fitter: which fitter to use, see jess.fitters for options
+        fitter: which fitter to use, see jess.fitters for options
 
         bad_chans: list of bad channels - these have all information
                   removed except for the power
@@ -64,12 +64,10 @@ def fft_mad(
 
         return_mask: return the bool mask of flagged frequencies
 
-
     Returns:
+        Dynamic Spectrum with narrow band perodic RFI removed.
 
-       Dynamic Spectrum with narrow band perodic RFI removed.
-
-       (optional) bool mask of frequencies where bad=True
+        (optional) bool mask of frequencies where bad=True
 
     See:
 
@@ -84,28 +82,30 @@ def fft_mad(
         a 0.1% higher standard deviation of the zero dm time series.
         This seems negligible, this version provides 2x speed up on a GTX 1030 over
         24 threads of X5675.
-
     """
-    frame = int(frame)
-    data_type = gulp.dtype
 
-    # gulp = cp.asarray(gulp)
-    gulp_fftd = cp.fft.rfft(gulp, axis=0)
-    gulp_fftd_abs = cp.abs(gulp_fftd)
-    mask = cp.zeros_like(gulp_fftd_abs, dtype=bool)
+    data_type = dynamic_spectra.dtype
 
-    for j in np.arange(0, len(gulp_fftd_abs[1]) - frame + 1, frame):
+    dynamic_spectra_fftd = cp.fft.rfft(dynamic_spectra, axis=0)
+    dynamic_spectra_fftd_abs = cp.abs(dynamic_spectra_fftd)
+    mask = cp.zeros_like(dynamic_spectra_fftd_abs, dtype=bool)
+
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = fitter(
-            cp.median(gulp_fftd_abs[:, j : j + frame], axis=0),
+            cp.median(dynamic_spectra_fftd_abs[subband], axis=0),
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
-        diff = gulp_fftd_abs[:, j : j + frame] - cp.array(fit)
+        diff = dynamic_spectra_fftd_abs[subband] - cp.array(fit)
         cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
         medians = cp.median(diff, axis=1)
         # adds some resistance to jumps in medians
         # medians = medfilt(medians, 7)
 
-        mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) > cut[:, None]
+        mask[subband] = cp.abs(diff - medians[:, None]) > cut[:, None]
 
     # remove infomation for the bad channels, but leave power
     # this has no effect on the following filter
@@ -115,46 +115,46 @@ def fft_mad(
         mask[1:, bad_chans] = True
 
     mask[0, :] = False  # set the row to false to preserve the powser levels
-    gulp_fftd[mask] = 0
+    dynamic_spectra_fftd[mask] = 0
 
     # We're flagging complex data, so multiply by 2
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
 
-    gulp_cleaned = cp.fft.irfft(gulp_fftd, axis=0)
+    dynamic_spectra_cleaned = cp.fft.irfft(dynamic_spectra_fftd, axis=0)
 
     if return_same_dtype:
-        gulp_cleaned = to_dtype(gulp_cleaned, dtype=data_type)
+        dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
     if return_mask:
-        return gulp_cleaned, mask
-
-    return gulp_cleaned
+        return dynamic_spectra_cleaned, mask
+    return dynamic_spectra_cleaned
 
 
 def mad_spectra(
     dynamic_spectra: cp.ndarray,
-    frame: int = 256,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     chans_per_fit: int = 50,
     return_same_dtype: bool = True,
+    return_mask: bool = False,
 ) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
     (i.e. for each time sample across all channels)
 
     Args:
-       gulp: a dynamic with time on the vertical axis, and freq on the horizontal
+       dynamic_spectra: spectra with time on the vertical axis,
+                        and freq on the horizontal
 
-       frame (int): number of frequency samples to calculate the MAD
+       frame: number of frequency samples to calculate the MAD
 
-       sigma (float): cutoff sigma
+       sigma: cutoff sigma
 
-       poly_order (int): polynomial order to fit for the bandpass
+       poly_order: polynomial order to fit for the bandpass
 
        return_same_dtype: return the same data type as given
 
     Returns:
-
        Dynamic Spectrum with values clipped
 
     Notes:
@@ -163,44 +163,50 @@ def mad_spectra(
         excision performance is about the same. See the cpu docstring for
         references.
 
+        mask = True, for good values
+
         You should use spectral_mad_flat (which has better RFI removal) unless
         you really need to preserve the bandpass.
     """
-    frame = int(frame)
     data_type = dynamic_spectra.dtype
-
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
     mask = cp.zeros_like(dynamic_spectra, dtype=bool)
 
-    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = poly_fitter(
-            cp.median(dynamic_spectra[:, j : j + frame], axis=0),
+            cp.median(dynamic_spectra[subband], axis=0),
             chans_per_fit=chans_per_fit,
         )
         # .astype(data_type)
 
-        diff = dynamic_spectra[:, j : j + frame] - fit
+        diff = dynamic_spectra[subband] - fit
         cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
         medians = cp.median(diff, axis=1)
-        mask[:, j : j + frame] = cp.abs(diff - medians[:, None]) < cut[:, None]
+        mask[subband] = cp.abs(diff - medians[:, None]) < cut[:, None]
 
         try:  # sometimes this fails to converge, if happens use original fit
             fit_clean = poly_fitter(
                 cp.nanmedian(
                     cp.where(
-                        mask[:, j : j + frame],
-                        dynamic_spectra[:, j : j + frame],
+                        mask[subband],
+                        dynamic_spectra[subband],
                         np.nan,
                     ),
                     axis=0,
                 ),
                 chans_per_fit=chans_per_fit,
             )
-        except Exception as e:
-            logging.warning("Failed to fit with Exception: %s, using original fit", e)
+        except Exception as excpt:
+            logging.warning(
+                "Failed to fit with Exception: %s, using original fit", excpt
+            )
             fit_clean = fit
-        dynamic_spectra[:, j : j + frame] = cp.where(
-            mask[:, j : j + frame],
-            dynamic_spectra[:, j : j + frame],
+        dynamic_spectra[subband] = cp.where(
+            mask[subband],
+            dynamic_spectra[subband],
             fit_clean,
         )
 
@@ -209,6 +215,8 @@ def mad_spectra(
     if return_same_dtype:
         dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
+    if return_mask:
+        return dynamic_spectra, mask
     return dynamic_spectra
 
 

@@ -351,12 +351,12 @@ class TestFftMad:
         sin = to_dtype(
             15 * np.sin(np.linspace(0, 12 * np.pi, self.fake.shape[0])) + 15, "uint8"
         )
-        self.total_power = sin.mean()
+        self.average_power = sin.mean()
         self.mid = self.fake.shape[1] // 2
         self.fake_with_rfi[:, self.mid] += sin
 
         # remove power so no DC spike
-        sin_fftd = np.fft.rfft(sin - np.mean(sin))
+        sin_fftd = np.fft.rfft(sin - self.average_power)
         sin_fftd_abs = np.abs(sin_fftd)
         self.max_bin = np.argmax(sin_fftd_abs)
 
@@ -366,7 +366,7 @@ class TestFftMad:
         """
 
         fake_clean = Jf.fft_mad(self.fake_with_rfi, chans_per_subband=32, sigma=6)
-        fake_clean[:, self.mid] = fake_clean[:, self.mid] - self.total_power
+        fake_clean[:, self.mid] = fake_clean[:, self.mid] - self.average_power
         assert np.allclose(self.fake, fake_clean, rtol=0.05)
 
     def test_mask(self):
