@@ -222,7 +222,7 @@ def mad_spectra(
 
 def mad_spectra_flat(
     dynamic_spectra: cp.ndarray,
-    frame: int = 256,
+    chans_per_subband: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
     median_time_kernel: int = 0,
@@ -264,7 +264,7 @@ def mad_spectra_flat(
     Note:
         This has better performance than spectral_mad, you should probably use this one.
     """
-    frame = int(frame)
+
     data_type = dynamic_spectra.dtype
     iinfo = np.iinfo(data_type)
 
@@ -280,23 +280,24 @@ def mad_spectra_flat(
         cp.asarray(dynamic_spectra), flatten_to=flatten_to, kernel_size=7
     )
     mask = cp.zeros_like(flattened, dtype=bool)
+    num_subbands, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[1], chans_per_subband
+    )
 
-    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
-
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         cut = sigma * median_abs_deviation_gpu(
-            flattened[:, j : j + frame], axis=1, scale="Normal"
+            flattened[subband], axis=1, scale="Normal"
         )
-        medians = cp.median(flattened[:, j : j + frame], axis=1)
+        medians = cp.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
             cut = medfilt(cut, kernel_size=median_time_kernel)
             medians = medfilt(medians, kernel_size=median_time_kernel)
 
-        mask[:, j : j + frame] = (
-            cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
-        )
+        mask[subband] = cp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
 
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan
+        flattened[subband][mask[subband]] = cp.nan
 
     # want kernel size to be 1, so every channel get set,
     # now that we've removed the worst RFI
@@ -306,23 +307,24 @@ def mad_spectra_flat(
     # but it works better this way
     flattened[mask] = flatten_to
 
-    for j in np.arange(0, len(dynamic_spectra[1]) - frame + 1, frame):
+    for jsub in np.arange(0, num_subbands):
+        subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         # Second iteration
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
         # )
         cut = sigma * median_abs_deviation_gpu(
-            flattened[:, j : j + frame], axis=1, scale="Normal"
+            flattened[subband], axis=1, scale="Normal"
         )
-        medians = cp.median(flattened[:, j : j + frame], axis=1)
+        medians = cp.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
             cut = medfilt(cut, kernel_size=median_time_kernel)
             medians = medfilt(medians, kernel_size=median_time_kernel)
 
-        mask_new = cp.abs(flattened[:, j : j + frame] - medians[:, None]) > cut[:, None]
-        mask[:, j : j + frame] = mask[:, j : j + frame] + mask_new
-        flattened[:, j : j + frame][mask[:, j : j + frame]] = cp.nan
+        mask_new = cp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
+        mask[subband] = mask[subband] + mask_new
+        flattened[subband][mask[subband]] = cp.nan
 
     # mean frequency subtraction makes sure there is smooth
     # transition between the blocks
