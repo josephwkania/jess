@@ -380,6 +380,16 @@ class TestFftMad:
         mask_true[self.max_bin, self.mid] = True
         assert np.array_equal(mask, mask_true)
 
+    def test_zero_channel(self):
+        """
+        Test if channel information gets removed
+        """
+        bad_chans = np.asarray([15])
+        fake_clean = Jf.fft_mad(
+            self.fake_with_rfi, chans_per_subband=32, bad_chans=bad_chans
+        )
+        assert np.isclose(np.std(fake_clean, axis=0)[bad_chans], 0)
+
 
 class TestMadSpectraFlat:
     """ "
@@ -405,7 +415,7 @@ class TestMadSpectraFlat:
         fake_clean = Jf.mad_spectra_flat(
             self.fake_with_rfi, chans_per_subband=32, sigma=7
         )
-        print(fake_clean - self.fake)
+
         assert np.allclose(fake_clean, self.fake, rtol=0.1)
 
     def test_mask(self):
@@ -420,6 +430,25 @@ class TestMadSpectraFlat:
         mask_true[20, 20] = True
         mask_true[40, 40] = True
 
-        print(mask)
-        print(mask_true)
         assert np.array_equal(mask, mask_true)
+
+
+def test_zero_dm():
+    """
+    Test if the mean is removed.
+    Add and remove equal amounts so total power
+    stays the same
+    """
+
+    data = np.load("tests/fake.npy")
+    bandpass = data.mean(axis=0)
+    data_flat = data - data.mean(axis=1)[:, None] + bandpass
+    data_flat = to_dtype(data_flat, "uint8")
+
+    data_with_rfi = data.copy()
+    data_with_rfi[15] += 15
+    data_with_rfi[17] -= 15
+    data_with_rfi[20] += 20
+    data_with_rfi[25] -= 20
+
+    assert np.array_equal(Jf.zero_dm(data_with_rfi), data_flat)

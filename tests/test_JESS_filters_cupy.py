@@ -115,6 +115,16 @@ class TestFftMad:
 
         assert cp.array_equal(mask, mask_true)
 
+    def test_zero_channel(self):
+        """
+        Test if channel information gets removed
+        """
+        bad_chans = cp.asarray([15])
+        fake_clean = Jf.fft_mad(
+            self.fake_with_rfi, chans_per_subband=32, bad_chans=bad_chans
+        )
+        assert cp.isclose(cp.std(fake_clean, axis=0)[bad_chans], 0)
+
 
 class TestMadSpectraFlat:
     """ "
