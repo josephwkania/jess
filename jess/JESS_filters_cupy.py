@@ -105,7 +105,8 @@ def fft_mad(
         # adds some resistance to jumps in medians
         # medians = medfilt(medians, 7)
 
-        mask[subband] = cp.abs(diff - medians[:, None]) > cut[:, None]
+        # mask[subband] = cp.abs(diff - medians[:, None]) > cut[:, None]
+        mask[subband] = diff - medians[:, None] > cut[:, None]
 
     # remove infomation for the bad channels, but leave power
     # this has no effect on the following filter

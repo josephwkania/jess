@@ -351,7 +351,9 @@ def fft_mad(
         cut = sigma * stats.median_abs_deviation(diff, axis=None, scale="Normal")
         # adds some resistance to jumps in medians
         medians = signal.medfilt(np.median(diff, axis=1), 7)
-        mask[subband] = np.abs(diff - medians[:, None]) > cut
+
+        # mask[subband] = np.abs(diff - medians[:, None]) > cut
+        mask[subband] = diff - medians[:, None] > cut
 
     # maybe some lekage into the nearby channels
     # but this doesn't seem to help much
