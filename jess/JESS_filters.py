@@ -6,7 +6,7 @@ import logging
 
 import numpy as np
 from rich.progress import track
-from scipy import signal, stats
+from scipy import ndimage, signal, stats
 from your import Your
 
 from jess.calculators import (
@@ -14,6 +14,7 @@ from jess.calculators import (
     balance_chans_per_subband,
     flattner_median,
     flattner_mix,
+    median_abs_deviation_med,
     shannon_entropy,
     to_dtype,
 )
@@ -271,6 +272,7 @@ def fft_mad(
     dynamic_spectra: np.ndarray,
     chans_per_subband: int = 256,
     sigma: float = 3,
+    time_median_size: int = 7,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
@@ -303,6 +305,8 @@ def fft_mad(
         chans_per_subband: number of frequency samples to calculate MAD
 
         sigma: cutoff sigma
+
+        time_median_size: the lenght of the median filter to run in time
 
         chans_per_fit: polynomial/spline knots per channel to fit the bandpass
 
@@ -348,12 +352,20 @@ def fft_mad(
         )  # .astype(data_type)
 
         diff = dynamic_spectra_fftd_abs[subband] - fit
-        cut = sigma * stats.median_abs_deviation(diff, axis=None, scale="Normal")
-        # adds some resistance to jumps in medians
-        medians = signal.medfilt(np.median(diff, axis=1), 7)
+        mads, medians = median_abs_deviation_med(diff, axis=1, scale="Normal")
 
-        # mask[subband] = np.abs(diff - medians[:, None]) > cut
-        mask[subband] = diff - medians[:, None] > cut
+        # adds some resistance to jumps in medians
+        if time_median_size > 2:
+            logging.debug("Applying Median filter lenght %i in time", time_median_size)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
+            ndimage.median_filter(
+                mads, size=time_median_size, mode="mirror", output=mads
+            )
+
+        cut = sigma * mads
+        mask[subband] = np.abs(diff - medians[:, None]) > cut[:, None]
 
     # maybe some lekage into the nearby channels
     # but this doesn't seem to help much

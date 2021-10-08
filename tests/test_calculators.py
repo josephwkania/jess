@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from scipy import signal, stats
 from your import Your
+import warnings
 
 import jess.calculators as calc
 
@@ -117,6 +118,172 @@ class TestAutoCorrelate:
         """
         with pytest.raises(NotImplementedError):
             calc.autocorrelate(self.rand, axis=3)
+
+
+class TestMedianAbsDeviation:
+    """
+    Test MedianAbsDeviation that also returns the
+    medians
+    """
+
+    def setup_class(self):
+        """
+        For all the tests
+        """
+        self.dat_nan = np.array(
+            [
+                2.20,
+                2.20,
+                2.4,
+                2.4,
+                2.5,
+                2.7,
+                2.8,
+                2.9,
+                3.03,
+                3.03,
+                3.10,
+                3.37,
+                3.4,
+                3.4,
+                3.4,
+                3.5,
+                3.6,
+                3.7,
+                3.7,
+                3.7,
+                3.7,
+                3.77,
+                5.28,
+                np.nan,
+            ]
+        )
+        self.dat = np.array(
+            [
+                2.20,
+                2.20,
+                2.4,
+                2.4,
+                2.5,
+                2.7,
+                2.8,
+                2.9,
+                3.03,
+                3.03,
+                3.10,
+                3.37,
+                3.4,
+                3.4,
+                3.4,
+                3.5,
+                3.6,
+                3.7,
+                3.7,
+                3.7,
+                3.7,
+                3.77,
+                5.28,
+                28.95,
+            ]
+        )
+
+    def test_median_abs_deviation(self):
+        """
+        None axis
+        """
+        mad, center = calc.median_abs_deviation_med(self.dat, axis=None)
+        np.testing.assert_almost_equal(mad, 0.355)
+        np.testing.assert_almost_equal(center, np.median(self.dat, axis=None))
+
+        dat = self.dat.reshape(6, 4)
+        mad, center = calc.median_abs_deviation_med(dat, axis=0)
+        mad_expected = np.asarray([0.435, 0.5, 0.45, 0.4])
+        np.testing.assert_array_almost_equal(mad, mad_expected)
+        np.testing.assert_array_almost_equal(center, np.median(dat, axis=0))
+
+    def test_mad_nan_omit(self):
+        """
+        Omit nans, not sure if my center policy is the same as MAD
+        """
+        mad, center = calc.median_abs_deviation_med(self.dat_nan, nan_policy="omit")
+        np.testing.assert_almost_equal(mad, 0.34)
+        np.testing.assert_almost_equal(center, np.nanmedian(center))
+
+    @staticmethod
+    def test_axis_and_nan():
+        """
+        tests axis 1 with nans
+        """
+        arr = np.array([[1.0, 2.0, 3.0, 4.0, np.nan], [1.0, 4.0, 5.0, 8.0, 9.0]])
+        mad, center = calc.median_abs_deviation_med(arr, axis=1)
+        np.testing.assert_equal(mad, np.array([np.nan, 3.0]))
+        np.testing.assert_equal(center, np.nanmedian(arr, axis=1))
+
+    @staticmethod
+    def test_nan_policy_omit_with_inf():
+        """ "
+        Test with nan and inf
+        """
+        arr = np.array([1, 3, 4, 6, 99, np.nan, np.inf])
+        mad, center = calc.median_abs_deviation_med(arr, nan_policy="omit")
+        np.testing.assert_equal(mad, 3.0)
+        np.testing.assert_equal(center, np.nanmedian(arr))
+
+    @pytest.mark.parametrize("axis", [0, 1, 2, None])
+    def test_size_zero_with_axis(self, axis):
+        """
+        zeros axis
+        """
+        arr = np.zeros((3, 0, 4))
+        mad, _ = calc.median_abs_deviation_med(arr, axis=axis)
+        np.testing.assert_equal(
+            mad, np.full_like(arr.sum(axis=axis), fill_value=np.nan)
+        )
+
+    @pytest.mark.parametrize(
+        "nan_policy, expected",
+        [
+            ("omit", np.array([np.nan, 1.5, 1.5])),
+            ("propagate", np.array([np.nan, np.nan, 1.5])),
+        ],
+    )
+    def test_nan_policy_with_axis(self, nan_policy, expected):
+        """
+        tests with nans along eaxis
+        """
+        arr = np.array(
+            [
+                [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
+                [1, 5, 3, 6, np.nan, np.nan],
+                [5, 6, 7, 9, 9, 10],
+            ]
+        )
+        with warnings.catch_warnings(record=True):
+            # warning is expected, so catch it
+            mad, _ = calc.median_abs_deviation_med(arr, nan_policy=nan_policy, axis=1)
+        np.testing.assert_equal(mad, expected)
+
+    @pytest.mark.parametrize("axis, expected", [(1, [2.5, 2.0, 12.0]), (None, 4.5)])
+    def test_center_mean_with_nan(self, axis, expected):
+        """
+        test with a differnent centering method
+        """
+        arr = np.array(
+            [[1, 2, 4, 9, np.nan], [0, 1, 1, 1, 12], [-10, -10, -10, 20, 20]]
+        )
+        mad, center = calc.median_abs_deviation_med(
+            arr, center=np.nanmean, nan_policy="omit", axis=axis
+        )
+        np.testing.assert_allclose(mad, expected, rtol=1e-15, atol=1e-15)
+        np.testing.assert_allclose(center, np.nanmean(arr, axis=axis))
+
+    @staticmethod
+    def test_center_not_callable():
+        """
+        Center finder must be callable
+        """
+        with pytest.raises(TypeError, match="callable"):
+            calc.median_abs_deviation_med([1, 2, 3, 5], center=99)
 
 
 class TestMean:

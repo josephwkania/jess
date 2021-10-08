@@ -363,22 +363,27 @@ class TestFftMad:
     def test_power(self):
         """
         Test removing sine wave
+
+        Had to increase the sigma to 6.5 or it would flag good data
         """
 
-        fake_clean = Jf.fft_mad(self.fake_with_rfi, chans_per_subband=32, sigma=6)
+        fake_clean = Jf.fft_mad(self.fake_with_rfi, chans_per_subband=32, sigma=6.5)
         fake_clean[:, self.mid] = fake_clean[:, self.mid] - self.average_power
-        assert np.allclose(self.fake, fake_clean, rtol=0.05)
+        np.testing.assert_allclose(self.fake, fake_clean, rtol=0.05)
 
     def test_mask(self):
         """
         Test if mask is correct
         """
         _, mask = Jf.fft_mad(
-            self.fake_with_rfi, chans_per_subband=32, return_mask=True, sigma=6
+            self.fake_with_rfi,
+            chans_per_subband=32,
+            return_mask=True,
+            sigma=6.5,
         )
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[self.max_bin, self.mid] = True
-        assert np.array_equal(mask, mask_true)
+        np.testing.assert_array_equal(mask, mask_true)
 
     def test_zero_channel(self):
         """
