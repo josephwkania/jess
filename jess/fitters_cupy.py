@@ -7,7 +7,7 @@ import logging
 
 import cupy as cp
 
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
+from jess.scipy_cupy.stats import median_abs_deviation
 
 # from scipy import stats
 
@@ -61,7 +61,7 @@ def poly_fitter(
     poly = cp.poly1d(fit_values)  # get the values of the fitted bandpass
     diff = bandpass - poly(channels)
     # find the difference between fitted and real bandpass
-    std_diff = median_abs_deviation_gpu(diff, scale="normal")
+    std_diff = median_abs_deviation(diff, scale="normal")
     logging.debug("Standard Deviation of fit: %.2f", std_diff.get())
 
     if std_diff > 0.0:

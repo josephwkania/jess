@@ -669,7 +669,7 @@ def mad_spectra_flat(
     chans_per_subband: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
-    median_time_kernel: int = 0,
+    time_median_size: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
 ) -> np.ndarray:
@@ -692,6 +692,8 @@ def mad_spectra_flat(
        sigma: sigma which to reject outliers
 
        flatten_to: the median of the output data
+
+       time_median_size: the lenght of the median filter to run in time
 
        return_same_dtype: return the same data type as given
 
@@ -728,14 +730,18 @@ def mad_spectra_flat(
 
     for jsub in np.arange(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
-        cut = sigma * stats.median_abs_deviation(
+        mads, medians = median_abs_deviation_med(
             flattened[subband], axis=1, scale="Normal"
         )
-        medians = np.median(flattened[subband], axis=1)
+        # medians = np.median(flattened[subband], axis=1)
+        cut = sigma * mads
 
-        if median_time_kernel > 2:
-            cut = signal.medfilt(cut, kernel_size=median_time_kernel)
-            medians = signal.medfilt(medians, kernel_size=median_time_kernel)
+        if time_median_size > 2:
+            logging.debug("Applying Median filter lenght %i in time", time_median_size)
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
 
         mask[subband] = np.abs(flattened[subband] - medians[:, None]) > cut[:, None]
 
@@ -755,15 +761,17 @@ def mad_spectra_flat(
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
         # )
-        cut = sigma * stats.median_abs_deviation(
+        mads, medians = median_abs_deviation_med(
             flattened[subband], axis=1, scale="Normal"
         )
+        # medians = np.median(flattened[subband], axis=1)
+        cut = sigma * mads
 
-        medians = np.median(flattened[subband], axis=1)
-
-        if median_time_kernel > 2:
-            cut = signal.medfilt(cut, kernel_size=median_time_kernel)
-            medians = signal.medfilt(medians, kernel_size=median_time_kernel)
+        if time_median_size > 2:
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
 
         mask_new = np.abs(flattened[subband] - medians[:, None]) > cut[:, None]
         mask[subband] = mask[subband] + mask_new

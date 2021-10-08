@@ -19,7 +19,7 @@ from rich.table import Table
 from scipy import signal
 from your import Your
 
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
+from jess.scipy_cupy.stats import median_abs_deviation
 
 
 def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):
@@ -78,14 +78,14 @@ def get_stds(
     stds = cp.zeros(len(powers_of_two) + 1, dtype=np.float64)
     mads = cp.zeros(len(powers_of_two) + 1, dtype=np.float64)
     stds[0] = cp.std(timeseries)
-    mads[0] = median_abs_deviation_gpu(timeseries, scale="normal")
+    mads[0] = median_abs_deviation(timeseries, scale="normal")
 
     for j, k in enumerate(powers_of_two):
         kernal = cp.array(signal.boxcar(2 ** k) / 2 ** k)
         conv = cp.convolve(timeseries, kernal, "valid")
         # conv = signal.detrend(conv.get())
         stds[j + 1] = cp.std(conv)
-        mads[j + 1] = median_abs_deviation_gpu(conv, scale="normal")
+        mads[j + 1] = median_abs_deviation(conv, scale="normal")
 
     widths = 2 ** np.insert(powers_of_two, [0], 0)
     stds = stds.get()  # Don't need cupy

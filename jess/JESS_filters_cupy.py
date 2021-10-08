@@ -13,7 +13,7 @@ from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
-from jess.scipy_cupy.stats import median_abs_deviation_gpu
+from jess.scipy_cupy.stats import median_abs_deviation
 
 
 def fft_mad(
@@ -100,7 +100,7 @@ def fft_mad(
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
         diff = dynamic_spectra_fftd_abs[subband] - cp.array(fit)
-        cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
+        cut = sigma * median_abs_deviation(diff, axis=1, scale="Normal")
         medians = cp.median(diff, axis=1)
         # adds some resistance to jumps in medians
         # medians = medfilt(medians, 7)
@@ -184,7 +184,7 @@ def mad_spectra(
         # .astype(data_type)
 
         diff = dynamic_spectra[subband] - fit
-        cut = sigma * median_abs_deviation_gpu(diff, axis=1, scale="Normal")
+        cut = sigma * median_abs_deviation(diff, axis=1, scale="Normal")
         medians = cp.median(diff, axis=1)
         mask[subband] = cp.abs(diff - medians[:, None]) < cut[:, None]
 
@@ -287,9 +287,7 @@ def mad_spectra_flat(
 
     for jsub in np.arange(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
-        cut = sigma * median_abs_deviation_gpu(
-            flattened[subband], axis=1, scale="Normal"
-        )
+        cut = sigma * median_abs_deviation(flattened[subband], axis=1, scale="Normal")
         medians = cp.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
@@ -314,9 +312,7 @@ def mad_spectra_flat(
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
         # )
-        cut = sigma * median_abs_deviation_gpu(
-            flattened[subband], axis=1, scale="Normal"
-        )
+        cut = sigma * median_abs_deviation(flattened[subband], axis=1, scale="Normal")
         medians = cp.median(flattened[subband], axis=1)
 
         if median_time_kernel > 2:
