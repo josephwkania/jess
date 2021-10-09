@@ -333,10 +333,10 @@ def median_abs_deviation_med(
     if contains_nan:
         if axis is None:
             mad = _mad_1d_gpu(x.ravel(), center, nan_policy)
-            centers = cp.nanmedian(x.ravel())
+            centers = center(x.ravel())
         else:
             mad = cp.apply_along_axis(_mad_1d_gpu, axis, x, center, nan_policy)
-            centers = cp.nanmedian(x, axis=axis)
+            centers = center(x, axis=axis)
     else:
         if axis is None:
             centers = center(x, axis=None)

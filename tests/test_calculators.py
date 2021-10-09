@@ -123,7 +123,7 @@ class TestAutoCorrelate:
 class TestMedianAbsDeviation:
     """
     Test MedianAbsDeviation that also returns the
-    medians
+    central value
     """
 
     def setup_class(self):
@@ -207,7 +207,7 @@ class TestMedianAbsDeviation:
         """
         mad, center = calc.median_abs_deviation_med(self.dat_nan, nan_policy="omit")
         np.testing.assert_almost_equal(mad, 0.34)
-        np.testing.assert_almost_equal(center, np.nanmedian(center))
+        np.testing.assert_almost_equal(center, np.median(center))
 
     @staticmethod
     def test_axis_and_nan():
@@ -217,7 +217,7 @@ class TestMedianAbsDeviation:
         arr = np.array([[1.0, 2.0, 3.0, 4.0, np.nan], [1.0, 4.0, 5.0, 8.0, 9.0]])
         mad, center = calc.median_abs_deviation_med(arr, axis=1)
         np.testing.assert_equal(mad, np.array([np.nan, 3.0]))
-        np.testing.assert_equal(center, np.nanmedian(arr, axis=1))
+        np.testing.assert_equal(center, np.median(arr, axis=1))
 
     @staticmethod
     def test_nan_policy_omit_with_inf():
@@ -227,7 +227,7 @@ class TestMedianAbsDeviation:
         arr = np.array([1, 3, 4, 6, 99, np.nan, np.inf])
         mad, center = calc.median_abs_deviation_med(arr, nan_policy="omit")
         np.testing.assert_equal(mad, 3.0)
-        np.testing.assert_equal(center, np.nanmedian(arr))
+        np.testing.assert_equal(center, np.median(arr))
 
     @pytest.mark.parametrize("axis", [0, 1, 2, None])
     def test_size_zero_with_axis(self, axis):

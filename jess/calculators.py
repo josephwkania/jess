@@ -110,7 +110,7 @@ def mean(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
 def median_abs_deviation_med(
     x: np.ndarray,
     axis: int = 0,
-    center: object = np.nanmedian,
+    center: object = np.median,
     scale: float = 1.0,
     nan_policy: str = "propagate",
 ):
