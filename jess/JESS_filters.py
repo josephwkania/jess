@@ -306,7 +306,7 @@ def fft_mad(
 
         sigma: cutoff sigma
 
-        time_median_size: the lenght of the median filter to run in time
+        time_median_size: the length of the median filter to run in time
 
         chans_per_fit: polynomial/spline knots per channel to fit the bandpass
 
@@ -353,6 +353,7 @@ def fft_mad(
 
         diff = dynamic_spectra_fftd_abs[subband] - fit
         mads, medians = median_abs_deviation_med(diff, axis=1, scale="Normal")
+        cut = sigma * mads
 
         # adds some resistance to jumps in medians
         if time_median_size > 2:
@@ -360,11 +361,8 @@ def fft_mad(
             ndimage.median_filter(
                 medians, size=time_median_size, mode="mirror", output=medians
             )
-            ndimage.median_filter(
-                mads, size=time_median_size, mode="mirror", output=mads
-            )
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
 
-        cut = sigma * mads
         mask[subband] = np.abs(diff - medians[:, None]) > cut[:, None]
 
     # maybe some lekage into the nearby channels
@@ -693,7 +691,7 @@ def mad_spectra_flat(
 
        flatten_to: the median of the output data
 
-       time_median_size: the lenght of the median filter to run in time
+       time_median_size: the length of the median filter to run in time
 
        return_same_dtype: return the same data type as given
 

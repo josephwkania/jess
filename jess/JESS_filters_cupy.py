@@ -6,20 +6,21 @@ import logging
 
 import cupy as cp
 import numpy as np
-from cupyx.scipy.signal import medfilt
+from cupyx.scipy import ndimage
 
 from jess.calculators import balance_chans_per_subband
 from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import poly_fitter
-from jess.scipy_cupy.stats import median_abs_deviation
+from jess.scipy_cupy.stats import median_abs_deviation, median_abs_deviation_med
 
 
 def fft_mad(
     dynamic_spectra: cp.ndarray,
     chans_per_subband: int = 256,
     sigma: float = 3,
+    time_median_size: int = 7,
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
@@ -50,6 +51,8 @@ def fft_mad(
                          and freq on the horizontal
 
         chans_per_subband: number of frequency samples to calculate MAD
+
+        time_median_size: the length of the median filter to run in time
 
         sigma: cutoff sigma
 
@@ -100,10 +103,16 @@ def fft_mad(
             chans_per_fit=chans_per_fit,
         )  # .astype(data_type)
         diff = dynamic_spectra_fftd_abs[subband] - cp.array(fit)
-        cut = sigma * median_abs_deviation(diff, axis=1, scale="Normal")
-        medians = cp.median(diff, axis=1)
+        mads, medians = median_abs_deviation_med(diff, axis=1, scale="Normal")
+        cut = sigma * mads
+
         # adds some resistance to jumps in medians
-        # medians = medfilt(medians, 7)
+        if time_median_size > 2:
+            logging.debug("Applying Median filter lenght %i in time", time_median_size)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
 
         # mask[subband] = cp.abs(diff - medians[:, None]) > cut[:, None]
         mask[subband] = diff - medians[:, None] > cut[:, None]
@@ -226,7 +235,7 @@ def mad_spectra_flat(
     chans_per_subband: int = 256,
     sigma: float = 3,
     flatten_to: int = 64,
-    median_time_kernel: int = 0,
+    time_median_size: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
 ) -> cp.ndarray:
@@ -250,9 +259,11 @@ def mad_spectra_flat(
 
        flatten_to: the median of the output data
 
+       time_median_size: the lenght of the median filter to run in time
+
        return_same_dtype: return the same data type as given
 
-        return_mask: return the mask where True=masked_values
+       return_mask: return the mask where True=masked_values
 
     Returns:
        Dynamic Spectrum with values clipped
@@ -287,12 +298,18 @@ def mad_spectra_flat(
 
     for jsub in np.arange(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
-        cut = sigma * median_abs_deviation(flattened[subband], axis=1, scale="Normal")
-        medians = cp.median(flattened[subband], axis=1)
 
-        if median_time_kernel > 2:
-            cut = medfilt(cut, kernel_size=median_time_kernel)
-            medians = medfilt(medians, kernel_size=median_time_kernel)
+        mads, medians = median_abs_deviation_med(
+            flattened[subband], axis=1, scale="Normal"
+        )
+        cut = sigma * mads
+
+        if time_median_size > 2:
+            logging.debug("Running median filter with size %i", time_median_size)
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
 
         mask[subband] = cp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
 
@@ -302,7 +319,7 @@ def mad_spectra_flat(
     # now that we've removed the worst RFI
     flattened = flattner_median(flattened, flatten_to=flatten_to, kernel_size=1)
     # set the masked values to what we want to flatten to
-    # not obvus why this has to be done, because nans should be ok
+    # not obvious why this has to be done, because nans should be ok
     # but it works better this way
     flattened[mask] = flatten_to
 
@@ -312,12 +329,17 @@ def mad_spectra_flat(
         # flattened[:, j : j + frame] = flattner(
         #    flattened[:, j : j + frame], flatten_to=flatten_to, kernel_size=7
         # )
-        cut = sigma * median_abs_deviation(flattened[subband], axis=1, scale="Normal")
-        medians = cp.median(flattened[subband], axis=1)
 
-        if median_time_kernel > 2:
-            cut = medfilt(cut, kernel_size=median_time_kernel)
-            medians = medfilt(medians, kernel_size=median_time_kernel)
+        mads, medians = median_abs_deviation_med(
+            flattened[subband], axis=1, scale="Normal"
+        )
+        cut = sigma * mads
+
+        if time_median_size > 2:
+            ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
+            ndimage.median_filter(
+                medians, size=time_median_size, mode="mirror", output=medians
+            )
 
         mask_new = cp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
         mask[subband] = mask[subband] + mask_new
