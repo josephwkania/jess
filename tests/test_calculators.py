@@ -4,11 +4,12 @@ Tests for calculator.py
 """
 
 
+import warnings
+
 import numpy as np
 import pytest
-from scipy import signal, stats
+from scipy import ndimage, signal, stats
 from your import Your
-import warnings
 
 import jess.calculators as calc
 
@@ -412,8 +413,10 @@ class TestFlattener:
         rands_with_trend = rands + line[:, None]
         flattened = calc.flattner_median(rands_with_trend, kernel_size=3)
 
-        rands -= signal.medfilt(np.median(rands, axis=1), kernel_size=3)[:, None]
-        rands -= signal.medfilt(np.median(rands, axis=0), kernel_size=3)
+        rands -= ndimage.median_filter(np.median(rands, axis=1), mode="mirror", size=3)[
+            :, None
+        ]
+        rands -= ndimage.median_filter(np.median(rands, axis=0), mode="mirror", size=3)
         rands += 64
         assert np.allclose(rands, flattened, rtol=0.2)
 
@@ -447,7 +450,7 @@ class TestFlattener:
         rands -= signal.medfilt(np.median(rands, axis=1), kernel_size=3)[:, None]
         rands -= signal.medfilt(np.mean(rands, axis=0), kernel_size=3)
         rands += 64
-        assert np.allclose(rands, flattened, rtol=0.2)
+        np.testing.assert_allclose(rands, flattened, rtol=0.2)
 
 
 def test_highpass_window():

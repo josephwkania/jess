@@ -21,12 +21,14 @@ from jess.calculators import (
 from jess.fitters import poly_fitter
 
 
-def run_filter(file: str, filter: str, window: int = 64, time_median_kernel: int = 0):
+def run_filter(
+    file: str, filter_name: str, window: int = 64, time_median_kernel: int = 0
+):
     """
     Runs filter on a file
     """
     yr_file = Your(file)
-    filter = filter.casefold()
+    filter_name = filter_name.casefold()
 
     if filter == "anderson":
         test_values = anderson_calculate_values(
@@ -356,8 +358,8 @@ def fft_mad(
         cut = sigma * mads
 
         # adds some resistance to jumps in medians
-        if time_median_size > 2:
-            logging.debug("Applying Median filter lenght %i in time", time_median_size)
+        if time_median_size > 1:
+            logging.debug("Applying Median filter length %i in time", time_median_size)
             ndimage.median_filter(
                 medians, size=time_median_size, mode="mirror", output=medians
             )
@@ -670,6 +672,7 @@ def mad_spectra_flat(
     time_median_size: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
+    no_time_deterned: bool = False,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -693,9 +696,12 @@ def mad_spectra_flat(
 
        time_median_size: the length of the median filter to run in time
 
+       return_mask: return the mask where True=masked_values
+
        return_same_dtype: return the same data type as given
 
-       return_mask: return the mask where True=masked_values
+       no_time_deterend: Don't deterend in time, useful fo low dm
+                         where pulse>%50 of the channel
 
     Returns:
        Dynamic Spectrum with values clipped
@@ -720,7 +726,10 @@ def mad_spectra_flat(
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
     # I choose 7 empirically
-    flattened = flattner_median(dynamic_spectra, flatten_to=flatten_to, kernel_size=7)
+    flattened, ts0 = flattner_median(
+        dynamic_spectra, flatten_to=flatten_to, kernel_size=7, return_time_series=True
+    )
+    # print(f"flattned.dytpe: {flattened.dtype}")
     mask = np.zeros_like(flattened, dtype=bool)
     num_subbands, limits = balance_chans_per_subband(
         dynamic_spectra.shape[1], chans_per_subband
@@ -734,8 +743,8 @@ def mad_spectra_flat(
         # medians = np.median(flattened[subband], axis=1)
         cut = sigma * mads
 
-        if time_median_size > 2:
-            logging.debug("Applying Median filter lenght %i in time", time_median_size)
+        if time_median_size > 1:
+            logging.debug("Applying Median filter length %i in time", time_median_size)
             ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
             ndimage.median_filter(
                 medians, size=time_median_size, mode="mirror", output=medians
@@ -747,7 +756,9 @@ def mad_spectra_flat(
 
     # want kernel size to be 1, so every channel get set,
     # now that we've removed the worst RFI
-    flattened = flattner_median(flattened, flatten_to=flatten_to, kernel_size=1)
+    flattened, ts1 = flattner_median(
+        flattened, flatten_to=flatten_to, kernel_size=1, return_time_series=True
+    )
     # set the masked values to what we want to flatten to
     # not obvus why this has to be done, because nans should be ok
     # but it works better this way
@@ -765,7 +776,7 @@ def mad_spectra_flat(
         # medians = np.median(flattened[subband], axis=1)
         cut = sigma * mads
 
-        if time_median_size > 2:
+        if time_median_size > 1:
             ndimage.median_filter(cut, size=time_median_size, mode="mirror", output=cut)
             ndimage.median_filter(
                 medians, size=time_median_size, mode="mirror", output=medians
@@ -777,8 +788,15 @@ def mad_spectra_flat(
 
     # mean frequency subtraction makes sure there is smooth
     # transition between the blocks
-    flattened = flattner_mix(flattened, flatten_to=flatten_to, kernel_size=1)
+    flattened, ts2 = flattner_mix(
+        flattened, flatten_to=flatten_to, kernel_size=1, return_time_series=True
+    )
     flattened[mask] = flatten_to
+
+    if no_time_deterned:
+        time_series = ts0 + ts1 + ts2
+        time_series = time_series - np.median(time_series)
+        flattened = flattened + time_series[:, None]
 
     logging.info("Masking %.2f %%", mask.mean() * 100)
 

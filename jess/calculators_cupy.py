@@ -6,7 +6,10 @@ The repository for all calculators
 import logging
 
 import cupy as cp
-from cupyx.scipy.signal import medfilt
+from cupyx.scipy import ndimage
+
+# Can't use inits with pytest, this error is unavoidable
+# pylint: disable=W0201
 
 
 def mean(data_array: cp.ndarray, factor: int, axis: int) -> cp.ndarray:
@@ -76,7 +79,12 @@ def decimate(
 
 
 def flattner_median(
-    dynamic_spectra: cp.ndarray, flatten_to: int = 64, kernel_size: int = 1
+    dynamic_spectra: cp.ndarray,
+    flatten_to: int = 64,
+    kernel_size: int = 0,
+    return_same_dtype: bool = False,
+    return_time_series: bool = False,
+    intermediate_dtype: object = cp.float32,
 ) -> cp.ndarray:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
@@ -89,34 +97,60 @@ def flattner_median(
         flatten_to: The number to set as the baseline
 
         kernel_size: The size of the median filter to run over the medians
+                     0,1 => nothing is applied
+
+        intermediate_dtype: the data type of the intermediate calculation
+
+        return_same_dtype: return the same data type as dynamic_spectra
+
+        return_time_series: return the time series difference from flatten_to
+                            median_time_series - flatten_to
 
     returns:
         Dynamic spectra flattened in frequency and time
+        (optional) time series medians
     """
+    original_dtype = dynamic_spectra.dtype
+    spectra_medians = cp.nanmedian(dynamic_spectra, axis=0).astype(intermediate_dtype)
+    spectra_medians = spectra_medians - flatten_to
+
     if kernel_size > 1:
-        ts_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
+        ndimage.median_filter(
+            spectra_medians, size=kernel_size, mode="mirror", output=spectra_medians
         )
         # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=0), kernel_size=kernel_size
+        dynamic_spectra = dynamic_spectra - spectra_medians
+        ts_medians = ndimage.median_filter(
+            cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype),
+            size=kernel_size,
         )
-        return dynamic_spectra - spectra_medians + flatten_to
+    else:
+        # break up into two subtractions so the final number comes out where we want it
+        dynamic_spectra = dynamic_spectra - spectra_medians
+        ts_medians = cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype)
 
-    ts_medians = cp.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = cp.nanmedian(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
+    ts_medians = ts_medians - flatten_to
+    result = dynamic_spectra - ts_medians[:, None]
+
+    if return_same_dtype:
+        result = to_dtype(result, original_dtype)
+
+    if return_time_series:
+        return result, ts_medians
+    return result
 
 
 def flattner_mix(
-    dynamic_spectra: cp.ndarray, flatten_to: int = 64, kernel_size: int = 1
+    dynamic_spectra: cp.ndarray,
+    flatten_to: int = 64,
+    kernel_size: int = 0,
+    return_same_dtype: bool = False,
+    return_time_series: bool = False,
+    intermediate_dtype: object = cp.float32,
 ) -> cp.ndarray:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
-    and then the means of the of bandpass. Then add flatten_to to all the pixels
+    and then the medians of the of bandpass. Then add flatten_to to all the pixels
     so that the data can be keep as the same data type.
 
     This uses medians subtraction on the time series. This is less agressive and
@@ -130,26 +164,48 @@ def flattner_mix(
         flatten_to: The number to set as the baseline
 
         kernel_size: The size of the median filter to run over the medians
+                     0,1 => nothing is applied
+
+        return_same_dtype: return the same data type as given, else it will
+                           at least np.int64
+
+        return_time_series: return the time series median differences from flatten_to
+                            median_time_series - flatten_to
 
     returns:
-        Dynamic spectra flattened with mean in frequency and median in time
+        Dynamic spectra flattened in frequency and time
+        (optional) time series medians
     """
+    original_dtype = dynamic_spectra.dtype
+    ts_medians = cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype)
+    ts_medians = ts_medians - flatten_to
+
     if kernel_size > 1:
-        ts_medians = medfilt(
-            cp.nanmedian(dynamic_spectra, axis=1), kernel_size=kernel_size
+        ndimage.median_filter(
+            ts_medians, size=kernel_size, mode="mirror", output=ts_medians
         )
         # break up into two subtractions so the final number comes out where we want it
         dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-        spectra_medians = medfilt(
-            cp.nanmean(dynamic_spectra, axis=0), kernel_size=kernel_size
-        )
-        return dynamic_spectra - spectra_medians + flatten_to
 
-    ts_medians = cp.nanmedian(dynamic_spectra, axis=1)
-    # break up into two subtractions so the final number comes out where we want it
-    dynamic_spectra = dynamic_spectra - ts_medians[:, None]
-    spectra_medians = cp.nanmean(dynamic_spectra, axis=0)
-    return dynamic_spectra - spectra_medians + flatten_to
+        spectra_means = ndimage.median_filter(
+            cp.nanmedian(dynamic_spectra, axis=0).astype(intermediate_dtype),
+            size=kernel_size,
+            mode="mirror",
+        )
+    else:
+        # break up into two subtractions so the final number comes out where we want it
+        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+        spectra_means = cp.nanmean(dynamic_spectra, axis=0)
+
+    spectra_means = spectra_means - flatten_to
+    result = dynamic_spectra - spectra_means
+
+    if return_same_dtype:
+        result = to_dtype(result, dtype=original_dtype)
+
+    if return_time_series:
+        return result, ts_medians
+    return result
 
 
 def to_dtype(data: cp.ndarray, dtype: object) -> cp.ndarray:
