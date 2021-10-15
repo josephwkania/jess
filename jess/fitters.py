@@ -18,7 +18,7 @@ as a loss function, fits twice to be even more robust
 import logging
 
 import numpy as np
-from scipy import signal, stats
+from scipy import ndimage, stats
 from scipy.interpolate import splev, splrep
 from sklearn.base import TransformerMixin
 from sklearn.linear_model import HuberRegressor
@@ -291,7 +291,7 @@ def median_fitter(
         bandpass = np.median(section, axis=0)
         fit = median_fitter(bandpass)
     """
-    return signal.medfilt(bandpass, kernel_size=chans_per_fit)
+    return ndimage.median_filter(bandpass, size=chans_per_fit, mode="mirror")
 
 
 def poly_fitter(
