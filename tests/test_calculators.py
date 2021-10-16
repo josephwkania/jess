@@ -16,6 +16,8 @@ import jess.calculators as calc
 # Can't use inits with pytest, this error is unavoidable
 # pylint: disable=W0201
 
+rs = np.random.RandomState(2021)
+
 
 class TestAccumulate:
     """
@@ -75,7 +77,7 @@ class TestAutoCorrelate:
         """
         Random array to autocorrelate
         """
-        self.rand = np.random.normal(size=51 * 256).reshape(51, 256)
+        self.rand = rs.normal(size=51 * 256).reshape(51, 256)
 
     @staticmethod
     def np_autocorrelate(data):
@@ -348,7 +350,7 @@ class TestDecimate:
         """
         Holds shared array
         """
-        self.random = np.random.normal(loc=10, size=512 * 512).reshape(512, 512)
+        self.random = rs.normal(loc=10, size=512 * 512).reshape(512, 512)
 
     def test_decimate_singal(self):
         """
@@ -390,7 +392,7 @@ class TestFlattener:
         """
         Flatten a 2D array with a trend
         """
-        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        rands = rs.normal(size=512 * 256).reshape(512, 256)
         line = 5 + 10 * np.arange(512)
         rands_with_trend = rands + line[:, None]
         flattened = calc.flattner_median(rands_with_trend)
@@ -408,7 +410,7 @@ class TestFlattener:
         not sure why the relative error need to be
         so high
         """
-        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        rands = rs.normal(size=512 * 256).reshape(512, 256)
         line = 5 + 10 * np.arange(512)
         rands_with_trend = rands + line[:, None]
         flattened = calc.flattner_median(rands_with_trend, kernel_size=3)
@@ -425,7 +427,7 @@ class TestFlattener:
         """
         Flatten a 2D array with a trend
         """
-        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        rands = rs.normal(size=512 * 256).reshape(512, 256)
         line = 5 + 10 * np.arange(512)
         rands_with_trend = rands + line[:, None]
         flattened = calc.flattner_mix(rands_with_trend)
@@ -442,7 +444,7 @@ class TestFlattener:
 
         Not sure why the relative error need to be so high
         """
-        rands = np.random.normal(size=512 * 256).reshape(512, 256)
+        rands = rs.normal(size=512 * 256).reshape(512, 256)
         line = 5 + 10 * np.arange(512)
         rands_with_trend = rands + line[:, None]
         flattened = calc.flattner_mix(rands_with_trend, kernel_size=3)
@@ -470,7 +472,7 @@ def test_guassian_noise_adder():
     assert combined == calc.guassian_noise_adder(stds)
 
 
-class TestIdealNoiseCalculator:
+class TestNoiseCalculator:
     """
     Test the ideal noise calculator on random
     Guassian noise.
@@ -484,37 +486,40 @@ class TestIdealNoiseCalculator:
         """
         data = np.load("tests/fake.npy")
         self.stds = np.std(data, axis=0)
+        self.zero_dm_std = np.std(data.mean(axis=1))
 
         self.yr_object = Your("tests/fake.fil")
 
-    def test_ideal_noise(self):
+    def test_noise_default(self):
         """
         Test the default case
         """
 
-        ideal_noises = calc.ideal_noise_calculator(self.yr_object, num_samples=4)
+        ideal_noises, std = calc.noise_calculator(self.yr_object, num_samples=4)
 
-        assert np.allclose(self.stds, ideal_noises, rtol=0.15)
+        np.testing.assert_allclose(self.stds, ideal_noises, rtol=0.15)
+        print(self.zero_dm_std, std)
+        assert np.isclose(self.zero_dm_std, std, rtol=0.05)
 
     def test_ideal_noise_no_detrend(self):
         """
         Test with no detrend
         """
-        ideal_noises_no_detrend = calc.ideal_noise_calculator(
+        ideal_noises_no_detrend, std = calc.noise_calculator(
             self.yr_object, num_samples=4, detrend=False
         )
-        assert np.allclose(self.stds, ideal_noises_no_detrend, rtol=0.15)
+        np.testing.assert_allclose(self.stds, ideal_noises_no_detrend, rtol=0.15)
+        assert np.isclose(self.zero_dm_std, std, rtol=0.05)
 
     def test_ideal_noise_no_kernel(self):
         """
         Test without median filter
         """
-        ideal_noises_no_kernel = calc.ideal_noise_calculator(
+        ideal_noises_no_kernel, std = calc.noise_calculator(
             self.yr_object, num_samples=4, kernel_size=0
         )
-        print(self.stds)
-        print(ideal_noises_no_kernel)
-        assert np.allclose(self.stds, ideal_noises_no_kernel, rtol=0.30)
+        np.testing.assert_allclose(self.stds, ideal_noises_no_kernel, rtol=0.15)
+        assert np.isclose(self.zero_dm_std, std, rtol=0.05)
 
 
 class TestPreprocess:
@@ -527,7 +532,7 @@ class TestPreprocess:
         """
         Holds shared array
         """
-        self.random = np.random.normal(size=512 * 512).reshape(512, 512)
+        self.random = rs.normal(size=512 * 512).reshape(512, 512)
 
     def test_hor_mean_std(self):
         """
@@ -606,7 +611,7 @@ class TestEntropy:
         """ "
         Holds random
         """
-        self.random = np.random.normal(size=512 * 512).reshape(512, 512)
+        self.random = rs.normal(size=512 * 512).reshape(512, 512)
 
     def test_entropy(self):
         """
@@ -683,7 +688,7 @@ def test_to_dtype():
     """
     Create some random data and turn it into uint8
     """
-    random = np.random.normal(scale=12, size=512 * 512).reshape(512, 512)
+    random = rs.normal(scale=12, size=512 * 512).reshape(512, 512)
     random_8 = np.around(random)
     random_8 = np.clip(random_8, 0, 255)
     random_8 = random_8.astype("uint8")

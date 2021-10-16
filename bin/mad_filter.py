@@ -101,7 +101,7 @@ class JessWriter(Writer):
         )
         dedispersed[0 : -self.samples_lost, :] = spectral_mad(
             dedispersed[0 : -self.samples_lost, :],
-            frame=self.channels_per_subband,
+            chans_per_subband=self.channels_per_subband,
             sigma=self.sigma,
         )
         redispersed = dedisperse(
@@ -249,7 +249,7 @@ def get_outfile(file: str, out_file: str) -> str:
     # if a file is given, make sure it has a .fil ext
     path, file_ext = os.path.splitext(out_file)
     if file_ext:
-        assert file_ext == ".fil", "I can only write .fil, you gave: %s!" % file_ext
+        assert file_ext == ".fil", f"I can only write .fil, you gave: {file_ext}!"
         return out_file
 
     out_file += ".fil"
@@ -296,7 +296,7 @@ def clean(
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         cleaned = mad_spectra_flat(
             cp.asarray(data),
-            frame=channels_per_subband,
+            chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
         )
@@ -355,7 +355,7 @@ def clean_dispersion(
     # if not remove_ends:
     cleaned = mad_spectra_flat(
         cp.asarray(yr_input.get_data(0, samples_lost)),
-        frame=channels_per_subband,
+        chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
     )
@@ -377,7 +377,7 @@ def clean_dispersion(
         )
         dedisp[0:-samples_lost, :] = mad_spectra_flat(
             dedisp[0:-samples_lost, :],
-            frame=channels_per_subband,
+            chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
         )
@@ -399,7 +399,7 @@ def clean_dispersion(
                 yr_input.your_header.nspectra - samples_lost, samples_lost
             )
         ),
-        frame=channels_per_subband,
+        chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
     )

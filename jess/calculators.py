@@ -466,13 +466,13 @@ def guassian_noise_adder(standard_deviations: np.ndarray) -> float:
     return np.sqrt(summed) / len(standard_deviations)
 
 
-def ideal_noise_calculator(
+def noise_calculator(
     yr_obj: object,
     num_samples: int = 1000,
     len_block: int = 128,
     detrend: bool = True,
     kernel_size: int = 17,
-):
+) -> Tuple[np.ndarray, np.float64]:
     """
     Calculate the ideal noise of a file
 
@@ -500,7 +500,8 @@ def ideal_noise_calculator(
                      no filter is applied
 
     Returns:
-        Ideal standard deviation of time series.
+        Ideal standard deviation of time series,
+        Real standard deviation of the time series
 
     Notes:
         detrend would be useful if there are power level changes in the data. This will
@@ -517,10 +518,16 @@ def ideal_noise_calculator(
         By calculating all the channels independently, then adding the
         standard deviations we should avoid correlated (zero dm)
         noise that shows up across off the channels
+
+        Calculate the standard deviation of the zero dm time series by collapsing
+        all the channels for each random block. Then take the median of all these
+        standard deviations.
+
     """
     start_sample_range = yr_obj.your_header.nspectra - len_block
     starts = [random.randrange(0, start_sample_range) for _ in range(num_samples)]
     iqrs = np.zeros((num_samples, yr_obj.your_header.nchans), dtype=np.float64)
+    zero_dm_stds = np.zeros(num_samples, dtype=np.float64)
 
     for j, jstart in enumerate(starts):
         data = yr_obj.get_data(jstart, len_block)
@@ -530,14 +537,17 @@ def ideal_noise_calculator(
             signal.detrend(data, axis=0, overwrite_data=True)
 
         iqr = stats.iqr(data, axis=0, scale="normal")
+
         if kernel_size > 1:
-            iqr = signal.medfilt(iqr, kernel_size=kernel_size)
+            iqr = ndimage.median_filter(iqr, size=kernel_size, mode="nearest")
 
         iqrs[j] = iqr
+        zero_dm_stds[j] = np.std(data.mean(axis=1))
 
-    stds = np.median(iqrs, axis=0)
+    ideal_noise = np.median(iqrs, axis=0)
+    zero_dm_noise = np.median(zero_dm_stds)
 
-    return stds
+    return ideal_noise, zero_dm_noise
 
 
 def preprocess(
@@ -600,7 +610,7 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     if axis == 0:
         data = data.T
     elif axis > 1:
-        raise ValueError("Axis out of bounds, given axis=%i" % axis)
+        raise ValueError(f"Axis out of bounds, given axis={axis}")
     length, _ = data.shape
 
     entropies = np.zeros(length, dtype=float)
