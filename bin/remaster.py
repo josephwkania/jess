@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Runs a MAD filter over fits/fil.
+Remasters fits/fil files.
 
-Can dedisperse the data to a given DM to
-protect bright/narrow pulses.
+Runs a mad filter, fft mad filter, and the a
+high pass filter over the data.
+
+Rights out a filterbank.
 """
 
 import argparse
@@ -21,15 +23,16 @@ from your.utils.misc import YourArgparseFormatter
 
 try:
     import cupy as cp
+
     from jess.calculators_cupy import to_dtype
     from jess.dispersion_cupy import dedisperse, delay_lost
-    from jess.JESS_filters_cupy import fft_mad, zero_dm_fft, mad_spectra_flat
+    from jess.JESS_filters_cupy import fft_mad, mad_spectra_flat, zero_dm_fft
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
     from jess.calculators import to_dtype
     from jess.dispersion import dedisperse, delay_lost
-    from jess.JESS_filters import fft_mad, zero_dm_fft, mad_spectra_flat
+    from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm_fft
 
     BACKEND_GPU = False
 
@@ -54,7 +57,7 @@ def get_outfile(file: str, out_file: str) -> str:
     # if a file is given, make sure it has a .fil ext
     path, file_ext = os.path.splitext(out_file)
     if file_ext:
-        assert file_ext == ".fil", "I can only write .fil, you gave: %s!" % file_ext
+        assert file_ext == ".fil", f"I can only write .fil, you gave: {file_ext}!"
         return out_file
 
     out_file += ".fil"
@@ -67,7 +70,7 @@ def clean_cpu(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
-    median_time_kernel: int,
+    time_median_size: int,
     modes_to_zero: int,
     out_file: str,
     sigproc_object: object,
@@ -107,17 +110,22 @@ def clean_cpu(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        # cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
+        # cleaned = fft_mad(
+        #     cp.asarray(data), sigma=sigma, chans_per_subband=channels_per_subband
+        # )
         cleaned = mad_spectra_flat(
             data,
-            frame=channels_per_subband,
+            chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
-            median_time_kernel=median_time_kernel,
+            time_median_size=time_median_size,
             return_same_dtype=False,
         )
         cleaned = fft_mad(
-            cleaned, sigma=sigma, frame=channels_per_subband, return_same_dtype=False
+            cleaned,
+            sigma=sigma,
+            chans_per_subband=channels_per_subband,
+            return_same_dtype=False,
         )
 
         if modes_to_zero > 0:
@@ -137,7 +145,7 @@ def clean_gpu(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
-    median_time_kernel: int,
+    time_median_size: int,
     modes_to_zero: int,
     out_file: str,
     sigproc_object: object,
@@ -177,17 +185,22 @@ def clean_gpu(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        # cleaned = fft_mad(cp.asarray(data), sigma=sigma, frame=channels_per_subband)
+        # cleaned = fft_mad(
+        #     cp.asarray(data), sigma=sigma, chans_per_subband=channels_per_subband
+        # )
         cleaned = mad_spectra_flat(
             cp.asarray(data),
-            frame=channels_per_subband,
+            chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
-            median_time_kernel=median_time_kernel,
+            time_median_size=time_median_size,
             return_same_dtype=False,
         )
         cleaned = fft_mad(
-            cleaned, sigma=sigma, frame=channels_per_subband, return_same_dtype=False
+            cleaned,
+            sigma=sigma,
+            chans_per_subband=channels_per_subband,
+            return_same_dtype=False,
         )
 
         if modes_to_zero > 0:
@@ -208,7 +221,7 @@ def clean_dispersion(
     gulp: int,
     flatten_to: int,
     channels_per_subband: int,
-    median_time_kernel: int,
+    time_median_size: int,
     out_file: str,
     sigproc_object: object,
 ) -> None:
@@ -253,10 +266,10 @@ def clean_dispersion(
     # if not remove_ends:
     cleaned = mad_spectra_flat(
         cp.asarray(yr_input.get_data(0, samples_lost)),
-        frame=channels_per_subband,
+        chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
-        median_time_kernel=median_time_kernel,
+        time_median_size=time_median_size,
     )
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
@@ -276,10 +289,10 @@ def clean_dispersion(
         )
         dedisp[0:-samples_lost, :] = mad_spectra_flat(
             dedisp[0:-samples_lost, :],
-            frame=channels_per_subband,
+            chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
-            median_time_kernel=median_time_kernel,
+            time_median_size=time_median_size,
         )
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
@@ -299,10 +312,10 @@ def clean_dispersion(
                 yr_input.your_header.nspectra - samples_lost, samples_lost
             )
         ),
-        frame=channels_per_subband,
+        chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
-        median_time_kernel=median_time_kernel,
+        time_median_size=time_median_size,
     )
     sigproc_object.append_spectra(
         cleaned.get(),
@@ -317,7 +330,7 @@ def master_cleaner(
     gulp: int = 16384,
     flatten_to: int = 64,
     channels_per_subband: int = 256,
-    median_time_kernel: int = 0,
+    time_median_size: int = 0,
     modes_to_zero: int = 6,
     out_file: str = None,
 ) -> None:
@@ -366,18 +379,18 @@ def master_cleaner(
 
     if dispersion_measure > 0:
         raise NotImplementedError("This isn't working quite right yet")
-        logging.debug("Cleaning at DM %f", dispersion_measure)
-        clean_dispersion(
-            yr_input,
-            dispersion_measure=dispersion_measure,
-            sigma=sigma,
-            gulp=gulp,
-            flatten_to=flatten_to,
-            channels_per_subband=channels_per_subband,
-            median_time_kernel=median_time_kernel,
-            out_file=out_file,
-            sigproc_object=sigproc_object,
-        )
+        # logging.debug("Cleaning at DM %f", dispersion_measure)
+        # clean_dispersion(
+        #     yr_input,
+        #     dispersion_measure=dispersion_measure,
+        #     sigma=sigma,
+        #     gulp=gulp,
+        #     flatten_to=flatten_to,
+        #     channels_per_subband=channels_per_subband,
+        #     time_median_size=time_median_size,
+        #     out_file=out_file,
+        #     sigproc_object=sigproc_object,
+        # )
     else:
         logging.debug("No DM given, cleaning at 0 DM")
         if BACKEND_GPU:
@@ -387,7 +400,7 @@ def master_cleaner(
                 gulp=gulp,
                 flatten_to=flatten_to,
                 channels_per_subband=channels_per_subband,
-                median_time_kernel=median_time_kernel,
+                time_median_size=time_median_size,
                 modes_to_zero=modes_to_zero,
                 out_file=out_file,
                 sigproc_object=sigproc_object,
@@ -399,7 +412,7 @@ def master_cleaner(
                 gulp=gulp,
                 flatten_to=flatten_to,
                 channels_per_subband=channels_per_subband,
-                median_time_kernel=median_time_kernel,
+                time_median_size=time_median_size,
                 modes_to_zero=modes_to_zero,
                 out_file=out_file,
                 sigproc_object=sigproc_object,
@@ -457,8 +470,8 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "-median_time_kernel",
-        "---median_time_kernel",
+        "-time_median_size",
+        "---time_median_size",
         help="The length of kernel for median of median and median of MADs in time",
         type=int,
         default=0,
@@ -526,7 +539,7 @@ if __name__ == "__main__":
         sigma=args.sigma,
         gulp=args.gulp,
         flatten_to=args.flatten_to,
-        median_time_kernel=args.median_time_kernel,
+        time_median_size=args.time_median_size,
         channels_per_subband=args.channels_per_subband,
         modes_to_zero=args.modes_to_zero,
         # remove_ends=args.remove_ends,

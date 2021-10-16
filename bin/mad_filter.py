@@ -11,8 +11,6 @@ import logging
 import os
 import textwrap
 
-import cupy as cp
-
 # import psutil
 from rich.logging import RichHandler
 from rich.progress import track
@@ -22,14 +20,18 @@ from your.formats.filwriter import make_sigproc_object
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
-from jess.dispersion_cupy import dedisperse, delay_lost
+try:
+    import cupy as cp
 
-# from jess.fitters import get_fitter
-from jess.JESS_filters_cupy import mad_spectra_flat
+    from jess.dispersion_cupy import dedisperse, delay_lost
+    from jess.JESS_filters_cupy import mad_spectra_flat
 
-# from your.utils.rfi import sk_sg_filter
-# from your.writer import Writer
+    BACKEND_GPU = True
+except ModuleNotFoundError:
+    from jess.dispersion import dedisperse, delay_lost
+    from jess.JESS_filters import mad_spectra_flat
 
+    BACKEND_GPU = False
 
 logger = logging.getLogger()
 
@@ -256,7 +258,7 @@ def get_outfile(file: str, out_file: str) -> str:
     return out_file
 
 
-def clean(
+def clean_gpu(
     yr_input: object,
     sigma: float,
     gulp: int,
@@ -284,7 +286,7 @@ def clean(
 
         sigproc_obj: sigproc object to write out
 
-    Returns
+    Returns:
         None
     """
 
@@ -296,6 +298,53 @@ def clean(
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         cleaned = mad_spectra_flat(
             cp.asarray(data),
+            chans_per_subband=channels_per_subband,
+            sigma=sigma,
+            flatten_to=flatten_to,
+        )
+        sigproc_object.append_spectra(cleaned.get(), out_file)
+
+
+def clean_cpu(
+    yr_input: object,
+    sigma: float,
+    gulp: int,
+    flatten_to: int,
+    channels_per_subband: int,
+    out_file: str,
+    sigproc_object: object,
+) -> None:
+    """
+    Run the MAD filter on chunks of data without dedispersing it.
+
+     Args:
+        yr_input: the your object of the file you want to clean
+
+        sigma: Sigma at which to remove outliers
+
+        gulp: The amount of data to process.
+
+        flatten_to: make this the median out the out data.
+
+        channels_per_subband: the number of channels for each MAD
+                              subband
+
+        out_file: name of the file to write out
+
+        sigproc_obj: sigproc object to write out
+
+    Returns:
+        None
+    """
+
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+        logging.debug("Cleaning samples starting at %i", j)
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+        cleaned = mad_spectra_flat(
+            data,
             chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
@@ -502,15 +551,28 @@ def mad_cleaner(
         )
     else:
         logging.debug("No DM given, cleaning at 0 DM")
-        clean(
-            yr_input=yr_input,
-            sigma=sigma,
-            gulp=gulp,
-            flatten_to=flatten_to,
-            channels_per_subband=channels_per_subband,
-            out_file=out_file,
-            sigproc_object=sigproc_object,
-        )
+        if BACKEND_GPU:
+            logging.debug("Using GPU backend")
+            clean_gpu(
+                yr_input=yr_input,
+                sigma=sigma,
+                gulp=gulp,
+                flatten_to=flatten_to,
+                channels_per_subband=channels_per_subband,
+                out_file=out_file,
+                sigproc_object=sigproc_object,
+            )
+        else:
+            logging.debug("No Cupy, cpu backend")
+            clean_cpu(
+                yr_input=yr_input,
+                sigma=sigma,
+                gulp=gulp,
+                flatten_to=flatten_to,
+                channels_per_subband=channels_per_subband,
+                out_file=out_file,
+                sigproc_object=sigproc_object,
+            )
 
 
 if __name__ == "__main__":
