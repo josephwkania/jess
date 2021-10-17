@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 """
-Runs a MAD filter over fits/fil.
+Runs a MAD filter over .fits/.fil, writing out
+a .fil.
 
-Can dedisperse the data to a given DM to
-protect bright/narrow pulses.
+If no dm is given, this uses jess.JESS_filters.mad_spectra_flat
+to flatten the data, run a mad filter, flatten again, mad, then
+a final flatten. This gives the best performance in cleaning time
+and removal of RFI.
+
+If you give a dm this will dedisperse the data to the given DM to
+protect bright/narrow pulses. This uses jess.JESS_filters.spectra_mad
+It only runs the mad filter once.
+The desispersion is computationally expensive, and it makes it slow.
+The single iteration of the MAD filter and using polynomial detrend
+makes this filter not preform as well. It does keep the bandpass
+shape and time series trend.
 """
 
 import argparse
@@ -24,12 +35,12 @@ try:
     import cupy as cp
 
     from jess.dispersion_cupy import dedisperse, delay_lost
-    from jess.JESS_filters_cupy import mad_spectra_flat
+    from jess.JESS_filters_cupy import mad_spectra, mad_spectra_flat
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
     from jess.dispersion import dedisperse, delay_lost
-    from jess.JESS_filters import mad_spectra_flat
+    from jess.JESS_filters import mad_spectra, mad_spectra_flat
 
     BACKEND_GPU = False
 
@@ -289,6 +300,7 @@ def clean_gpu(
     Returns:
         None
     """
+    logging.debug("Using GPU backend for mad_spectra_flat")
 
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
@@ -336,6 +348,7 @@ def clean_cpu(
     Returns:
         None
     """
+    logging.warning("Using CPU backend for mad_spectra_flat")
 
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
@@ -349,22 +362,24 @@ def clean_cpu(
             sigma=sigma,
             flatten_to=flatten_to,
         )
-        sigproc_object.append_spectra(cleaned.get(), out_file)
+        sigproc_object.append_spectra(cleaned, out_file)
 
 
-def clean_dispersion(
+def clean_dispersion_gpu(
     yr_input: object,
     dispersion_measure: float,
     sigma: float,
     gulp: int,
-    flatten_to: int,
     channels_per_subband: int,
     # remove_ends: bool,
     out_file: str,
     sigproc_object: object,
 ) -> None:
     """
-    Run the MAD filter on chunks of data without dedispersing it.
+    Run the MAD filter on chunks of data by dispersing it MAD
+    cleaning and then redispersing when write to file.
+
+    GPU version
 
      Args:
         yr_input: the your object of the file you want to clean
@@ -388,6 +403,8 @@ def clean_dispersion(
     Returns
         None
     """
+    logging.debug("Using GPU backend for clean dispersion")
+
     samples_lost = delay_lost(
         dispersion_measure, yr_input.chan_freqs, yr_input.your_header.tsamp
     )
@@ -402,11 +419,10 @@ def clean_dispersion(
     # add data that can't be dispersed
     # because its at the start
     # if not remove_ends:
-    cleaned = mad_spectra_flat(
+    cleaned = mad_spectra(
         cp.asarray(yr_input.get_data(0, samples_lost)),
         chans_per_subband=channels_per_subband,
         sigma=sigma,
-        flatten_to=flatten_to,
     )
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
@@ -424,16 +440,15 @@ def clean_dispersion(
             yr_input.your_header.tsamp,
             yr_input.chan_freqs,
         )
-        dedisp[0:-samples_lost, :] = mad_spectra_flat(
+        dedisp[0:-samples_lost, :] = mad_spectra(
             dedisp[0:-samples_lost, :],
             chans_per_subband=channels_per_subband,
             sigma=sigma,
-            flatten_to=flatten_to,
         )
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
-        redisip = redisip.astype(yr_input.your_header.dtype)
+
         sigproc_object.append_spectra(
             redisip[samples_lost:-samples_lost, :].get(), out_file
         )
@@ -442,7 +457,7 @@ def clean_dispersion(
     # because its at the end
 
     # if not remove_ends:
-    cleaned = mad_spectra_flat(
+    cleaned = mad_spectra(
         cp.asarray(
             yr_input.get_data(
                 yr_input.your_header.nspectra - samples_lost, samples_lost
@@ -450,7 +465,109 @@ def clean_dispersion(
         ),
         chans_per_subband=channels_per_subband,
         sigma=sigma,
-        flatten_to=flatten_to,
+    )
+    sigproc_object.append_spectra(
+        cleaned.get(),
+        out_file,
+    )
+
+
+def clean_dispersion_cpu(
+    yr_input: object,
+    dispersion_measure: float,
+    sigma: float,
+    gulp: int,
+    channels_per_subband: int,
+    # remove_ends: bool,
+    out_file: str,
+    sigproc_object: object,
+) -> None:
+    """
+    Run the MAD filter on chunks of data by dispersing it MAD
+    cleaning and then redispersing when write to file.
+
+    CPU version
+
+     Args:
+        yr_input: the your object of the file you want to clean
+
+        dispersion_measure: The dispersion measure to dedisperse
+                            the data to
+
+        sigma: Sigma at which to remove outliers
+
+        gulp: The amount of data to process.
+
+        latten_to: make this the median out the out data.
+
+        channels_per_subband: the number of channels for each MAD
+                              subband
+
+        out_file: name of the file to write out
+
+        sigproc_obj: sigproc object to write out
+
+    Returns
+        None
+    """
+    logging.warning("Using CPU backend for mad_spectra_flat")
+
+    samples_lost = delay_lost(
+        dispersion_measure, yr_input.chan_freqs, yr_input.your_header.tsamp
+    )
+    logging.debug(
+        "dispersion_measure: %f, yr_input.chan_freqs: %s",
+        dispersion_measure,
+        yr_input.chan_freqs,
+    )
+    logging.debug("yr_input.your_header.tsamp: %f", yr_input.your_header.tsamp)
+    logging.debug("samples_lost: %i", samples_lost)
+
+    # add data that can't be dispersed
+    # because its at the start
+    # if not remove_ends:
+    cleaned = mad_spectra(
+        yr_input.get_data(0, samples_lost),
+        chans_per_subband=channels_per_subband,
+        sigma=sigma,
+    )
+    sigproc_object.append_spectra(cleaned, out_file)
+
+    # loop through all the data we can dedisperse
+    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+        logging.debug("Cleaning samples starting at %i", j)
+
+        if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, 2 * samples_lost + gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+        dedisp = dedisperse(
+            data,
+            dispersion_measure,
+            yr_input.your_header.tsamp,
+            yr_input.chan_freqs,
+        )
+        dedisp[0:-samples_lost, :] = mad_spectra(
+            dedisp[0:-samples_lost, :],
+            chans_per_subband=channels_per_subband,
+            sigma=sigma,
+        )
+        redisip = dedisperse(
+            dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
+        )
+
+        sigproc_object.append_spectra(
+            redisip[samples_lost:-samples_lost, :].get(), out_file
+        )
+
+    # add data that can't be dispersed
+    # because its at the end
+
+    # if not remove_ends:
+    cleaned = mad_spectra(
+        yr_input.get_data(yr_input.your_header.nspectra - samples_lost, samples_lost),
+        chans_per_subband=channels_per_subband,
+        sigma=sigma,
     )
     sigproc_object.append_spectra(
         cleaned.get(),
@@ -538,21 +655,31 @@ def mad_cleaner(
 
     if dispersion_measure > 0:
         logging.debug("Cleaning at DM %f", dispersion_measure)
-        clean_dispersion(
-            yr_input,
-            dispersion_measure=dispersion_measure,
-            sigma=sigma,
-            gulp=gulp,
-            flatten_to=flatten_to,
-            channels_per_subband=channels_per_subband,
-            # remove_ends,
-            out_file=out_file,
-            sigproc_object=sigproc_object,
-        )
+        if BACKEND_GPU:
+            clean_dispersion_gpu(
+                yr_input,
+                dispersion_measure=dispersion_measure,
+                sigma=sigma,
+                gulp=gulp,
+                channels_per_subband=channels_per_subband,
+                # remove_ends,
+                out_file=out_file,
+                sigproc_object=sigproc_object,
+            )
+        else:
+            clean_dispersion_cpu(
+                yr_input,
+                dispersion_measure=dispersion_measure,
+                sigma=sigma,
+                gulp=gulp,
+                channels_per_subband=channels_per_subband,
+                # remove_ends,
+                out_file=out_file,
+                sigproc_object=sigproc_object,
+            )
     else:
         logging.debug("No DM given, cleaning at 0 DM")
         if BACKEND_GPU:
-            logging.debug("Using GPU backend")
             clean_gpu(
                 yr_input=yr_input,
                 sigma=sigma,
@@ -563,7 +690,7 @@ def mad_cleaner(
                 sigproc_object=sigproc_object,
             )
         else:
-            logging.debug("No Cupy, cpu backend")
+            logging.warning("No Cupy, cpu backend")
             clean_cpu(
                 yr_input=yr_input,
                 sigma=sigma,
@@ -628,7 +755,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-flatten_to",
         "--flatten_to",
-        help="Flatten data to this number",
+        help="Flatten data to this number (Only used for mad_specta_flat)",
         type=int,
         default=64,
         required=False,
