@@ -3,14 +3,38 @@
 Test for jess.fitters
 """
 
+import warnings
+
 import pytest
 
 cp = pytest.importorskip("cupy")
 
 # pylint: disable=C0413
 from jess.fitters_cupy import (  # isort:skip # noqa: E402
+    arpls_fitter,
     poly_fitter,
 )
+
+
+def test_arpls_fitter():
+    """
+    Fit to some data with spikes
+    ignore the spikes
+
+    There can be some ringing on the
+    ends, so just clip those parts.
+    Can also increase lam, but that makes it slow
+    """
+    data = cp.polyval(cp.asarray([-0.01, 7, 100]), cp.linspace(0, 1023, 1024))
+    data_dirty = data.copy()
+    data_dirty[30] += 30
+    data_dirty[60] += 60
+    clip = 16
+    with warnings.catch_warnings(record=True):
+        # continues to throw csr warning even when using csr format
+        # ignore
+        fit = arpls_fitter(data_dirty)
+    cp.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], rtol=0.15)
 
 
 def test_poly_fitter():

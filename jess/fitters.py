@@ -18,8 +18,9 @@ as a loss function, fits twice to be even more robust
 import logging
 
 import numpy as np
-from scipy import ndimage, stats
+from scipy import ndimage, sparse, stats
 from scipy.interpolate import splev, splrep
+from scipy.linalg import cholesky
 from sklearn.base import TransformerMixin
 from sklearn.linear_model import HuberRegressor
 from sklearn.pipeline import make_pipeline
@@ -38,6 +39,9 @@ def get_fitter(fitter: str) -> object:
     return:
         corresponding fitter object
     """
+    fitter = fitter.casefold()
+    if fitter == "arpls_fitter":
+        return arpls_fitter
     if fitter == "bspline_fitter":
         return bspline_fitter
     if fitter == "cheb_fitter":
@@ -48,6 +52,91 @@ def get_fitter(fitter: str) -> object:
         return poly_fitter
 
     raise ValueError(f"You didn't give a valid fitter type! (Given {fitter})")
+
+
+def arpls_fitter(
+    bandpass: np.ndarray,
+    lam: float = 1e4,
+    ratio: float = 0.05,
+    itermax: int = 10,
+    dtype: object = np.float32,
+) -> np.ndarray:
+    """
+    Baseline correction using asymmetrically
+    reweighted penalized least squares smoothing
+    Sung-June Baek, Aaron Park, Young-Jin Ahna and Jaebum Choo,
+    Analyst, 2015, 140, 250 (2015)
+
+    Abstract
+
+    Baseline correction methods based on penalized least squares are successfully
+    applied to various spectral analyses. The methods change the weights iteratively
+    by estimating a baseline. If a signal is below a previously fitted baseline,
+    large weight is given. On the other hand, no weight or small weight is given
+    when a signal is above a fitted baseline as it could be assumed to be a part
+    of the peak. As noise is distributed above the baseline as well as below the
+    baseline, however, it is desirable to give the same or similar weights in
+    either case. For the purpose, we propose a new weighting scheme based on the
+    generalized logistic function. The proposed method estimates the noise level
+    iteratively and adjusts the weights correspondingly. According to the
+    experimental results with simulated spectra and measured Raman spectra, the
+    proposed method outperforms the existing methods for baseline correction and
+    peak height estimation.
+
+    This was first used for radio astronomy in
+    Radio frequency interference mitigation based on the asymmetrically reweighted
+    penalized least squares and SumThreshold method (2021)
+    http://zmtt.bao.ac.cn/GPPS/RFI/
+
+
+    Args:
+        Bandpass: the bandpass to fit
+
+        lam: parameter that can be adjusted by user. The larger lambda is,
+             the smoother the resulting background, z
+
+        ratio: weighting deviations: 0 < ratio < 1,
+               smaller values allow less negative values
+
+        itermax: number of iterations to perform
+
+        dtype: data type to preform the matrix opterations
+
+    Output:
+        Fit to bandpass
+
+    """
+    input_length = len(bandpass)
+    #  D = sparse.csc_matrix(np.diff(np.eye(N), 2))
+    diff_mtx = sparse.eye(input_length, format="csc", dtype=dtype)
+    diff_mtx = (
+        diff_mtx[1:] - diff_mtx[:-1]
+    )  # numpy.diff( ,2) does not work with sparse matrix. This is a workaround.
+    diff_mtx = diff_mtx[1:] - diff_mtx[:-1]
+
+    h_mtx = lam * diff_mtx.T * diff_mtx
+    weights = np.ones(input_length, dtype=dtype)
+    for j in range(itermax):
+        logging.debug("loop #%i", j)
+        weights_mtx = sparse.diags(
+            weights, 0, shape=(input_length, input_length), dtype=dtype
+        )
+        wh_mtx = sparse.csc_matrix(weights_mtx + h_mtx)
+        # CUDA likes csr here, doesn't seem to matter to scipy
+        c_mtx = sparse.csr_matrix(cholesky(wh_mtx.todense()))
+        fit = sparse.linalg.spsolve(
+            c_mtx, sparse.linalg.spsolve(c_mtx.T, weights * bandpass)
+        )
+        diff = bandpass - fit
+        diff_negative = diff[diff < 0]
+        mean = np.mean(diff_negative)
+        std = np.std(diff_negative)
+        weights_iter = 1.0 / (1 + np.exp(2 * (diff - (2 * std - mean)) / std))
+        if np.linalg.norm(weights - weights_iter) / np.linalg.norm(weights) < ratio:
+            logging.debug("Reached end condition at iteration #%i", j)
+            break
+        weights = weights_iter
+    return fit
 
 
 class SplineTransformer(TransformerMixin):
