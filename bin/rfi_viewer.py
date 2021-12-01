@@ -43,8 +43,6 @@ from tkinter import (
     filedialog,
 )
 
-# from urllib.parse import non_hierarchical
-
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,6 +58,9 @@ from your.utils.misc import YourArgparseFormatter
 
 from jess.calculators import preprocess, shannon_entropy
 from jess.fitters import bspline_fitter
+
+# from urllib.parse import non_hierarchical
+
 
 # based on
 # https://steemit.com/utopian-io/@hadif66/tutorial-embeding-scipy-matplotlib-with-tkinter-to-work-on-images-in-a-gui-framework

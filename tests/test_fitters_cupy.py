@@ -23,18 +23,18 @@ def test_arpls_fitter():
 
     There can be some ringing on the
     ends, so just clip those parts.
-    Can also increase lam, but that makes it slow
+    Seems to have a sweet spot for lam
     """
     data = cp.polyval(cp.asarray([-0.01, 7, 100]), cp.linspace(0, 1023, 1024))
     data_dirty = data.copy()
     data_dirty[30] += 30
     data_dirty[60] += 60
-    clip = 16
+    clip = 65
     with warnings.catch_warnings(record=True):
         # continues to throw csr warning even when using csr format
         # ignore
-        fit = arpls_fitter(data_dirty)
-    cp.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], rtol=0.15)
+        fit = arpls_fitter(data_dirty, lam=20)
+    cp.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], atol=3)
 
 
 def test_poly_fitter():

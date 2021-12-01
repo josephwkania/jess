@@ -1,15 +1,18 @@
+"""
+Install jess.
+"""
 import glob
 
 from setuptools import find_packages, setup
 
-version = "0.0.1"
+from jess._version import __version__
 
-with open("requirements.txt") as f:
+with open("requirements.txt", encoding="UTF-8") as f:
     required = f.read().splitlines()
 
 setup(
     name="jess",
-    version=version,
+    version=__version__,
     packages=find_packages(),
     author="Joseph W Kania",
     scripts=glob.glob("bin/*"),

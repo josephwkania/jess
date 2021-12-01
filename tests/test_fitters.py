@@ -43,9 +43,9 @@ def test_arpls_fitter():
     data_dirty = data.copy()
     data_dirty[30] += 30
     data_dirty[60] += 60
-    clip = 16
+    clip = 17
     fit = arpls_fitter(data_dirty)
-    np.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], rtol=0.15)
+    np.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], atol=3)
 
 
 def test_bspline_fit():

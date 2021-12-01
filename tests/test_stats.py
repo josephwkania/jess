@@ -4,9 +4,10 @@ Tests for median_abs_deviation
 Stolen from scipy.stats.tests.test_stats.py
 and subject to the scipy license
 """
+import warnings
+
 import numpy as np
 import pytest
-import warnings
 from numpy.testing import (
     assert_allclose,
     assert_almost_equal,

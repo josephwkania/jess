@@ -15,7 +15,6 @@ import os
 import textwrap
 
 import numpy as np
-
 from rich.logging import RichHandler
 from rich.progress import track
 from your import Your
@@ -24,6 +23,7 @@ from your.utils.misc import YourArgparseFormatter
 
 try:
     import cupy as cp
+
     from jess.calculators_cupy import to_dtype
     from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
 
