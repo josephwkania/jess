@@ -17,9 +17,12 @@ with open("requirements.txt", encoding="UTF-8") as f:
 setup(
     name="jess",
     version=version,
-    packages=find_packages(),
+    description="Just in Time Elimination of Spurious Signals - jess",
+    url="https://github.com/josephwkania/jess",
     author="Joseph W Kania",
+    packages=find_packages(),
     scripts=glob.glob("bin/*"),
+    python_requires=">=3.6, <4",
     install_requires=required,
-    extras_require={"cupy": ["cupy>=9.2"]},
+    extras_require={"tests": ["pytest", "pytest-cov"], "cupy": ["cupy>=9.2"]},
 )

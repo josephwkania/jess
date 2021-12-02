@@ -1,4 +1,4 @@
-name: flake8-black
+name: flake8-black-pytest
 
 on: [push, pull_request]
 
@@ -22,10 +22,10 @@ jobs:
           python -m pip install --upgrade pip
       - name: Install it
         run: |
-          pip install .
+          pip install .[tests]
       - name: Install CI dependencies
         run: |
-          pip install flake8 black pytest pytest-cov
+          pip install flake8 black
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
