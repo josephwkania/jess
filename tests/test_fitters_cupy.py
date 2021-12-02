@@ -29,12 +29,12 @@ def test_arpls_fitter():
     data_dirty = data.copy()
     data_dirty[30] += 30
     data_dirty[60] += 60
-    clip = 65
+    clip = 17
     with warnings.catch_warnings(record=True):
         # continues to throw csr warning even when using csr format
         # ignore
         fit = arpls_fitter(data_dirty, lam=20)
-    cp.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], atol=3)
+    cp.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], rtol=0.5)
 
 
 def test_poly_fitter():
