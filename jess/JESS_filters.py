@@ -1016,7 +1016,10 @@ def skew_calculate_values(yr_file, window=64, time_median_kernel=0):
 
 
 def zero_dm(
-    dynamic_spectra: np.ndarray, bandpass: np.ndarray = None, copy: bool = False
+    dynamic_spectra: np.ndarray,
+    bandpass: np.ndarray = None,
+    return_same_dtype: bool = True,
+    intermediate_dtype: type = np.float32,
 ) -> np.ndarray:
     """
     Mask-safe zero-dm subtraction
@@ -1028,7 +1031,9 @@ def zero_dm(
         bandpass - Use if a large file is broken up into pieces.
                    Be careful about how you use this with masks.
 
-        copy: make a copy of the data instead of processing in place
+        intermediate_dtype - The data type to do the calculations
+
+        return_same_dtype: return the same data type as given
 
     returns:
         dynamic spectra with a (more) uniform zero time series
@@ -1063,17 +1068,18 @@ def zero_dm(
 
         https://sigpyproc3.readthedocs.io/en/latest/_modules/sigpyproc/Filterbank.html#Filterbank.removeZeroDM
     """
-    if copy:
-        dynamic_spectra = dynamic_spectra.copy()
     data_type = dynamic_spectra.dtype
 
-    time_series = np.ma.mean(dynamic_spectra, axis=1)
+    time_series = np.ma.mean(dynamic_spectra, axis=1).astype(intermediate_dtype)
     if bandpass is None:
         bandpass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
 
     dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
 
-    return to_dtype(dynamic_spectra, dtype=data_type)
+    if return_same_dtype:
+        return to_dtype(dynamic_spectra, dtype=data_type)
+
+    return dynamic_spectra
 
 
 def zero_dm_fft(

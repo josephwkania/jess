@@ -25,12 +25,12 @@ try:
     import cupy as cp
 
     from jess.calculators_cupy import to_dtype
-    from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
+    from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
 
     GPU_BACKEND = True
 except ModuleNotFoundError:
     from jess.calculators import to_dtype
-    from jess.JESS_filters import fft_mad, zero_dm_fft
+    from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
 
     GPU_BACKEND = False
 
@@ -56,7 +56,7 @@ def get_outfile(file: str, out_file: str) -> str:
     path, file_ext = os.path.splitext(out_file)
     if file_ext:
         if not file_ext == ".fil":
-            raise ValueError("I can only write .fil, you gave: %s!" % file_ext)
+            raise ValueError(f"I can only write .fil, you gave: {file_ext}!")
         return out_file
 
     out_file += ".fil"
@@ -110,10 +110,17 @@ def cpu_backend(
         # use one bandpass to prevent jumps
         if bandpass is None:
             logging.debug("Creating bandpass")
-            bandpass = np.ma.mean(data, axis=0)
+            # I had np.ma.mean here before but
+            # this isn't a masked array
+            bandpass = np.mean(data, axis=0)
+
         data = fft_mad(data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False)
-        if modes_to_zero is not None:
-            logging.debug("Zero DMing")
+
+        if modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            data = zero_dm(data, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             data = zero_dm_fft(
                 data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
@@ -167,15 +174,22 @@ def gpu_backend(
         # can't do this with the cupy zero dmer
         # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
 
+        data = cp.asarray(data)
+
         # use one bandpass to prevent jumps
         if bandpass is None:
             logging.debug("Creating bandpass")
-            bandpass = np.ma.mean(data, axis=0)
-        data = fft_mad(
-            cp.asarray(data), sigma=sigma, bad_chans=bad_chans, return_same_dtype=False
-        )
-        if modes_to_zero is not None:
-            logging.debug("Zero DMing")
+            # I had np.ma.mean here before but
+            # this isn't a masked array
+            bandpass = cp.mean(data, axis=0)
+
+        data = fft_mad(data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False)
+
+        if modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            data = zero_dm(data, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             data = zero_dm_fft(
                 data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
@@ -329,15 +343,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "-modes_to_zero",
         "--modes_to_zero",
-        help="Number of modes to zero",
+        help="Number of Fourier modes to zero, 0=No filter, 1=mean subtract, etc",
         type=int,
-        default=None,
+        default=0,
         required=False,
     )
     parser.add_argument(
         "-o",
         "--out_file",
-        help="output file, default: input filename with _zeroDM appended",
+        help="output file, default: input filename with _fft appended",
         type=str,
         default=None,
         required=False,

@@ -379,6 +379,76 @@ def mad_spectra_flat(
     return flattened
 
 
+def zero_dm(
+    dynamic_spectra: cp.ndarray,
+    bandpass: cp.ndarray = None,
+    return_same_dtype: bool = True,
+    intermediate_dtype: type = cp.float32,
+) -> cp.ndarray:
+    """
+    Mask-safe zero-dm subtraction
+
+    args:
+        dynamic_spectra: The data you want to zero-dm, expects times samples
+                         on the vertical axis. Accepts numpy.ma.arrays.
+
+        bandpass - Use if a large file is broken up into pieces.
+                   Be careful about how you use this with masks.
+
+        intermediate_dtype - The data type to do the calculations
+
+        return_same_dtype: return the same data type as given
+
+    returns:
+        dynamic spectra with a (more) uniform zero time series
+
+    note:
+        This should masked values. I am mainly conserned with bad data being spread out
+        ny the filter, and this ignores masked values when calculating time series
+        and bandpass
+
+        The CPU version of this uses np.ma, this isn't available form cupy, so I
+        don't use it here. This doesn't seem when writing this.
+
+    example:
+        yr = Your("some.fil")
+        dynamic_spectra = yr.get_data(744000, 2 ** 14)
+
+        mask = np.zeros(yr.your_header.nchans, dtype=bool)
+        mask[0:100] = True # mask the first hundred channels
+
+        dynamic_spectra = np.ma.array(dynamic_spectra,
+                                        mask=np.broadcast_to(dynamic_spectra.shape))
+        cleaned = zero_dm(dynamic_spectra)
+
+    from:
+        "An interference removal technique for radio pulsar searches" R.P Eatough 2009
+
+    see:
+        https://github.com/SixByNine/sigproc/blob/28ba4f4539d41a8722c6ed194fa66e87bf4610fc/src/zerodm.c#L195
+
+        https://sourceforge.net/p/heimdall-astro/code/ci/master/tree/Pipeline/clean_filterbank_rfi.cu
+
+        https://github.com/scottransom/presto/blob/de2cf58262190d35fb37dbebf8308a6e29d72adf/src/zerodm.c
+
+        https://github.com/thepetabyteproject/your/blob/1f4b39326835e6bb87e0003318b433dc1455a137/your/writer.py#L232
+
+        https://sigpyproc3.readthedocs.io/en/latest/_modules/sigpyproc/Filterbank.html#Filterbank.removeZeroDM
+    """
+    data_type = dynamic_spectra.dtype
+
+    time_series = cp.mean(dynamic_spectra, axis=1).astype(intermediate_dtype)
+    if bandpass is None:
+        bandpass = cp.mean(dynamic_spectra, axis=0)
+
+    dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
+
+    if return_same_dtype:
+        return to_dtype(dynamic_spectra, dtype=data_type)
+
+    return dynamic_spectra
+
+
 def zero_dm_fft(
     dynamic_spectra: cp.ndarray,
     bandpass: cp.ndarray = None,
