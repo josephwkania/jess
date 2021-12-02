@@ -43,7 +43,7 @@ def test_arpls_fitter():
     data_dirty = data.copy()
     data_dirty[30] += 30
     data_dirty[60] += 60
-    clip = 17
+    clip = 37
     fit = arpls_fitter(data_dirty)
     np.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], atol=3)
 
