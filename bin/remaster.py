@@ -13,6 +13,7 @@ import logging
 import os
 import textwrap
 
+import numpy as np
 from rich.logging import RichHandler
 from rich.progress import track
 from your import Your
@@ -26,13 +27,13 @@ try:
 
     from jess.calculators_cupy import to_dtype
     from jess.dispersion_cupy import dedisperse, delay_lost
-    from jess.JESS_filters_cupy import fft_mad, mad_spectra_flat, zero_dm_fft
+    from jess.JESS_filters_cupy import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
     from jess.calculators import to_dtype
     from jess.dispersion import dedisperse, delay_lost
-    from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm_fft
+    from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
 
     BACKEND_GPU = False
 
@@ -103,6 +104,10 @@ def clean_cpu(
 
     logging.debug("Using CPU backend")
 
+    # need a bandpass if we do zero_dming, put outside the loop
+    if modes_to_zero > 1:
+        bandpass = np.array([flatten_to] * yr_input.your_header.nchans)
+
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
@@ -128,9 +133,13 @@ def clean_cpu(
             return_same_dtype=False,
         )
 
-        if modes_to_zero > 0:
+        if modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            cleaned = zero_dm(cleaned, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             cleaned = zero_dm_fft(
-                cleaned, modes_to_zero=modes_to_zero, return_same_dtype=False
+                cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
 
         # Keep full precision until done
@@ -178,6 +187,10 @@ def clean_gpu(
 
     logging.debug("Using GPU backend")
 
+    # need a bandpass if we do zero_dming, put outside the loop
+    if modes_to_zero > 1:
+        bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
+
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
@@ -203,9 +216,13 @@ def clean_gpu(
             return_same_dtype=False,
         )
 
-        if modes_to_zero > 0:
+        if modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            cleaned = zero_dm(cleaned, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             cleaned = zero_dm_fft(
-                cleaned, modes_to_zero=modes_to_zero, return_same_dtype=False
+                cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
 
         # Keep full precision until done
