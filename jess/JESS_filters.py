@@ -971,6 +971,7 @@ def arpls_sumthreshold(
 
     Note:
         From http://zmtt.bao.ac.cn/GPPS/RFI/
+        Cite: https://ui.adsabs.harvard.edu/abs/2021MNRAS.500.2969Z
     """
 
     # Find bandpass and then use ArPLS to estimate
@@ -1020,7 +1021,7 @@ def sumthreasthold(
     mask: np.ndarray = None,
     eta_i: List[float] = (0.5, 0.55, 0.62, 0.75, 1),
     chi_1: float = 35000,
-    normalize_standing_waves: bool = True,
+    normalize_standing_waves: bool = False,
     suppress_dilation: bool = False,
     sm_kwargs: Dict = None,
     di_kwargs: Dict = None,
@@ -1055,13 +1056,14 @@ def sumthreasthold(
     Note:
         From
         https://cosmo-gitlab.phys.ethz.ch/cosmo_public/seek/-/blob/master/seek/mitigation/sum_threshold.py
+        Cite https://arxiv.org/abs/1607.07443
     """
 
     if mask is None:
         mask = np.zeros_like(dynamic_spectra, dtype=bool)
 
-    if sm_kwargs is None:
-        sm_kwargs = sm.get_sm_kwargs()
+    # if sm_kwargs is None:
+    #     sm_kwargs = sm.get_sm_kwargs()
 
     # if plotting: sum_threshold_utils.plot_moments(data)
 
@@ -1083,7 +1085,6 @@ def sumthreasthold(
             eta=eta,
             n_iter=pixel_powers,
             chi_i=chi_i,
-            sm_kwargs=sm_kwargs,
         )
 
     dilated_mask = st_mask

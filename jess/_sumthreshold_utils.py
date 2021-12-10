@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
 Utils for Sumthreshold
+
+Most of these functions are from
+https://cosmo-gitlab.phys.ethz.ch/cosmo_public/seek/
+Cite https://arxiv.org/abs/1607.07443
+
+or
+http://zmtt.bao.ac.cn/GPPS/RFI/
+Cite: https://ui.adsabs.harvard.edu/abs/2021MNRAS.500.2969Z
 """
 
 from typing import Dict, List
@@ -83,7 +91,7 @@ def _gaussian_filter(
     window_size_0: int,
 ):
     """
-    Apply Guassain filter to Dysnamic spectra
+    Apply Gaussain filter to Dysnamic spectra
 
     Args:
         dynamic_spectra_pad - Dynamic spectra padded to include kernel sizes
@@ -109,7 +117,7 @@ def _gaussian_filter(
         window_size_0 - Kernel window size for axis 0
 
     Returns:
-        Guassian filtere 2D ndarray
+        Guassian filtered 2D ndarray
 
     Note:
         based on
@@ -300,7 +308,7 @@ def get_sm_kwargs(
         From
         https://cosmo-gitlab.phys.ethz.ch/cosmo_public/seek/-/blob/master/seek/mitigation/sum_threshold.py
     """
-    return dict(M=kernel_m, N=kernel_n, sigma_m=sigma_m, sigma_n=sigma_n)
+    return dict(kernel_m=kernel_m, kernel_n=kernel_n, sigma_m=sigma_m, sigma_n=sigma_n)
 
 
 def ksigma(dynamic_spectra: np.ndarray) -> np.ndarray:
@@ -422,7 +430,7 @@ def run_sumthreshold(
     eta: float,
     n_iter: int,
     chi_i: List[float],
-    sm_kwargs: Dict,
+    # sm_kwargs: Dict,
 ) -> np.ndarray:
     """
     Perform one SumThreshold operation: sum the un-masked data after
@@ -449,7 +457,7 @@ def run_sumthreshold(
         https://github.com/cosmo-ethz/seek/blob/master/seek/mitigation/sum_threshold.py
     """
 
-    smoothed_dynamic = gaussian_filter(dynamic_spectra, init_mask, **sm_kwargs)
+    smoothed_dynamic = gaussian_filter(dynamic_spectra, init_mask)
     res = dynamic_spectra - smoothed_dynamic
 
     st_mask = init_mask.copy()
