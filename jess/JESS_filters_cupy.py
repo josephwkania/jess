@@ -187,8 +187,7 @@ def mad_spectra(
     for jsub in np.arange(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = poly_fitter(
-            cp.median(dynamic_spectra[subband], axis=0),
-            chans_per_fit=chans_per_fit,
+            cp.median(dynamic_spectra[subband], axis=0), chans_per_fit=chans_per_fit,
         )
         # .astype(data_type)
 
@@ -200,12 +199,7 @@ def mad_spectra(
         try:  # sometimes this fails to converge, if happens use original fit
             fit_clean = poly_fitter(
                 cp.nanmedian(
-                    cp.where(
-                        mask[subband],
-                        dynamic_spectra[subband],
-                        np.nan,
-                    ),
-                    axis=0,
+                    cp.where(mask[subband], dynamic_spectra[subband], np.nan,), axis=0,
                 ),
                 chans_per_fit=chans_per_fit,
             )
@@ -215,9 +209,7 @@ def mad_spectra(
             )
             fit_clean = fit
         dynamic_spectra[subband] = cp.where(
-            mask[subband],
-            dynamic_spectra[subband],
-            fit_clean,
+            mask[subband], dynamic_spectra[subband], fit_clean,
         )
 
     logging.info("Masking %.2f %%", (1 - mask.mean()) * 100)
@@ -238,7 +230,7 @@ def mad_spectra_flat(
     time_median_size: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
-    no_time_deternd: bool = False,
+    no_time_detrend: bool = False,
 ) -> cp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -266,7 +258,7 @@ def mad_spectra_flat(
 
        return_same_dtype: return the same data type as given
 
-       no_time_deterend: Don't deterend in time, useful fo low dm
+       no_time_detrend: Don't deterend in time, useful fo low dm
                          where pulse>%50 of the channel
 
     Returns:
@@ -282,12 +274,16 @@ def mad_spectra_flat(
     """
 
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
 
-    if not iinfo.min < flatten_to < iinfo.max:
+    if cp.issubdtype(data_type, cp.integer):
+        info = cp.iinfo(data_type)
+    else:
+        info = cp.finfo(data_type)
+
+    if not info.min < flatten_to < info.max:
         raise ValueError(
             f"""Can't flatten {data_type}, which has a range
-            [{iinfo.min}, {iinfo.max}, to {flatten_to}"""
+            [{info.min}, {info.max}, to {flatten_to}"""
         )
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
@@ -361,7 +357,7 @@ def mad_spectra_flat(
     )
     flattened[mask] = flatten_to
 
-    if no_time_deternd:
+    if no_time_detrend:
         logging.debug("Adding time series back.")
         time_series = ts0 + ts1 + ts2
         # subtract off the median, this takes care of big
@@ -518,9 +514,7 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = cp.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[
-        :modes_to_zero,
-    ] = True
+    mask[:modes_to_zero,] = True
 
     # masking complex number, multiply by two
     logging.info("Masked Percentage: %.2f %%", 2 * 100 * mask.mean())

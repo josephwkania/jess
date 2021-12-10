@@ -642,8 +642,7 @@ def mad_spectra(
                 dynamic_spectra[subband], mask=mask[subband]
             )
             fit_clean = fitter(
-                np.ma.median(masked_arr, axis=0),
-                chans_per_fit=chans_per_fit,
+                np.ma.median(masked_arr, axis=0), chans_per_fit=chans_per_fit,
             )
         except Exception as excpt:
             logging.warning(
@@ -674,7 +673,7 @@ def mad_spectra_flat(
     time_median_size: int = 0,
     return_mask: bool = False,
     return_same_dtype: bool = True,
-    no_time_deterned: bool = False,
+    no_time_detrend: bool = False,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -702,7 +701,7 @@ def mad_spectra_flat(
 
        return_same_dtype: return the same data type as given
 
-       no_time_deterend: Don't deterend in time, useful fo low dm
+       no_time_detrend: Don't deterend in time, useful fo low dm
                          where pulse>%50 of the channel
 
     Returns:
@@ -718,12 +717,15 @@ def mad_spectra_flat(
     """
 
     data_type = dynamic_spectra.dtype
-    iinfo = np.iinfo(data_type)
+    if np.issubdtype(data_type, np.integer):
+        info = np.iinfo(data_type)
+    else:
+        info = np.finfo(data_type)
 
-    if not iinfo.min < flatten_to < iinfo.max:
+    if not info.min < flatten_to < info.max:
         raise ValueError(
             f"""Can't flatten {data_type}, which has a range
-            [{iinfo.min}, {iinfo.max}, to {flatten_to}"""
+            [{info.min}, {info.max}, to {flatten_to}"""
         )
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
@@ -795,7 +797,7 @@ def mad_spectra_flat(
     )
     flattened[mask] = flatten_to
 
-    if no_time_deterned:
+    if no_time_detrend:
         time_series = ts0 + ts1 + ts2
         time_series = time_series - np.median(time_series)
         flattened = flattened + time_series[:, None]
@@ -952,10 +954,7 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
-def arpls_sumthreshold(
-    dynamic_spectra: np.ndarray,
-    max_pixels: int = 8,
-) -> np.ndarray:
+def arpls_sumthreshold(dynamic_spectra: np.ndarray, max_pixels: int = 8,) -> np.ndarray:
     """
     Computes a mask to cover the RFI in a data set based on ArPLS-ST.
 
@@ -987,11 +986,7 @@ def arpls_sumthreshold(
     pixel_range = np.arange(1, max_pixels)
     pixel_powers = 2 ** (pixel_range - 1)
 
-    line_mask = sm.run_sumthreshold_arpls(
-        diff,
-        n_iter=pixel_powers,
-        chi_i=2 * popt,
-    )
+    line_mask = sm.run_sumthreshold_arpls(diff, n_iter=pixel_powers, chi_i=2 * popt,)
 
     line_index = np.where(line_mask)[0]
     final_curve = freq_mean.copy()
@@ -1298,9 +1293,7 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = np.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[
-        :modes_to_zero,
-    ] = True
+    mask[:modes_to_zero,] = True
 
     # complex data, we are projecting two numbers
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)

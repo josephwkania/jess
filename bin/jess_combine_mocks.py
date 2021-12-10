@@ -103,13 +103,15 @@ def mad_clean(
                 1 = DC, etc
 
     Returns:
-        cleaned dynanic spectra
+        cleaned dynamic spectra
 
     """
     logging.debug("MAD + FFT MADing the subband")
 
     if modes_to_zero <= -1:
         no_time_detrend = True
+    else:
+        no_time_detrend = False
 
     cleaned = mad_spectra_flat(
         dynamic_spectra,
@@ -118,7 +120,7 @@ def mad_clean(
         flatten_to=flatten_to,
         time_median_size=time_median_size,
         return_same_dtype=False,
-        no_time_deternd=no_time_detrend,
+        no_time_detrend=no_time_detrend,
     )
     cleaned = fft_mad(
         cleaned,
@@ -232,7 +234,7 @@ def read_and_combine_subint(
         ),
         axis=1,
     )
-    nchans, _ = data.shape
+    _, nchans = data.shape
 
     bandpass = xp.array([flatten_to] * nchans)
     if modes_to_zero == 1:
@@ -395,8 +397,8 @@ def combine(f1, f2, modes_to_zero, nstart=0, nsamp=100, outdir=None, filfile=Non
     del y1
     del y2
 
-    if lowband_obj.foff < 0 or upband_obj.foff < 0:
-        raise AttributeError("Negative channel_bandwidth in Mock fits not supported.")
+    # if lowband_obj.foff < 0 or upband_obj.foff < 0:
+    #     raise AttributeError("Negative channel_bandwidth in Mock fits not supported.")
 
     low_header = vars(lowband_obj.your_header)
     up_header = vars(upband_obj.your_header)
@@ -774,9 +776,7 @@ if __name__ == "__main__":
     if not values.no_log_file:
         if values.verbose:
             logging.basicConfig(
-                filename=log_filename,
-                level=logging.DEBUG,
-                format=LOGGING_FORMAT,
+                filename=log_filename, level=logging.DEBUG, format=LOGGING_FORMAT,
             )
         else:
             logging.basicConfig(
@@ -802,8 +802,7 @@ if __name__ == "__main__":
 
     if values.all_files:
         all_files(
-            values.all_files,
-            outdir=values.outdir,
+            values.all_files, outdir=values.outdir,
         )
     elif not (values.first_band and values.second_band):
         print(
