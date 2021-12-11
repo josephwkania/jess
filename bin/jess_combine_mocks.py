@@ -80,10 +80,9 @@ def calc_skipchan(lowband_obj, upband_obj):
 def mad_clean(
     dynamic_spectra: np.ndarray,
     flatten_to: int,
-    time_median_size: float = 3,
     sigma: float = 5,
-    channels_per_subband: int = 128,
-    modes_to_zero: int = 0,
+    time_median_size: float = 3,
+    channels_per_subband: int = 64,
 ) -> np.ndarray:
     """
     Uses time domain MAD, then Fourier Domain MAD to
@@ -106,12 +105,12 @@ def mad_clean(
         cleaned dynamic spectra
 
     """
-    logging.debug("MAD + FFT MADing the subband")
-
-    if modes_to_zero <= -1:
-        no_time_detrend = True
-    else:
-        no_time_detrend = False
+    logging.debug(
+        "MAD + FFT MAD, sigma=%f, chans_per_sub=%i, time_median_size=%i",
+        sigma,
+        channels_per_subband,
+        time_median_size,
+    )
 
     cleaned = mad_spectra_flat(
         dynamic_spectra,
@@ -120,7 +119,7 @@ def mad_clean(
         flatten_to=flatten_to,
         time_median_size=time_median_size,
         return_same_dtype=False,
-        no_time_detrend=no_time_detrend,
+        no_time_detrend=True,
     )
     cleaned = fft_mad(
         cleaned,
@@ -133,7 +132,15 @@ def mad_clean(
 
 
 def read_and_combine_subint(
-    lowband_obj, upband_obj, fsub, upchanskip, lowchanskip, modes_to_zero
+    lowband_obj,
+    upband_obj,
+    fsub,
+    upchanskip,
+    lowchanskip,
+    sigma,
+    time_median_size,
+    channels_per_subband,
+    modes_to_zero,
 ):
     """
     Reads data for a subint for both bands, applies
@@ -214,28 +221,41 @@ def read_and_combine_subint(
         dtype = xp.uint8
     else:
         logging.warning("Not tested, unpredictable results!")
-        flatten_to = cp.median(upsub_data)
+        flatten_to = xp.median(upsub_data)
         logging.info(
             "Less than 8 bit, guessing %.2f is a good number to flatten to ", flatten_to
         )
         scale = 1.0
         dtype = xp.uint8
 
-    lowsub_data = mad_clean(lowsub_data, flatten_to=flatten_to)
-    upsub_data = mad_clean(upsub_data, flatten_to=flatten_to)
+    lowsub_data = mad_clean(
+        lowsub_data,
+        flatten_to=flatten_to,
+        sigma=sigma,
+        time_median_size=time_median_size,
+        channels_per_subband=channels_per_subband,
+    )
+    upsub_data = mad_clean(
+        upsub_data,
+        flatten_to=flatten_to,
+        sigma=sigma,
+        time_median_size=time_median_size,
+        channels_per_subband=channels_per_subband,
+    )
 
     logger.debug("Combining data from relevant channels from upper and lower bands")
     # Note freq are not exactly same in the two subbands.
     # Assuming fch1 and channel_bandwidth from lower band.
     # The exact freq in upperband will vary
-    data = xp.flip(
-        xp.concatenate(
-            (lowsub_data[:, :-lowchanskip], upsub_data[:, upchanskip:]), axis=1
-        ),
-        axis=1,
+    data = xp.concatenate(
+        (upsub_data[:, :-upchanskip], lowsub_data[:, lowchanskip:],), axis=1
     )
-    _, nchans = data.shape
 
+    # data = xp.flip(data,
+    #    axis=1,
+    # )
+
+    _, nchans = data.shape
     bandpass = xp.array([flatten_to] * nchans)
     if modes_to_zero == 1:
         logging.debug("Zero DMing: Subtracting Mean")
@@ -247,15 +267,13 @@ def read_and_combine_subint(
         )
 
     data -= xp.mean(data)
-    data += flatten_to
-
     data /= xp.std(data)
     data *= scale
+    data += flatten_to
 
     data = to_dtype(data, dtype=dtype)
     if BACKEND_GPU:
-        data = data.get()
-
+        return data.get()
     return data
 
 
@@ -375,7 +393,18 @@ def write_fil(data, lowband_obj, upband_obj, filename=None, outdir=None):
     logger.info("Successfully written data to Filterbank file: %s", filfile)
 
 
-def combine(f1, f2, modes_to_zero, nstart=0, nsamp=100, outdir=None, filfile=None):
+def combine(
+    f1,
+    f2,
+    sigma,
+    time_median_size,
+    channels_per_subband,
+    modes_to_zero,
+    nstart=0,
+    nsamp=100,
+    outdir=None,
+    filfile=None,
+):
     """
     combines data from two subbands from Mock spectrometer
     and writes out a Filterbank file.
@@ -550,7 +579,15 @@ def combine(f1, f2, modes_to_zero, nstart=0, nsamp=100, outdir=None, filfile=Non
 
         try:
             data = read_and_combine_subint(
-                lowband_obj, upband_obj, fsub, upchanskip, lowchanskip, modes_to_zero
+                lowband_obj,
+                upband_obj,
+                fsub,
+                upchanskip,
+                lowchanskip,
+                sigma,
+                time_median_size,
+                channels_per_subband,
+                modes_to_zero,
             )
         except KeyError:
             logger.warning("Encountered KeyError, maybe mmap'd object was delected")
@@ -575,7 +612,15 @@ def combine(f1, f2, modes_to_zero, nstart=0, nsamp=100, outdir=None, filfile=Non
             )
 
             data = read_and_combine_subint(
-                lowband_obj, upband_obj, fsub, upchanskip, lowchanskip, modes_to_zero
+                lowband_obj,
+                upband_obj,
+                fsub,
+                upchanskip,
+                lowchanskip,
+                sigma,
+                time_median_size,
+                channels_per_subband,
+                modes_to_zero,
             )
 
         if skip != 0 and isub == startsub:
@@ -663,6 +708,9 @@ def all_files(direct, outdir):
         combine(
             glob.glob(names[out][0]),
             glob.glob(names[out][1]),
+            sigma=values.sigma,
+            time_median_size=values.time_median_size,
+            channels_per_subband=values.channels_per_subband,
             modes_to_zero=values.modes_to_zero,
             nstart=values.nstart,
             nsamp=values.nsamp,
@@ -814,6 +862,9 @@ if __name__ == "__main__":
         combine(
             glob.glob(values.first_band),
             glob.glob(values.second_band),
+            sigma=values.sigma,
+            time_median_size=values.time_median_size,
+            channels_per_subband=values.channels_per_subband,
             modes_to_zero=values.modes_to_zero,
             nstart=values.nstart,
             nsamp=values.nsamp,
