@@ -187,7 +187,8 @@ def mad_spectra(
     for jsub in np.arange(0, num_subbands):
         subband = np.index_exp[:, limits[jsub] : limits[jsub + 1]]
         fit = poly_fitter(
-            cp.median(dynamic_spectra[subband], axis=0), chans_per_fit=chans_per_fit,
+            cp.median(dynamic_spectra[subband], axis=0),
+            chans_per_fit=chans_per_fit,
         )
         # .astype(data_type)
 
@@ -199,7 +200,12 @@ def mad_spectra(
         try:  # sometimes this fails to converge, if happens use original fit
             fit_clean = poly_fitter(
                 cp.nanmedian(
-                    cp.where(mask[subband], dynamic_spectra[subband], np.nan,), axis=0,
+                    cp.where(
+                        mask[subband],
+                        dynamic_spectra[subband],
+                        np.nan,
+                    ),
+                    axis=0,
                 ),
                 chans_per_fit=chans_per_fit,
             )
@@ -209,7 +215,9 @@ def mad_spectra(
             )
             fit_clean = fit
         dynamic_spectra[subband] = cp.where(
-            mask[subband], dynamic_spectra[subband], fit_clean,
+            mask[subband],
+            dynamic_spectra[subband],
+            fit_clean,
         )
 
     logging.info("Masking %.2f %%", (1 - mask.mean()) * 100)
@@ -514,7 +522,9 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = cp.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[:modes_to_zero,] = True
+    mask[
+        :modes_to_zero,
+    ] = True
 
     # masking complex number, multiply by two
     logging.info("Masked Percentage: %.2f %%", 2 * 100 * mask.mean())

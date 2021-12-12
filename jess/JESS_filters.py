@@ -642,7 +642,8 @@ def mad_spectra(
                 dynamic_spectra[subband], mask=mask[subband]
             )
             fit_clean = fitter(
-                np.ma.median(masked_arr, axis=0), chans_per_fit=chans_per_fit,
+                np.ma.median(masked_arr, axis=0),
+                chans_per_fit=chans_per_fit,
             )
         except Exception as excpt:
             logging.warning(
@@ -954,7 +955,10 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
-def arpls_sumthreshold(dynamic_spectra: np.ndarray, max_pixels: int = 8,) -> np.ndarray:
+def arpls_sumthreshold(
+    dynamic_spectra: np.ndarray,
+    max_pixels: int = 8,
+) -> np.ndarray:
     """
     Computes a mask to cover the RFI in a data set based on ArPLS-ST.
 
@@ -986,7 +990,11 @@ def arpls_sumthreshold(dynamic_spectra: np.ndarray, max_pixels: int = 8,) -> np.
     pixel_range = np.arange(1, max_pixels)
     pixel_powers = 2 ** (pixel_range - 1)
 
-    line_mask = sm.run_sumthreshold_arpls(diff, n_iter=pixel_powers, chi_i=2 * popt,)
+    line_mask = sm.run_sumthreshold_arpls(
+        diff,
+        n_iter=pixel_powers,
+        chi_i=2 * popt,
+    )
 
     line_index = np.where(line_mask)[0]
     final_curve = freq_mean.copy()
@@ -1293,7 +1301,9 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = np.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[:modes_to_zero,] = True
+    mask[
+        :modes_to_zero,
+    ] = True
 
     # complex data, we are projecting two numbers
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)
