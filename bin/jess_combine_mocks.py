@@ -231,20 +231,21 @@ def read_and_combine_subint(
         scale = 1.0
         dtype = xp.uint8
 
-    lowsub_data = mad_clean(
-        lowsub_data,
-        flatten_to=flatten_to,
-        sigma=sigma,
-        time_median_size=time_median_size,
-        channels_per_subband=channels_per_subband,
-    )
-    upsub_data = mad_clean(
-        upsub_data,
-        flatten_to=flatten_to,
-        sigma=sigma,
-        time_median_size=time_median_size,
-        channels_per_subband=channels_per_subband,
-    )
+    if sigma > 0:
+        lowsub_data = mad_clean(
+            lowsub_data,
+            flatten_to=flatten_to,
+            sigma=sigma,
+            time_median_size=time_median_size,
+            channels_per_subband=channels_per_subband,
+        )
+        upsub_data = mad_clean(
+            upsub_data,
+            flatten_to=flatten_to,
+            sigma=sigma,
+            time_median_size=time_median_size,
+            channels_per_subband=channels_per_subband,
+        )
 
     logger.debug("Combining data from relevant channels from upper and lower bands")
     # Note freq are not exactly same in the two subbands.
@@ -778,7 +779,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-sig",
         "--sigma",
-        help="Sigma at which to cut data",
+        help="Sigma at which to excise data, -1 for no cleaning",
         type=float,
         default=5.0,
         required=False,
