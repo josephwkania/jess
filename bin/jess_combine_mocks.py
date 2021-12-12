@@ -33,6 +33,7 @@ except ModuleNotFoundError:
     from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
 
     BACKEND_GPU = False
+    logging.warning("Cupy not avaliable, using CPU!")
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,13 @@ def calc_skipchan(lowband_obj, upband_obj):
     logger.debug(
         "Calculating number of frequency channels to skip in upper and lower band."
     )
-    df = lowband_obj.bw / lowband_obj.nchans
+    chan_bandwidth = lowband_obj.bw / lowband_obj.nchans
     upperfreqoflower = lowband_obj.chan_freqs.max()
     lowerfreqofupper = upband_obj.chan_freqs.min()
-    nextfromlower = upperfreqoflower + np.abs(df)
-    numchandiff = int(np.round((nextfromlower - lowerfreqofupper) / np.abs(df)))
+    nextfromlower = upperfreqoflower + np.abs(chan_bandwidth)
+    numchandiff = int(
+        np.round((nextfromlower - lowerfreqofupper) / np.abs(chan_bandwidth))
+    )
     chanskip = numchandiff if numchandiff > 0 else 0
     (upchanskip, lowchanskip) = (
         (chanskip // 2, chanskip // 2 + 1)
@@ -207,9 +210,9 @@ def read_and_combine_subint(
         logging.debug("Using GPU")
         upsub_data = cp.asarray(upsub_data)
         lowsub_data = cp.asarray(lowsub_data)
-        xp = cp
+        xp = cp  # pylint: disable=invalid-name
     else:
-        xp = np
+        xp = np  # pylint: disable=invalid-name
 
     if lowband_obj.nbits == 16:
         flatten_to = 2 ** 15
@@ -394,8 +397,8 @@ def write_fil(data, lowband_obj, upband_obj, filename=None, outdir=None):
 
 
 def combine(
-    f1,
-    f2,
+    file1,
+    file2,
     sigma,
     time_median_size,
     channels_per_subband,
@@ -410,21 +413,23 @@ def combine(
     and writes out a Filterbank file.
 
     Args:
-        f1: List of files from one subband
-        f2: List of files from other subband
+        file1: List of files from one subband
+        file2: List of files from other subband
         nstart: Starting sample
         nsamp: number of samples to read
         outdir: Output directory for Filterbank file
         filfile: Name of the Filterbank file to write to
 
     """
-    y1 = Your(f1)
-    y2 = Your(f2)
+    your1 = Your(file1)
+    your2 = Your(file2)
     (lowband_obj, upband_obj) = (
-        (y1, y2) if y1.chan_freqs.max() < y2.chan_freqs.max() else (y2, y1)
+        (your1, your2)
+        if your1.chan_freqs.max() < your2.chan_freqs.max()
+        else (your2, your1)
     )
-    del y1
-    del y2
+    del your1
+    del your2
 
     # if lowband_obj.foff < 0 or upband_obj.foff < 0:
     #     raise AttributeError("Negative channel_bandwidth in Mock fits not supported.")
@@ -436,14 +441,9 @@ def combine(
     logger.debug("Header of upband file is: %s", up_header)
 
     for key in low_header.keys():
-        if (
-            key == "filelist"
-            or key == "filename"
-            or key == "center_freq"
-            or key == "fch1"
-        ):
+        if key in ("filelist", "filename", "center_freq", "fch1"):
             continue
-        elif key == "ra_deg" or key == "dec_deg" or key == "gl" or key == "gb":
+        if key in ("ra_deg", "dec_deg", "gl", "gb"):
             hpbw = (
                 57.3 * 3 * 10 ** 8 / (low_header["center_freq"] * 10 ** 6 * 200)
             )  # deg
@@ -451,9 +451,8 @@ def combine(
                 raise ValueError(
                     f"Value of {key} in the two bands differ by more than 10% FWHM"
                 )
-            else:
-                continue
-        elif key == "basename":
+            continue
+        if key == "basename":
             up_base = ".".join(up_header["basename"].split(".")[:-2])
             low_base = ".".join(low_header["basename"].split(".")[:-2])
             if up_base != low_base:
@@ -590,7 +589,7 @@ def combine(
                 modes_to_zero,
             )
         except KeyError:
-            logger.warning("Encountered KeyError, maybe mmap'd object was delected")
+            logger.warning("Encountered KeyError, maybe mmap'd object was deleted")
             logger.debug(
                 "Trying to open files %s and %s",
                 lowband_obj.filename,
@@ -660,8 +659,8 @@ def all_files(direct, outdir):
     direct = os.path.join(direct, "")
     outdir = os.path.join(outdir, "")
     logger.debug("Looking for file pairs.")
-    for af in glob.glob(direct + "*.fits"):
-        base_name = os.path.basename(af)
+    for a_fits in glob.glob(direct + "*.fits"):
+        base_name = os.path.basename(a_fits)
         split = base_name.split(".")
         file_one = (
             direct
@@ -704,10 +703,10 @@ def all_files(direct, outdir):
         )
         names[out_file] = [file_one, file_two]
     logger.info("Found %i file pairs, combing.", len(names.keys()))
-    for out in names:
+    for out, files in names.items():
         combine(
-            glob.glob(names[out][0]),
-            glob.glob(names[out][1]),
+            glob.glob(files[0]),
+            glob.glob(files[1]),
             sigma=values.sigma,
             time_median_size=values.time_median_size,
             channels_per_subband=values.channels_per_subband,
