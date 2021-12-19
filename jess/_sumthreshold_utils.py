@@ -47,7 +47,6 @@ def blob_mitigation(
     baseline: np.ndarray,
     line_mask: np.ndarray,
     threshold: float,
-    n_iter: int,
 ) -> np.ndarray:
     """
     The function to identify the blob RFI
@@ -70,13 +69,14 @@ def blob_mitigation(
     valid_index = np.where(~line_mask)[0]
     valid_data = dynamic_spectra - baseline
     valid_data = valid_data[:, valid_index]
-    point_mask_temp = run_sumthreshold_arpls(valid_data, n_iter=n_iter, chi_i=threshold)
+    point_mask_temp = run_sumthreshold_arpls(valid_data, chi_1=threshold)
     point_mask = np.zeros_like(dynamic_spectra, dtype=bool)
     point_mask[:, valid_index] = point_mask_temp
 
     return point_mask
 
 
+@njit
 def _gaussian_filter(
     dynamic_spectra_pad: np.ndarray,
     n_spectra: int,
@@ -87,11 +87,11 @@ def _gaussian_filter(
     dynamic_filtered_2: np.ndarray,
     kernel_0: np.ndarray,
     kernel_1: np.ndarray,
-    window_size_1: int,
-    window_size_0: int,
+    m_size: int,
+    n_size: int,
 ):
     """
-    Apply Gaussain filter to Dysnamic spectra
+    Apply Gaussian filter to Dynamic spectra
 
     Args:
         dynamic_spectra_pad - Dynamic spectra padded to include kernel sizes
@@ -112,53 +112,50 @@ def _gaussian_filter(
 
         kernel_1 - Kernel for axis 1
 
-        window_size_1 - Kernel window size for axis 1
+        m_size - Kernel window size for axis 1
 
-        window_size_0 - Kernel window size for axis 0
+        n_size - Kernel window size for axis 0
 
     Returns:
-        Guassian filtered 2D ndarray
+        Gaussian filter 2D ndarray
 
     Note:
         based on
         https://github.com/cosmo-ethz/seek/blob/master/seek/utils/filter.py
     """
-    # pylint: disable=not-an-iterable, invalid-name
-    # pylingt can't see that prange is iterable
-    window_0_half = window_size_0 // 2
-    window_1_half = window_size_1 // 2
-    for i in prange((window_0_half), n_spectra + (window_0_half)):
-        for j in prange((window_1_half), n_chan + (window_1_half)):
-            if mask[i - window_0_half, j - window_1_half]:
-                dynamic_filtered[i, j] = 0  # V[i-n2, j-m2]
+    # pylint: disable=not-an-iterable
+    n_half = n_size // 2
+    m_half = m_size // 2
+    for i in prange((n_half), n_spectra + (n_half)):
+        for j in prange((m_half), n_chan + (m_half)):
+            if mask[i - n_half, j - m_half]:
+                dynamic_filtered[i, j] = 0  # V[i-n_half, j-m_half]
             else:
                 val = np.sum(
                     (
-                        mask_pad[i - window_0_half : i + window_0_half + 1, j]
-                        * dynamic_spectra_pad[
-                            i - window_0_half : i + window_0_half + 1, j
-                        ]
+                        mask_pad[i - n_half : i + n_half + 1, j]
+                        * dynamic_spectra_pad[i - n_half : i + n_half + 1, j]
                         * kernel_0
                     )
                 )
                 dynamic_filtered[i, j] = val / np.sum(
-                    mask_pad[i - window_0_half : i + window_0_half + 1, j] * kernel_0
+                    mask_pad[i - n_half : i + n_half + 1, j] * kernel_0
                 )
 
-    for k in prange((window_1_half), n_chan + (window_1_half)):
-        for w in prange((window_0_half), n_spectra + (window_0_half)):
-            if mask[w - window_0_half, k - window_1_half]:
-                dynamic_filtered_2[w, k] = 0  # V[i2-k, j2-m2]
+    for j_2 in prange((m_half), n_chan + (m_half)):
+        for i_2 in prange((n_half), n_spectra + (n_half)):
+            if mask[i_2 - n_half, j_2 - m_half]:
+                dynamic_filtered_2[i_2, j_2] = 0  # V[i_2-n_half, j_2-m_half]
             else:
                 val = np.sum(
                     (
-                        mask_pad[w, k - window_1_half : k + window_1_half + 1]
-                        * dynamic_filtered[w, k - window_1_half : k + window_1_half + 1]
+                        mask_pad[i_2, j_2 - m_half : j_2 + m_half + 1]
+                        * dynamic_filtered[i_2, j_2 - m_half : j_2 + m_half + 1]
                         * kernel_1
                     )
                 )
-                dynamic_filtered_2[w, k] = val / np.sum(
-                    mask_pad[w, k - window_1_half : k + window_1_half + 1] * kernel_1
+                dynamic_filtered_2[i_2, j_2] = val / np.sum(
+                    mask_pad[i_2, j_2 - m_half : j_2 + m_half + 1] * kernel_1
                 )
     return dynamic_filtered_2
 
@@ -166,13 +163,13 @@ def _gaussian_filter(
 def gaussian_filter(
     dynamic_spectra: np.ndarray,
     mask: np.ndarray,
-    window_size_1: int = 40,
-    window_size_0: int = 20,
+    kernel_m: int = 40,
+    kernel_n: int = 20,
     sigma_m: float = 0.5,
     sigma_n: float = 0.5,
 ) -> np.ndarray:
     """
-    Applies a gaussian filter (smoothing) to the given two dimesnional array
+    Applies a gaussian filter (smoothing) to the given two dimensional array
     taking into account masked values
 
     Args:
@@ -180,9 +177,9 @@ def gaussian_filter(
 
         mask -  boolean array defining masked values
 
-        window_size_1 -  kernel window size in axis=1
+        kernel_m -  kernel window size in axis=1
 
-        window_size_0 -  kernel window size in axis=0
+        kernel_n -  kernel window size in axis=0
 
         sigma_m -  kernel sigma in axis=1
 
@@ -197,29 +194,23 @@ def gaussian_filter(
     """
     n_spectra, n_chan = dynamic_spectra.shape
     dynamic_spectra_pad = np.zeros(
-        (n_spectra + window_size_0, n_chan + window_size_1), dtype=dynamic_spectra.dtype
+        (n_spectra + kernel_n, n_chan + kernel_m), dtype=dynamic_spectra.dtype
     )
     dynamic_spectra_pad[
-        window_size_0 // 2 : -window_size_0 // 2,
-        window_size_1 // 2 : -window_size_1 // 2,
+        kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,
     ] = dynamic_spectra[:]
 
-    mask_pad = np.zeros(
-        (n_spectra + window_size_0, n_chan + window_size_1), dtype=np.bool
-    )
-    mask_pad[
-        window_size_0 // 2 : -window_size_0 // 2,
-        window_size_1 // 2 : -window_size_1 // 2,
-    ] = ~mask[:]
+    mask_pad = np.zeros((n_spectra + kernel_n, n_chan + kernel_m), dtype=bool)
+    mask_pad[kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,] = ~mask[:]
 
-    dynamic_filtered = np.zeros((n_spectra + window_size_0, n_chan + window_size_1))
-    dynamic_filtered_2 = np.zeros((n_spectra + window_size_0, n_chan + window_size_1))
+    dynamic_filtered = np.zeros((n_spectra + kernel_n, n_chan + kernel_m))
+    dynamic_filtered_2 = np.zeros((n_spectra + kernel_n, n_chan + kernel_m))
 
     def twod_guass(
         array_n: np.ndarray, array_m: np.ndarray, sigma_n: float, sigma_m: float
     ) -> np.ndarray:
         """
-        Calculate the two dimsional smoothing Guassian
+        Calculate the two dimensional smoothing Gaussian
 
         Args:
             array_n - array along axis=0
@@ -228,17 +219,17 @@ def gaussian_filter(
 
             sigma_n - width along axis=0
 
-            sigma_m - widht along axis=1
+            sigma_m - width along axis=1
 
         Returns:
-           2D guassian
+           2D Gaussian filtered data
         """
         return np.exp(
             -(array_n ** 2) / (2 * sigma_n ** 2) - array_m ** 2 / (2 * sigma_m ** 2)
         )
 
-    array_n = np.arange(-window_size_0 / 2, window_size_0 / 2 + 1)
-    array_m = np.arange(-window_size_1 / 2, window_size_1 / 2 + 1)
+    array_n = np.arange(-kernel_n / 2, kernel_n / 2 + 1)
+    array_m = np.arange(-kernel_m / 2, kernel_m / 2 + 1)
     kernel_0 = twod_guass(array_n, 0, sigma_n=sigma_n, sigma_m=sigma_m).T
     kernel_1 = twod_guass(0, array_m, sigma_n=sigma_n, sigma_m=sigma_m).T
 
@@ -252,13 +243,12 @@ def gaussian_filter(
         dynamic_filtered_2,
         kernel_0,
         kernel_1,
-        window_size_1,
-        window_size_0,
+        kernel_m,
+        kernel_n,
     )
 
     dynamic_filtered = dynamic_filtered[
-        window_size_0 // 2 : -window_size_0 // 2,
-        window_size_1 // 2 : -window_size_1 // 2,
+        kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,
     ]
     dynamic_filtered[mask] = dynamic_spectra[mask]
 
@@ -284,10 +274,7 @@ def get_di_kwargs(struct_size_0: int = 3, struct_size_1: int = 3) -> Dict:
 
 
 def get_sm_kwargs(
-    kernel_m: int = 20,
-    kernel_n: int = 40,
-    sigma_m: float = 15,
-    sigma_n: float = 7.5,
+    kernel_m: int = 20, kernel_n: int = 40, sigma_m: float = 15, sigma_n: float = 7.5,
 ) -> Dict:
     """
     Creates a dict with the smoothing keywords.
@@ -403,9 +390,9 @@ def _sumthreshold(
         power_sum = 0.0
         cnt = 0
 
-        for ii in range(0, n_iter):
-            if not mask[x, ii]:
-                power_sum += dynamic_spectra[x, ii]
+        for iiter in range(0, n_iter):
+            if not mask[x, iiter]:
+                power_sum += dynamic_spectra[x, iiter]
                 cnt += 1
 
         for y in range(n_iter, ds1):
@@ -430,7 +417,7 @@ def run_sumthreshold(
     eta: float,
     n_iter: int,
     chi_i: List[float],
-    # sm_kwargs: Dict,
+    sm_kwargs: Dict,
 ) -> np.ndarray:
     """
     Perform one SumThreshold operation: sum the un-masked data after
@@ -457,18 +444,18 @@ def run_sumthreshold(
         https://github.com/cosmo-ethz/seek/blob/master/seek/mitigation/sum_threshold.py
     """
 
-    smoothed_dynamic = gaussian_filter(dynamic_spectra, init_mask)
+    smoothed_dynamic = gaussian_filter(dynamic_spectra, init_mask, **sm_kwargs)
     res = dynamic_spectra - smoothed_dynamic
 
     st_mask = init_mask.copy()
 
-    for i_iter, chi in zip(n_iter, chi_i):
+    for iiter, chi in zip(n_iter, chi_i):
         chi = chi / eta
-        if i_iter == 1:
+        if iiter == 1:
             st_mask = st_mask | (chi <= res)
         else:
-            st_mask = _sumthreshold(res, st_mask, i_iter, chi, *res.shape)
-            st_mask = _sumthreshold(res.T, st_mask.T, i_iter, chi, *res.T.shape).T
+            st_mask = _sumthreshold(res, st_mask, iiter, chi, *res.shape)
+            st_mask = _sumthreshold(res.T, st_mask.T, iiter, chi, *res.T.shape).T
 
     # if plotting:
     #     sum_threshold_utils.plot_steps(
@@ -479,7 +466,7 @@ def run_sumthreshold(
 
 
 def run_sumthreshold_arpls(
-    detrend_dynamic: np.ndarray, n_iter: int, chi_i: List[float]
+    detrend_dynamic: np.ndarray, chi_1: float = 3, max_pixels: int = 8
 ):
     """
     A function to call sumthreshold for a list of threshold value
@@ -490,7 +477,7 @@ def run_sumthreshold_arpls(
         chi_1 - First threshold value
 
     Returns:
-        ArPLS SumThredshold mask
+        ArPLS SumThreshold mask
 
     Note:
         based on
@@ -499,21 +486,26 @@ def run_sumthreshold_arpls(
     # use first threshold value to compute the whole list of threshold
     # for sumthreshold algorithm
 
+    p = 1.5  # pylint: disable=invalid-name
+    pixel_range = np.arange(1, max_pixels)
+    pixel_raised = 2 ** (pixel_range - 1)
+
+    chi_i = chi_1 / p ** np.log2(pixel_range)
     if len(detrend_dynamic.shape) == 1:
         detrend_dynamic = detrend_dynamic[:, np.newaxis]
     st_mask = np.full(detrend_dynamic.shape, False)
 
-    for i_iter, chi in zip(n_iter, chi_i):
-        if i_iter == 1:
+    for pixel, chi in zip(pixel_raised, chi_i):
+        if pixel == 1:
             st_mask = st_mask | (chi <= detrend_dynamic)
         else:
             if detrend_dynamic.shape[-1] != 1:
                 st_mask = _sumthreshold(
-                    detrend_dynamic, st_mask, i_iter, chi, *detrend_dynamic.shape
+                    detrend_dynamic, st_mask, pixel, chi, *detrend_dynamic.shape
                 )
 
             st_mask = _sumthreshold(
-                detrend_dynamic.T, st_mask.T, i_iter, chi, *detrend_dynamic.T.shape
+                detrend_dynamic.T, st_mask.T, pixel, chi, *detrend_dynamic.T.shape
             ).T
 
     return st_mask

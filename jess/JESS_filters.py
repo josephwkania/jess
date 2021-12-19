@@ -3,7 +3,7 @@
 The repository for all my filters
 """
 import logging
-from typing import Dict, List
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 from rich.progress import track
@@ -954,69 +954,12 @@ def sad_spectra(gulp, frame=128, window=65, sigma=3, clip=True):
     return gulp.astype(data_type)
 
 
-def arpls_sumthreshold(dynamic_spectra: np.ndarray, max_pixels: int = 8,) -> np.ndarray:
-    """
-    Computes a mask to cover the RFI in a data set based on ArPLS-ST.
-
-    Args:
-        dynamic_spectra - Array containing the signal and RFI
-
-        eta_i - List of sensitivities
-
-        MAX_PIXELS - Controls the max iteration and chi_1
-
-    Returns:
-        2D mask where True = RFI
-
-    Note:
-        From http://zmtt.bao.ac.cn/GPPS/RFI/
-        Cite: https://ui.adsabs.harvard.edu/abs/2021MNRAS.500.2969Z
-    """
-
-    # Find bandpass and then use ArPLS to estimate
-    # what the RFI bandpass lookslike
-    freq_mean = dynamic_spectra.mean(axis=0)
-    base_line = arpls_fitter(freq_mean, lam=100000)
-    # compute the difference between SED curve and its baseline
-    diff = freq_mean - base_line
-    # compute the first threshold value for band RFI mitigation
-    popt = sm.ksigma(diff)
-    # band RFI mitigation
-
-    pixel_range = np.arange(1, max_pixels)
-    pixel_powers = 2 ** (pixel_range - 1)
-
-    line_mask = sm.run_sumthreshold_arpls(diff, n_iter=pixel_powers, chi_i=2 * popt,)
-
-    line_index = np.where(line_mask)[0]
-    final_curve = freq_mean.copy()
-    final_curve[line_index] = base_line[line_index]
-    valid_index = np.where(~line_mask)[0]
-
-    valid_data = dynamic_spectra - final_curve
-    valid_data = valid_data[valid_index]
-
-    # compute the first threshold value for blob RFI mitgation
-    popt_point = sm.ksigma(valid_data)
-    # blob RFI mitigation
-    mask = sm.blob_mitigation(
-        dynamic_spectra,
-        baseline=final_curve,
-        line_mask=line_mask,
-        threshold=5 * popt_point,
-        n_iter=pixel_powers,
-    )
-    mask[:, line_index] = True
-
-    return mask
-
-
-def sumthreasthold(
+def sum_threshold(
     dynamic_spectra: np.ndarray,
     mask: np.ndarray = None,
-    eta_i: List[float] = (0.5, 0.55, 0.62, 0.75, 1),
+    eta_i: Union[List[float], Tuple[float]] = (0.5, 0.55, 0.62, 0.75, 1),
     chi_1: float = 35000,
-    normalize_standing_waves: bool = False,
+    normalize_standing_waves: bool = True,
     suppress_dilation: bool = False,
     sm_kwargs: Dict = None,
     di_kwargs: Dict = None,
@@ -1032,7 +975,7 @@ def sumthreasthold(
 
         eta_i - List of sensitivities
 
-        MAX_PIXELS - Controls the max iteration and chi_1
+        max_pixels - Controls the max iteration and chi_1
 
     KWArgs:
         normalize_standing_waves - Whether to normalize standing waves
@@ -1057,8 +1000,8 @@ def sumthreasthold(
     if mask is None:
         mask = np.zeros_like(dynamic_spectra, dtype=bool)
 
-    # if sm_kwargs is None:
-    #     sm_kwargs = sm.get_sm_kwargs()
+    if sm_kwargs is None:
+        sm_kwargs = sm.get_sm_kwargs()
 
     # if plotting: sum_threshold_utils.plot_moments(data)
 
@@ -1067,19 +1010,15 @@ def sumthreasthold(
 
         # if plotting: sum_threshold_utils.plot_moments(data)
 
-    p_val = 1.5
+    p = 1.5  # pylint: disable=invalid-name
     pixel_range = np.arange(1, max_pixels)
-    pixel_powers = 2 ** (pixel_range - 1)
-    chi_i = chi_1 / p_val ** np.log2(pixel_range)
+    pixel_raised = 2 ** (pixel_range - 1)
+    chi_i = chi_1 / p ** np.log2(pixel_range)
 
     st_mask = mask
     for eta in eta_i:
         st_mask = sm.run_sumthreshold(
-            dynamic_spectra,
-            init_mask=st_mask,
-            eta=eta,
-            n_iter=pixel_powers,
-            chi_i=chi_i,
+            dynamic_spectra, st_mask, eta, pixel_raised, chi_i, sm_kwargs=sm_kwargs,
         )
 
     dilated_mask = st_mask
@@ -1093,6 +1032,50 @@ def sumthreasthold(
         #     sum_threshold_utils.plot_dilation(st_mask, mask, dilated_mask)
 
     return dilated_mask + mask
+
+
+def sum_threasthold_aprls(dynamic_spectra: np.ndarray,) -> np.ndarray:
+    """
+    Computes a mask to cover the RFI in a data set based on ArPLS-ST.
+
+    Args:
+        dynamic_spectra - Array containing the signal and RFI
+
+        eta_i - List of sensitivities
+
+    Returns:
+        2D mask where True = RFI
+
+    Note:
+        From http://zmtt.bao.ac.cn/GPPS/RFI/
+        Cite: https://ui.adsabs.harvard.edu/abs/2021MNRAS.500.2969Z
+    """
+    # eta_i: Union[List[float], Tuple[float]] = (0.5, 0.55, 0.62, 0.75, 1),
+    # Find bandpass and then use ArPLS to estimate
+    # what the RFI bandpass lookslike
+    freq_mean = dynamic_spectra.mean(axis=0)
+    baseline = arpls_fitter(freq_mean, lam=100000)
+    # compute the difference between SED curve and its baseline
+    diff = freq_mean - baseline
+    # compute the first threshold value for band RFI mitigation
+    popt = sm.ksigma(diff)
+    # band RFI mitigation
+    line_mask = sm.run_sumthreshold_arpls(diff, 2 * popt)
+
+    line_index = np.where(line_mask)[0]
+    freq_mean[line_index] = baseline[line_index]
+    valid_index = np.where(~line_mask)[0]
+
+    valid_data = dynamic_spectra - freq_mean
+    valid_data = valid_data[valid_index]
+
+    # compute the first threshold value for blob RFI mitgation
+    popt_point = sm.ksigma(valid_data)
+    # blob RFI mitigation
+    mask = sm.blob_mitigation(dynamic_spectra, freq_mean, line_mask, 5 * popt_point)
+    mask[:, line_index] = True
+
+    return mask
 
 
 def mad_time_cutter(gulp, frame=256, sigma=10):
