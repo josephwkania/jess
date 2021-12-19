@@ -618,7 +618,12 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     # Need to loop because np.unique doesn't
     # return counts for all
     for j in range(0, length):
-        _, counts = np.unique(data[j,], return_counts=True,)
+        _, counts = np.unique(
+            data[
+                j,
+            ],
+            return_counts=True,
+        )
         entropies[j] = entropy(counts)
     return entropies
 

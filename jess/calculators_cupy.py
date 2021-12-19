@@ -41,7 +41,9 @@ def mean(data_array: cp.ndarray, factor: int, axis: int) -> cp.ndarray:
 
 
 def decimate(
-    dynamic_spectra: cp.ndarray, time_factor: int = None, freq_factor: int = None,
+    dynamic_spectra: cp.ndarray,
+    time_factor: int = None,
+    freq_factor: int = None,
 ) -> cp.ndarray:
     """
     Makes decimates along either/both time and frequency axes.

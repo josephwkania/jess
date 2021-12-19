@@ -1019,7 +1019,12 @@ def sum_threshold(
     st_mask = mask
     for eta in eta_i:
         st_mask = sm.run_sumthreshold(
-            dynamic_spectra, st_mask, eta, pixel_raised, chi_i, sm_kwargs=sm_kwargs,
+            dynamic_spectra,
+            st_mask,
+            eta,
+            pixel_raised,
+            chi_i,
+            sm_kwargs=sm_kwargs,
         )
 
     dilated_mask = st_mask
@@ -1035,7 +1040,9 @@ def sum_threshold(
     return dilated_mask + mask
 
 
-def sum_threasthold_aprls(dynamic_spectra: np.ndarray,) -> np.ndarray:
+def sum_threasthold_aprls(
+    dynamic_spectra: np.ndarray,
+) -> np.ndarray:
     """
     Computes a mask to cover the RFI in a data set based on ArPLS-ST.
 

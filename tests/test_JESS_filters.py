@@ -376,7 +376,10 @@ class TestFftMad:
         Test if mask is correct
         """
         _, mask = Jf.fft_mad(
-            self.fake_with_rfi, chans_per_subband=32, return_mask=True, sigma=6.5,
+            self.fake_with_rfi,
+            chans_per_subband=32,
+            return_mask=True,
+            sigma=6.5,
         )
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[self.max_bin, self.mid] = True

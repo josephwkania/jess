@@ -58,7 +58,9 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
             )
         test = np.zeros(num_freq)
         for ichan in range(0, num_freq):
-            test[ichan], _ = stats.jarque_bera(data[:, ichan],)
+            test[ichan], _ = stats.jarque_bera(
+                data[:, ichan],
+            )
     elif which_test == "kurtosis":
         test = stats.kurtosis(data, axis=0)
     elif which_test == "lilliefors":

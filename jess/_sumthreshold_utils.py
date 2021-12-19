@@ -197,11 +197,15 @@ def gaussian_filter(
         (n_spectra + kernel_n, n_chan + kernel_m), dtype=dynamic_spectra.dtype
     )
     dynamic_spectra_pad[
-        kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,
+        kernel_n // 2 : -kernel_n // 2,
+        kernel_m // 2 : -kernel_m // 2,
     ] = dynamic_spectra[:]
 
     mask_pad = np.zeros((n_spectra + kernel_n, n_chan + kernel_m), dtype=bool)
-    mask_pad[kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,] = ~mask[:]
+    mask_pad[
+        kernel_n // 2 : -kernel_n // 2,
+        kernel_m // 2 : -kernel_m // 2,
+    ] = ~mask[:]
 
     dynamic_filtered = np.zeros((n_spectra + kernel_n, n_chan + kernel_m))
     dynamic_filtered_2 = np.zeros((n_spectra + kernel_n, n_chan + kernel_m))
@@ -248,7 +252,8 @@ def gaussian_filter(
     )
 
     dynamic_filtered = dynamic_filtered[
-        kernel_n // 2 : -kernel_n // 2, kernel_m // 2 : -kernel_m // 2,
+        kernel_n // 2 : -kernel_n // 2,
+        kernel_m // 2 : -kernel_m // 2,
     ]
     dynamic_filtered[mask] = dynamic_spectra[mask]
 
@@ -274,7 +279,10 @@ def get_di_kwargs(struct_size_0: int = 3, struct_size_1: int = 3) -> Dict:
 
 
 def get_sm_kwargs(
-    kernel_m: int = 20, kernel_n: int = 40, sigma_m: float = 15, sigma_n: float = 7.5,
+    kernel_m: int = 20,
+    kernel_n: int = 40,
+    sigma_m: float = 15,
+    sigma_n: float = 7.5,
 ) -> Dict:
     """
     Creates a dict with the smoothing keywords.

@@ -41,7 +41,10 @@ def dedisperse(
     dedispersed = cp.zeros(data.shape, dtype=data.dtype)
     for ichan in range(num_freq):
         dedispersed[:, ichan] = cp.concatenate(
-            [data[-delay_bins[ichan] :, ichan], data[: -delay_bins[ichan], ichan],]
+            [
+                data[-delay_bins[ichan] :, ichan],
+                data[: -delay_bins[ichan], ichan],
+            ]
         )
     return dedispersed
 
