@@ -357,10 +357,7 @@ def cheb_fitter(
     return best_fit_bandpass
 
 
-def median_fitter(
-    bandpass: np.ndarray,
-    chans_per_fit: int = 19,
-) -> np.ndarray:
+def median_fitter(bandpass: np.ndarray, chans_per_fit: int = 19,) -> np.ndarray:
     """
     Uses a median filter to fit for the bandpass shape
 

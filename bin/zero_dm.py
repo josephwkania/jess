@@ -54,10 +54,7 @@ def get_outfile(file: str, out_file: str) -> str:
 
 
 def zero_dm_cleaner(
-    file: str,
-    mask_file: str = None,
-    gulp: int = 16384,
-    out_file: str = None,
+    file: str, mask_file: str = None, gulp: int = 16384, out_file: str = None,
 ) -> None:
     """
     Loops over a file, zero DMing each block, uses one
@@ -199,8 +196,5 @@ if __name__ == "__main__":
         )
 
     zero_dm_cleaner(
-        args.file,
-        args.mask,
-        args.gulp,
-        args.out_file,
+        args.file, args.mask, args.gulp, args.out_file,
     )

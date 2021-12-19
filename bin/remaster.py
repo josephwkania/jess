@@ -335,8 +335,7 @@ def clean_dispersion(
         time_median_size=time_median_size,
     )
     sigproc_object.append_spectra(
-        cleaned.get(),
-        out_file,
+        cleaned.get(), out_file,
     )
 
 

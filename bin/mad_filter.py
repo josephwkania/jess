@@ -467,8 +467,7 @@ def clean_dispersion_gpu(
         sigma=sigma,
     )
     sigproc_object.append_spectra(
-        cleaned.get(),
-        out_file,
+        cleaned.get(), out_file,
     )
 
 
@@ -542,10 +541,7 @@ def clean_dispersion_cpu(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
         dedisp = dedisperse(
-            data,
-            dispersion_measure,
-            yr_input.your_header.tsamp,
-            yr_input.chan_freqs,
+            data, dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs,
         )
         dedisp[0:-samples_lost, :] = mad_spectra(
             dedisp[0:-samples_lost, :],
@@ -570,8 +566,7 @@ def clean_dispersion_cpu(
         sigma=sigma,
     )
     sigproc_object.append_spectra(
-        cleaned.get(),
-        out_file,
+        cleaned.get(), out_file,
     )
 
 
