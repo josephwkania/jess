@@ -642,7 +642,8 @@ def mad_spectra(
                 dynamic_spectra[subband], mask=mask[subband]
             )
             fit_clean = fitter(
-                np.ma.median(masked_arr, axis=0), chans_per_fit=chans_per_fit,
+                np.ma.median(masked_arr, axis=0),
+                chans_per_fit=chans_per_fit,
             )
         except Exception as excpt:
             logging.warning(
@@ -1276,7 +1277,9 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = np.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[:modes_to_zero,] = True
+    mask[
+        :modes_to_zero,
+    ] = True
 
     # complex data, we are projecting two numbers
     logging.info("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)

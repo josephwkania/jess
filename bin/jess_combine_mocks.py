@@ -252,7 +252,11 @@ def read_and_combine_subint(
     # Assuming fch1 and channel_bandwidth from lower band.
     # The exact freq in upperband will vary
     data = xp.concatenate(
-        (upsub_data[:, :-upchanskip], lowsub_data[:, lowchanskip:],), axis=1
+        (
+            upsub_data[:, :-upchanskip],
+            lowsub_data[:, lowchanskip:],
+        ),
+        axis=1,
     )
 
     # data = xp.flip(data,
@@ -824,7 +828,9 @@ if __name__ == "__main__":
     if not values.no_log_file:
         if values.verbose:
             logging.basicConfig(
-                filename=log_filename, level=logging.DEBUG, format=LOGGING_FORMAT,
+                filename=log_filename,
+                level=logging.DEBUG,
+                format=LOGGING_FORMAT,
             )
         else:
             logging.basicConfig(
@@ -850,7 +856,8 @@ if __name__ == "__main__":
 
     if values.all_files:
         all_files(
-            values.all_files, outdir=values.outdir,
+            values.all_files,
+            outdir=values.outdir,
         )
     elif not (values.first_band and values.second_band):
         print(

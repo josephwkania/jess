@@ -478,7 +478,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "-channels_per_subband",
+        "-chans_per_sub",
         "--channels_per_subband",
         help="Number of channels in each subband",
         type=int,
@@ -487,7 +487,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-time_median_size",
-        "---time_median_size",
+        "--time_median_size",
         help="The length of kernel for median of median and median of MADs in time",
         type=int,
         default=0,
