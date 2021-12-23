@@ -105,7 +105,7 @@ def clean_cpu(
     logging.debug("Using CPU backend")
 
     # need a bandpass if we do zero_dming, put outside the loop
-    if modes_to_zero > 1:
+    if modes_to_zero >= 1:
         bandpass = np.array([flatten_to] * yr_input.your_header.nchans)
 
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
@@ -188,7 +188,7 @@ def clean_gpu(
     logging.debug("Using GPU backend")
 
     # need a bandpass if we do zero_dming, put outside the loop
-    if modes_to_zero > 1:
+    if modes_to_zero >= 1:
         bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
 
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
@@ -335,8 +335,7 @@ def clean_dispersion(
         time_median_size=time_median_size,
     )
     sigproc_object.append_spectra(
-        cleaned.get(),
-        out_file,
+        cleaned.get(), out_file,
     )
 
 
