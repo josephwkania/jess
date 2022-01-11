@@ -4,7 +4,7 @@ The repository for all my filters
 """
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, NamedTuple
 
 import numpy as np
 from rich.progress import track
@@ -24,8 +24,7 @@ from jess.calculators import (
 from jess.fitters import arpls_fitter, poly_fitter
 
 
-@dataclass
-class FilterMaskResult:
+class FilterMaskResult(NamedTuple):
     """
     dynamic_spectra - Dynamic Spectra with RFI filtered
     mask - Boolean mask
@@ -37,8 +36,7 @@ class FilterMaskResult:
     percent_masked: np.float64
 
 
-@dataclass
-class FilterResult:
+class FilterResult(NamedTuple):
     """
     dynamic_spectra - Dynamic Spectra with RFI filtered
     percent_masked - The percent masked
@@ -1308,7 +1306,7 @@ def zero_dm_fft(
 
     # complex data, we are projecting two numbers
     # except for the first (DC) component
-    percent_masked = (mask.mean() * 2 - 1) * 100
+    percent_masked = (mask.mean() * 2) * 100
     logging.debug("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)
 
     # zero out the modes we don't want

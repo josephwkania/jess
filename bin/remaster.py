@@ -108,6 +108,8 @@ def clean_cpu(
     if modes_to_zero > 1:
         bandpass = np.array([flatten_to] * yr_input.your_header.nchans)
 
+    total_flag = np.zeros(3)
+    n_iter = 0
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
@@ -118,7 +120,7 @@ def clean_cpu(
         # cleaned = fft_mad(
         #     cp.asarray(data), sigma=sigma, chans_per_subband=channels_per_subband
         # )
-        cleaned = mad_spectra_flat(
+        cleaned, _, mad_percentage = mad_spectra_flat(
             data,
             chans_per_subband=channels_per_subband,
             sigma=sigma,
@@ -126,7 +128,7 @@ def clean_cpu(
             time_median_size=time_median_size,
             return_same_dtype=False,
         )
-        cleaned = fft_mad(
+        cleaned, _, fft_percentage = fft_mad(
             cleaned,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
@@ -135,17 +137,37 @@ def clean_cpu(
 
         if modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            cleaned = zero_dm(cleaned, bandpass, return_same_dtype=False)
+            cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
-            cleaned = zero_dm_fft(
+            cleaned, dm_percentage = zero_dm_fft(
                 cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
+        else:
+            dm_percentage = 0
 
+        n_iter += 1
+        total_flag += np.asarray((mad_percentage, fft_percentage, dm_percentage))
+        logging.info(
+            "mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+            mad_percentage,
+            fft_percentage,
+            dm_percentage,
+            mad_percentage + fft_percentage + dm_percentage,
+        )
         # Keep full precision until done
         cleaned = to_dtype(cleaned, dtype=yr_input.your_header.dtype)
 
         sigproc_object.append_spectra(cleaned, out_file)
+
+    n_iter = yr_input.your_header.nspectra / gulp
+    logging.info(
+        "Full file - mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+        total_flag[0] / n_iter,
+        total_flag[1] / n_iter,
+        total_flag[2] / n_iter,
+        total_flag.sum() / n_iter,
+    )
 
 
 def clean_gpu(
@@ -191,6 +213,8 @@ def clean_gpu(
     if modes_to_zero > 1:
         bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
 
+    total_flag = cp.zeros(3)
+    n_iter = 0
     for j in track(range(0, yr_input.your_header.nspectra, gulp)):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
@@ -201,7 +225,7 @@ def clean_gpu(
         # cleaned = fft_mad(
         #     cp.asarray(data), sigma=sigma, chans_per_subband=channels_per_subband
         # )
-        cleaned = mad_spectra_flat(
+        cleaned, _, mad_percentage = mad_spectra_flat(
             cp.asarray(data),
             chans_per_subband=channels_per_subband,
             sigma=sigma,
@@ -209,7 +233,7 @@ def clean_gpu(
             time_median_size=time_median_size,
             return_same_dtype=False,
         )
-        cleaned = fft_mad(
+        cleaned, _, fft_percentage = fft_mad(
             cleaned,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
@@ -218,17 +242,36 @@ def clean_gpu(
 
         if modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            cleaned = zero_dm(cleaned, bandpass, return_same_dtype=False)
+            cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
-            cleaned = zero_dm_fft(
+            cleaned, dm_percentage = zero_dm_fft(
                 cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
+        else:
+            dm_percentage = 0
 
+        n_iter += 1
+        total_flag += cp.asarray((mad_percentage, fft_percentage, dm_percentage))
+        logging.info(
+            "mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+            mad_percentage,
+            fft_percentage,
+            dm_percentage,
+            mad_percentage + fft_percentage + dm_percentage,
+        )
         # Keep full precision until done
         cleaned = to_dtype(cleaned, dtype=yr_input.your_header.dtype)
 
         sigproc_object.append_spectra(cleaned.get(), out_file)
+
+    logging.info(
+        "Full file - mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+        total_flag[0] / n_iter,
+        total_flag[1] / n_iter,
+        total_flag[2] / n_iter,
+        total_flag.sum() / n_iter,
+    )
 
 
 def clean_dispersion(
