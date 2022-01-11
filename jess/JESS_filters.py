@@ -3,6 +3,7 @@
 The repository for all my filters
 """
 import logging
+from dataclasses import dataclass
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
@@ -21,6 +22,30 @@ from jess.calculators import (
     to_dtype,
 )
 from jess.fitters import arpls_fitter, poly_fitter
+
+
+@dataclass
+class FilterMaskResult:
+    """
+    dynamic_spectra - Dynamic Spectra with RFI filtered
+    mask - Boolean mask
+    percent_masked - The percent masked
+    """
+
+    dynamic_spectra: np.ndarray
+    mask: np.ndarray
+    percent_masked: np.float64
+
+
+@dataclass
+class FilterResult:
+    """
+    dynamic_spectra - Dynamic Spectra with RFI filtered
+    percent_masked - The percent masked
+    """
+
+    dynamic_spectra: np.ndarray
+    percent_masked: np.float64
 
 
 def run_filter(
@@ -281,7 +306,6 @@ def fft_mad(
     fitter: object = poly_fitter,
     bad_chans: np.ndarray = None,
     return_same_dtype: bool = True,
-    return_mask: bool = False,
 ) -> np.ndarray:
     """
     Takes the real FFT of the dynamic spectra along the time axis
@@ -386,17 +410,15 @@ def fft_mad(
     dynamic_spectra_fftd[mask] = 0
 
     # We're flagging complex data, so multiply by 2
-    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100 * 2)
+    percent_flagged = mask.mean() * 100 * 2
+    logging.debug("Masked Percentage: %.2f %%", percent_flagged)
 
     dynamic_spectra_cleaned = np.fft.irfft(dynamic_spectra_fftd, axis=0)
 
     if return_same_dtype:
         dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
-    if return_mask:
-        return dynamic_spectra_cleaned, mask
-
-    return dynamic_spectra_cleaned
+    return FilterMaskResult(dynamic_spectra_cleaned, mask, percent_flagged)
 
 
 def jarque_bera_calculate_values(yr_file, window=64, time_median_kernel=0):
@@ -579,7 +601,6 @@ def mad_spectra(
     chans_per_fit: int = 50,
     fitter: object = poly_fitter,
     return_same_dtype: bool = True,
-    return_mask: bool = False,
 ) -> np.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -655,15 +676,13 @@ def mad_spectra(
         )
         # dynamic_spectra[subband][mask[subband]] = fit_clean[mask[subband]]
 
-    logging.info("Masked Percentage: %.2f %%", mask.mean() * 100)
+    masked_percentage = mask.mean() * 100
+    logging.debug("Masked Percentage: %.2f %%", masked_percentage)
 
     if return_same_dtype:
         dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
-    if return_mask:
-        return dynamic_spectra, mask
-
-    return dynamic_spectra
+    return FilterMaskResult(dynamic_spectra, mask, masked_percentage)
 
 
 def mad_spectra_flat(
@@ -672,7 +691,6 @@ def mad_spectra_flat(
     sigma: float = 3,
     flatten_to: int = 64,
     time_median_size: int = 0,
-    return_mask: bool = False,
     return_same_dtype: bool = True,
     no_time_detrend: bool = False,
 ) -> np.ndarray:
@@ -765,7 +783,7 @@ def mad_spectra_flat(
         flattened, flatten_to=flatten_to, kernel_size=1, return_time_series=True
     )
     # set the masked values to what we want to flatten to
-    # not obvus why this has to be done, because nans should be ok
+    # not obvious why this has to be done, because nans should be ok
     # but it works better this way
     flattened[mask] = flatten_to
 
@@ -803,14 +821,13 @@ def mad_spectra_flat(
         time_series = time_series - np.median(time_series)
         flattened = flattened + time_series[:, None]
 
-    logging.info("Masking %.2f %%", mask.mean() * 100)
+    masked_percentage = mask.mean() * 100
+    logging.debug("Masking %.2f %%", masked_percentage)
 
     if return_same_dtype:
         flattened = to_dtype(flattened, dtype=data_type)
 
-    if return_mask:
-        return flattened, mask
-    return flattened
+    return FilterMaskResult(flattened, mask, masked_percentage)
 
 
 def mad_time(
@@ -1211,11 +1228,12 @@ def zero_dm(
         bandpass = np.ma.mean(dynamic_spectra, axis=0)  # .astype(data_type)
 
     dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
+    percent_masked = 1 / len(bandpass) * 100
 
     if return_same_dtype:
         return to_dtype(dynamic_spectra, dtype=data_type)
 
-    return dynamic_spectra
+    return FilterResult(dynamic_spectra, percent_masked)
 
 
 def zero_dm_fft(
@@ -1289,7 +1307,9 @@ def zero_dm_fft(
     ] = True
 
     # complex data, we are projecting two numbers
-    logging.info("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)
+    # except for the first (DC) component
+    percent_masked = (mask.mean() * 2 - 1) * 100
+    logging.debug("Masked Percentage: %.2f %%", mask.mean() * 2 * 100)
 
     # zero out the modes we don't want
     dynamic_spectra_fftd[np.broadcast_to(mask, dynamic_spectra_fftd.shape)] = 0
@@ -1300,4 +1320,4 @@ def zero_dm_fft(
     if return_same_dtype:
         dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
-    return dynamic_spectra_cleaned
+    return FilterResult(dynamic_spectra_cleaned, percent_masked)
