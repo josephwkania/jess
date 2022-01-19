@@ -463,10 +463,11 @@ def zero_dm(
         bandpass = cp.mean(dynamic_spectra, axis=0)
 
     dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
-    percent_masked = 1 / len(bandpass) * 100
+    # use cp.divide so it return a cupy object
+    percent_masked = cp.divide(1, len(bandpass)) * 100
 
     if return_same_dtype:
-        return to_dtype(dynamic_spectra, dtype=data_type)
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
     return FilterResult(dynamic_spectra, percent_masked)
 

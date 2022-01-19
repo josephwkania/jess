@@ -254,7 +254,7 @@ def clean_gpu(
         n_iter += 1
         total_flag += cp.asarray((mad_percentage, fft_percentage, dm_percentage))
         logging.info(
-            "mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+            "MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
             mad_percentage,
             fft_percentage,
             dm_percentage,
@@ -266,7 +266,7 @@ def clean_gpu(
         sigproc_object.append_spectra(cleaned.get(), out_file)
 
     logging.info(
-        "Full file - mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
+        "Full file - MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
         total_flag[0] / n_iter,
         total_flag[1] / n_iter,
         total_flag[2] / n_iter,
@@ -330,7 +330,7 @@ def clean_dispersion(
         sigma=sigma,
         flatten_to=flatten_to,
         time_median_size=time_median_size,
-    )
+    ).dynamic_spectra
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
     # loop through all the data we can dedisperse
@@ -376,9 +376,10 @@ def clean_dispersion(
         sigma=sigma,
         flatten_to=flatten_to,
         time_median_size=time_median_size,
-    )
+    ).dynamic_spectra
     sigproc_object.append_spectra(
-        cleaned.get(), out_file,
+        cleaned.get(),
+        out_file,
     )
 
 
