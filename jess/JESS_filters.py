@@ -3,8 +3,7 @@
 The repository for all my filters
 """
 import logging
-from dataclasses import dataclass
-from typing import Dict, List, Tuple, Union, NamedTuple
+from typing import Dict, List, NamedTuple, Tuple, Union
 
 import numpy as np
 from rich.progress import track
