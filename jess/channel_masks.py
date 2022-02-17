@@ -4,7 +4,8 @@ Contains Utilities to make channel masks
 """
 
 import logging
-from typing import List
+from functools import partial
+from typing import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +15,10 @@ from sklearn.preprocessing import StandardScaler
 
 from jess.calculators import preprocess, shannon_entropy
 from jess.fitters import get_fitter
+
+# Should change the masks to npt.NDArray[bool] in
+# the future
+# import numpy.typing as npt
 
 logger = logging.getLogger()
 
@@ -29,6 +34,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         Central Tendency: mean, midhing, trimean
         Information: shannopn-entropy
 
+    MAD and IQR report the scaled version, to make comparison tests easier
     """
     which_test = which_test.lower()
     if which_test == "98-2":
@@ -41,7 +47,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         top_quant, bottom_quant = np.quantile(data, [0.90, 0.10], axis=0)
         test = top_quant - bottom_quant
     elif which_test == "75-25":
-        test = stats.iqr(data, axis=0)
+        test = stats.iqr(data, axis=0, scale="normal")
     elif which_test == "anderson-darling":
         _, num_freq = data.shape
         test = np.zeros(num_freq)
@@ -72,7 +78,7 @@ def stat_test(data: np.ndarray, which_test: str) -> np.ndarray:
         for ichan in range(0, num_freq):
             test[ichan], _ = stats.kstest(data_0[:, ichan], "norm")
     elif which_test == "mad":
-        test = stats.median_abs_deviation(data, axis=0)
+        test = stats.median_abs_deviation(data, axis=0, scale="normal")
     elif which_test == "mean":
         test = np.mean(data, axis=0)
     elif which_test == "midhing":
@@ -107,8 +113,9 @@ def z_score_flagger(
     flag_above: bool = True,
     flag_below: bool = True,
     sigma: float = 6.0,
+    measure_of_scale: Callable = partial(stats.median_abs_deviation, scale="normal"),
     show_plots: bool = False,
-) -> List[bool]:
+) -> np.ndarray:
     """
     Flags points based on z-score
 
@@ -140,11 +147,9 @@ def z_score_flagger(
             "Median after flatting is %.1f, this is high, check fit", median
         )
 
-    stand_dev = stats.median_abs_deviation(flat_bandpass, scale="normal")
+    stand_dev = measure_of_scale(flat_bandpass)
     if stand_dev < 0.001:
-        logging.warning("Standard Dev: %.4f, recalculating non-robustly", stand_dev)
-        stand_dev = np.std(flat_bandpass)
-        logging.warning("Standard Dev: %.4f", stand_dev)
+        logging.warning("Standard Dev: %.4f,", stand_dev)
 
     if show_plots:
         plt.figure(figsize=(10, 10))
@@ -222,10 +227,10 @@ def dbscan_flagger(
 
     min_samples = int(min_clust_frac * num_data)
     logging.debug("Running DBSCAN with eps=%.4f, min_samples=%i", eps, min_samples)
-    db = DBSCAN(eps=eps, min_samples=min_samples).fit(normed_vec)
-    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
-    labels = db.labels_
+    db_obj = DBSCAN(eps=eps, min_samples=min_samples).fit(normed_vec)
+    core_samples_mask = np.zeros_like(db_obj.labels_, dtype=bool)
+    core_samples_mask[db_obj.core_sample_indices_] = True
+    labels = db_obj.labels_
 
     unique_labels = set(labels)
     num_clusters_ = len(unique_labels) - (1 if -1 in labels else 0)
@@ -243,7 +248,7 @@ def dbscan_flagger(
     ), "More that 40% the points are classified as noise, clustering failed"
 
     normed_vec = scaler.inverse_transform(normed_vec)
-    # trasform back so we can see the data again
+    # transform back so we can see the data again
     unique_labels = set(labels)
     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
     plt.figure(figsize=(20, 10))
@@ -254,20 +259,20 @@ def dbscan_flagger(
 
         class_member_mask = labels == k
 
-        xy = normed_vec[class_member_mask & core_samples_mask]
+        x_y = normed_vec[class_member_mask & core_samples_mask]
         plt.plot(
-            xy[:, 0],
-            xy[:, 1],
+            x_y[:, 0],
+            x_y[:, 1],
             "o",
             markerfacecolor=tuple(col),
             markersize=7,
             label="Clustered",
         )
 
-        xy = normed_vec[class_member_mask & ~core_samples_mask]
+        x_y = normed_vec[class_member_mask & ~core_samples_mask]
         plt.plot(
-            xy[:, 0],
-            xy[:, 1],
+            x_y[:, 0],
+            x_y[:, 1],
             "+",
             markerfacecolor=tuple(col),
             markeredgecolor="k",
@@ -275,7 +280,7 @@ def dbscan_flagger(
             label="noise",
         )
 
-    chans_to_mask = np.array(xy[:, 0], dtype=int)
+    chans_to_mask = np.array(x_y[:, 0], dtype=int)
     mask = np.zeros_like(test_values, dtype=bool)
     mask[chans_to_mask] = True
     if show_plot:
@@ -292,14 +297,14 @@ def channel_masker(
     test: str,
     sigma: float = 3.0,
     fitter: str = "median_fitter",
-    chans_per_fit: int = 47,
+    chans_per_fit: int = 30,
     flagger: str = "z_score_flagger",
     flag_above: bool = True,
     flag_below: bool = True,
     eps: float = 0.9,
-    min_clust_frac=0.01,
+    min_clust_frac: float = 0.01,
     show_plots: bool = False,
-) -> List[bool]:
+) -> np.ndarray:
     """
     Does the given statistical test on a given data array.
     Then a curve is fitted to the resulting test-bandpass, this removes large effects
@@ -316,15 +321,19 @@ def channel_masker(
         file - dynamic spectra, the 2D chunk of data to process, time is on y-axis
 
         test - Statistical test you preform on each channel,
-               option are from stat_test and are
-               Measures of scale: [98-2, 91-9, 90-10, 75-25, mad, stand-dev]
-               Guassianity: [anderson-darling, d'angostino, jurue-bera,
-                            kurtosis, lilliefors, shapio-wilk, skew]
-               Entropy: [shannon-entropy]
-               Central Value: [mean, midhing, trimean]
+                option are from stat_test and are
+                Measures of scale: [98-2, 91-9, 90-10, 75-25, mad, stand-dev]
+                Guassianity: [anderson-darling, d'angostino, jarque-bera,
+                             kurtosis, lilliefors, shapio-wilk, skew]
+                Entropy: [shannon-entropy]
+                Central Value: [mean, midhing, trimean]
 
-               You can your rfi_viewer.py to see how your data looks at each
-               one of these tests
+                If you give a list of two tests, you will get the first one
+                subtracted from the second. For example (stand-dev, mad)
+                will be a test the difference between the two.
+
+                You can your rfi_viewer.py to see how your data looks at each
+                one of these tests
 
         sigma - This routine calculates z values over all channels, this is the
                 sigma at which to flag channels
@@ -334,10 +343,12 @@ def channel_masker(
         nspectra - the number of spectra to process
                    (default: 65536, the default heimdall gulp)
 
-        fitter - the fitter to you to remove bandpass effects
+        fitter - Fitter used to fit bandpass effects
 
         chans_per_fit - the number of channels per fitting point, see fitters.py
-                        (default: 50)
+                        If zero, don't do bandpass subtraction.
+                        If two tests are given, smooth the second test. (default: 30)
+
         flagger: The flagger to remove outlying points,
                  [z_score_flagger, dbscan_flagger]
 
@@ -347,31 +358,43 @@ def channel_masker(
 
         eps - dbscan eps (dbscan only)
 
-        min_clut_frac - fraction of channels for the minimum cluster size (dbscan only)
+        min_clust_frac - fraction of channels for the minimum cluster size (dbscan only)
 
         show_plot - show the fit and threshold plots, used to check if data is
                     well behaved (default: false)
 
     returns:
-        mask - List of bools, where True is a bad channel
+        mask - ndarray[bools], where `True` is a bad channel
 
     Example:
         yr_obj = Your('some_data.fil')
         dynamic_spectra = yr_obj.get_data(0, 65536)
         mask = channel_masker(dynamic_spectra, which_test="mean")
     """
-    fitter = get_fitter(fitter)
 
-    test_values = stat_test(dynamic_spectra, test)
+    test = np.array(test, ndmin=1)
+    test_values = stat_test(dynamic_spectra, test[0])
+    # Save if we want to plot
+    test_values_original = test_values.copy()
 
-    fit = fitter(test_values, chans_per_fit=chans_per_fit)
-
-    flat = test_values - fit
+    fit = None
+    if len(test) == 2 and chans_per_fit > 0:
+        base_values = stat_test(dynamic_spectra, test[1])
+        fitter_func = get_fitter(fitter)
+        fit = fitter_func(base_values, chans_per_fit=chans_per_fit)
+        test_values -= fit
+    elif len(test) == 2:
+        base_values = stat_test(dynamic_spectra, test[1])
+        test_values -= base_values
+    elif chans_per_fit > 0:
+        fitter_func = get_fitter(fitter)
+        fit = fitter_func(test_values, chans_per_fit=chans_per_fit)
+        test_values -= fit
 
     if flagger == "z_score_flagger":
         logging.debug("Using z_score_flagger")
         mask = z_score_flagger(
-            flat,
+            test_values,
             flag_above=flag_above,
             flag_below=flag_below,
             sigma=sigma,
@@ -379,7 +402,7 @@ def channel_masker(
         )
     elif flagger == "dbscan_flagger":
         logging.debug("Using dbscan_flagger")
-        mask = dbscan_flagger(flat, eps=eps, min_clust_frac=min_clust_frac)
+        mask = dbscan_flagger(test_values, eps=eps, min_clust_frac=min_clust_frac)
     else:
         raise ValueError(f"You asked for {flagger}, which not available")
 
@@ -388,9 +411,10 @@ def channel_masker(
         plt.title("Fit to test")
         plt.xlabel("Channels")
         plt.ylabel("Test Values")
-        plt.plot(flat, label="Flattend")
-        plt.plot(test_values, color="r", label="Test Values")
-        plt.plot(fit, label="Fit")
+        plt.plot(test_values, label="Flattend")
+        plt.plot(test_values_original, color="r", label="Test Values")
+        if fit is not None:
+            plt.plot(fit, label="Fit")
         plt.legend()
         plt.show()
 

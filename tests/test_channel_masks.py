@@ -69,11 +69,9 @@ class TestStatTest:
         """
         75-25
         """
-        top, bottom = np.quantile(self.rand, [0.75, 0.25], axis=0)
-        assert np.all(top > bottom)
-        diff = top - bottom
-        assert len(diff) == 512
-        assert np.array_equal(diff, stat_test(self.rand, "75-25"))
+        iqr = stats.iqr(self.rand, scale="normal", axis=0)
+        assert len(iqr) == 512
+        assert np.array_equal(iqr, stat_test(self.rand, "75-25"))
 
     def test_ad(self):
         """
@@ -125,7 +123,7 @@ class TestStatTest:
         """
         MAD
         """
-        mad = stats.median_abs_deviation(self.rand, axis=0)
+        mad = stats.median_abs_deviation(self.rand, axis=0, scale="normal")
         assert len(mad) == 512
         assert np.array_equal(mad, stat_test(self.rand, "mad"))
 
