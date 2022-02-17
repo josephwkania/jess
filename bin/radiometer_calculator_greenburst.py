@@ -12,7 +12,7 @@ from scipy import signal
 from your import Your
 
 
-def get_timeseries(input_file, block_size=2 ** 14):
+def get_timeseries(input_file, block_size=2**14):
     """
     Makes a zero DM timeseries for a given file
     args:
@@ -48,7 +48,7 @@ def get_stds(input_file, headless):
     # can use the above to test
 
     assert (
-        len(timeseries) < 2 ** 7
+        len(timeseries) < 2**7
     ), f"""The file length of
     {len(timeseries)} is shorter than the max boxcar width of {2**7}"""
 
@@ -57,7 +57,7 @@ def get_stds(input_file, headless):
     stds = np.zeros(len(powers_of_two) + 1, dtype=np.float64)
     stds[0] = np.std(timeseries)
     for j, k in enumerate(powers_of_two):
-        kernal = np.array(signal.boxcar(2 ** k) / 2 ** k)
+        kernal = np.array(signal.boxcar(2**k) / 2**k)
         stds[j + 1] = np.std(np.convolve(timeseries, kernal, "valid"))
 
     widths = 2 ** np.insert(powers_of_two, [0], 0)

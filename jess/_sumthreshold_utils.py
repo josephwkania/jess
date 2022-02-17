@@ -229,7 +229,7 @@ def gaussian_filter(
            2D Gaussian filtered data
         """
         return np.exp(
-            -(array_n ** 2) / (2 * sigma_n ** 2) - array_m ** 2 / (2 * sigma_m ** 2)
+            -(array_n**2) / (2 * sigma_n**2) - array_m**2 / (2 * sigma_m**2)
         )
 
     array_n = np.arange(-kernel_n / 2, kernel_n / 2 + 1)
@@ -327,7 +327,7 @@ def ksigma(dynamic_spectra: np.ndarray) -> np.ndarray:
         """
         Guass function to use for fit
         """
-        return np.exp(-((x_val - med) ** 2) / (2 * sigma ** 2)) / (
+        return np.exp(-((x_val - med) ** 2) / (2 * sigma**2)) / (
             np.sqrt(2 * np.pi) * sigma
         )
 

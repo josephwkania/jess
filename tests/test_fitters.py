@@ -102,6 +102,8 @@ def test_median_fitter():
     fit = median_fitter(data_dirty)
     clip = 3
     np.testing.assert_allclose(data[clip:-clip], fit[clip:-clip], atol=1)
+    with pytest.raises(ValueError):
+        median_fitter(data_dirty, interations=0)
 
 
 def test_poly_fitter():

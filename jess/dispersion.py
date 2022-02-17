@@ -118,7 +118,7 @@ def fdmt(
     nfreqs, ntimes = dynamic_spectra.shape
 
     freq_log = int(np.log2(nfreqs))
-    powers_of_two = {2 ** i for i in range(1, 30)}
+    powers_of_two = {2**i for i in range(1, 30)}
     if nfreqs not in powers_of_two:
         raise RuntimeError(f"{nfreqs=} is not a power of 2")
     if ntimes not in powers_of_two:
@@ -173,7 +173,7 @@ def fdmt_fft(
     nfreqs, ntimes = dynamic_spectra.shape
 
     freq_log = int(np.log2(nfreqs))
-    powers_of_two = {2 ** i for i in range(1, 30)}
+    powers_of_two = {2**i for i in range(1, 30)}
     if nfreqs not in powers_of_two:
         raise RuntimeError(f"{nfreqs=} is not a power of 2")
     if ntimes not in powers_of_two:

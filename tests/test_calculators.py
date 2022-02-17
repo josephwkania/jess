@@ -468,7 +468,7 @@ def test_guassian_noise_adder():
     Add some standard deviations
     """
     stds = np.array([1, 1, 2, 2])
-    combined = np.sqrt(np.sum(stds ** 2)) / 4
+    combined = np.sqrt(np.sum(stds**2)) / 4
     assert combined == calc.guassian_noise_adder(stds)
 
 

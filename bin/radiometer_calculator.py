@@ -22,7 +22,7 @@ from your import Your
 from jess.scipy_cupy.stats import median_abs_deviation
 
 
-def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width=8):
+def get_timeseries(input_file, block_size=2**14, nspectra=-1, max_boxcar_width=8):
     """
     Makes a zero DM timeseries for a given file
     args:
@@ -36,9 +36,9 @@ def get_timeseries(input_file, block_size=2 ** 14, nspectra=-1, max_boxcar_width
     if nspectra == -1:
         end = yr.your_header.nspectra
     else:
-        end = 2 ** nspectra
+        end = 2**nspectra
     timeseries = cp.zeros(end, dtype=np.float64)
-    if 2 ** max_boxcar_width > 2 * end:
+    if 2**max_boxcar_width > 2 * end:
         raise ValueError(
             f"""2*number samples to be processed:
         {2*end} is shorter than the max boxcar width of {2**max_boxcar_width}"""
@@ -81,7 +81,7 @@ def get_stds(
     mads[0] = median_abs_deviation(timeseries, scale="normal")
 
     for j, k in enumerate(powers_of_two):
-        kernal = cp.array(signal.boxcar(2 ** k) / 2 ** k)
+        kernal = cp.array(signal.boxcar(2**k) / 2**k)
         conv = cp.convolve(timeseries, kernal, "valid")
         # conv = signal.detrend(conv.get())
         stds[j + 1] = cp.std(conv)

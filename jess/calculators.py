@@ -461,7 +461,7 @@ def guassian_noise_adder(standard_deviations: np.ndarray) -> float:
         We are taking the mean, do divide by the number of channels
         (=number of standard deviations)
     """
-    squares = standard_deviations ** 2
+    squares = standard_deviations**2
     summed = np.sum(squares)
     return np.sqrt(summed) / len(standard_deviations)
 

@@ -12,12 +12,13 @@ import argparse
 import logging
 import os
 import textwrap
+from typing import Union
 
 import numpy as np
 from rich.logging import RichHandler
 from rich.progress import track
-from your import Your
-from your.formats.filwriter import make_sigproc_object
+from your import Writer, Your
+from your.formats.filwriter import sigproc_object_from_writer
 
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
@@ -41,7 +42,7 @@ except ModuleNotFoundError:
 logger = logging.getLogger()
 
 
-def get_outfile(file: str, out_file: str) -> str:
+def get_outfile(file: str, out_file: Union[str, None]) -> str:
     """
     Makes the outfile name by:
     if no str is given -> append _mad to the original file name
@@ -66,7 +67,7 @@ def get_outfile(file: str, out_file: str) -> str:
 
 
 def clean_cpu(
-    yr_input: object,
+    yr_input: Your,
     sigma: float,
     gulp: int,
     flatten_to: int,
@@ -74,7 +75,7 @@ def clean_cpu(
     time_median_size: int,
     modes_to_zero: int,
     out_file: str,
-    sigproc_object: object,
+    sigproc_object: sigproc_object_from_writer,
 ) -> None:
     """
     Run the MAD filter on chunks of data without dedispersing it.
@@ -171,7 +172,7 @@ def clean_cpu(
 
 
 def clean_gpu(
-    yr_input: object,
+    yr_input: Your,
     sigma: float,
     gulp: int,
     flatten_to: int,
@@ -179,7 +180,7 @@ def clean_gpu(
     time_median_size: int,
     modes_to_zero: int,
     out_file: str,
-    sigproc_object: object,
+    sigproc_object: sigproc_object_from_writer,
 ) -> None:
     """
     Run the MAD filter on chunks of data without dedispersing it.
@@ -275,7 +276,7 @@ def clean_gpu(
 
 
 def clean_dispersion(
-    yr_input: object,
+    yr_input: Your,
     dispersion_measure: float,
     sigma: float,
     gulp: int,
@@ -283,7 +284,7 @@ def clean_dispersion(
     channels_per_subband: int,
     time_median_size: int,
     out_file: str,
-    sigproc_object: object,
+    sigproc_object: sigproc_object_from_writer,
 ) -> None:
     """
     Run the MAD filter on chunks of data without dedispersing it.
@@ -392,7 +393,7 @@ def master_cleaner(
     channels_per_subband: int = 256,
     time_median_size: int = 0,
     modes_to_zero: int = 6,
-    out_file: str = None,
+    out_file: Union[str, None] = None,
 ) -> None:
     """
     Loops over a file, dedisperses the data, runs a subbanded mad filter,
@@ -413,28 +414,8 @@ def master_cleaner(
     out_file = get_outfile(file, out_file)
     yr_input = Your(file)
 
-    sigproc_object = make_sigproc_object(
-        rawdatafile=out_file,
-        source_name=yr_input.your_header.source_name,
-        nchans=yr_input.your_header.nchans,
-        foff=yr_input.your_header.foff,  # MHz
-        fch1=yr_input.your_header.fch1,  # MHz
-        tsamp=yr_input.your_header.tsamp,  # seconds
-        tstart=yr_input.your_header.tstart,  # MJD
-        # src_raj=yr_input.src_raj,  # HHMMSS.SS
-        # src_dej=yr_input.src_dej,  # DDMMSS.SS
-        # machine_id=yr_input.your_header.machine_id,
-        # nbeams=yr_input.your_header.nbeams,
-        # ibeam=yr_input.your_header.ibeam,
-        nbits=yr_input.your_header.nbits,
-        # nifs=yr_input.your_header.nifs,
-        # barycentric=yr_input.your_header.barycentric,
-        # pulsarcentric=yr_input.your_header.pulsarcentric,
-        # telescope_id=yr_input.your_header.telescope_id,
-        # data_type=yr_input.your_header.data_type,
-        # az_start=yr_input.your_header.az_start,
-        # za_start=yr_input.your_header.za_start,
-    )
+    wrt = Writer(yr_input, outname=out_file)
+    sigproc_object = sigproc_object_from_writer(wrt)
     sigproc_object.write_header(out_file)
 
     if dispersion_measure > 0:

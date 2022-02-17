@@ -215,12 +215,12 @@ def read_and_combine_subint(
         xp = np  # pylint: disable=invalid-name
 
     if lowband_obj.nbits == 16:
-        flatten_to = 2 ** 15
-        scale = xp.sqrt(2 ** 16)
+        flatten_to = 2**15
+        scale = xp.sqrt(2**16)
         dtype = xp.uint16
     elif lowband_obj.nbits == 8:
-        flatten_to = 2 ** 7
-        scale = xp.sqrt(2 ** 8)
+        flatten_to = 2**7
+        scale = xp.sqrt(2**8)
         dtype = xp.uint8
     else:
         logging.warning("Not tested, unpredictable results!")
@@ -450,7 +450,7 @@ def combine(
             continue
         if key in ("ra_deg", "dec_deg", "gl", "gb"):
             hpbw = (
-                57.3 * 3 * 10 ** 8 / (low_header["center_freq"] * 10 ** 6 * 200)
+                57.3 * 3 * 10**8 / (low_header["center_freq"] * 10**6 * 200)
             )  # deg
             if np.abs(low_header[key] - up_header[key]) > 0.1 * hpbw:
                 raise ValueError(

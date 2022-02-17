@@ -31,7 +31,7 @@ class TestDedisperson:
         self.time = self.tsamp * cp.arange(0, 3)
         self.dm = 100
         self.freq = 1 / cp.sqrt(
-            1 / 1400 ** 2 - 1000 * self.time / (4148808.0 * self.dm)
+            1 / 1400**2 - 1000 * self.time / (4148808.0 * self.dm)
         )
 
         self.disperesed = cp.zeros((3, 3), dtype=int)

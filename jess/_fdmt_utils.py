@@ -8,7 +8,7 @@ from typing import Any, Callable, List, Tuple
 
 import numpy as np
 
-DISPERSION_CONSTANT = 4.148808 * 10 ** 9  # Mhz * pc^-1 * cm^3
+DISPERSION_CONSTANT = 4.148808 * 10**9  # Mhz * pc^-1 * cm^3
 
 
 def get_dmt_function(func_name: str) -> Tuple[Callable[..., Any], np.dtype]:
@@ -85,7 +85,7 @@ def fdmt(
     nfreqs, ntimes = dynamic_spectra.shape
 
     freq_log = int(np.log2(nfreqs))
-    powers_of_two = {2 ** i for i in range(1, 30)}
+    powers_of_two = {2**i for i in range(1, 30)}
     if nfreqs not in powers_of_two:
         raise RuntimeError(f"{nfreqs=} is not a power of 2")
     if ntimes not in powers_of_two:
@@ -136,7 +136,7 @@ def fdmt_fft(
     nfreqs, ntimes = dynamic_spectra.shape
 
     freq_log = int(np.log2(nfreqs))
-    powers_of_two = {2 ** i for i in range(1, 30)}
+    powers_of_two = {2**i for i in range(1, 30)}
     if nfreqs not in powers_of_two:
         raise RuntimeError(f"{nfreqs=} is not a power of 2")
     if ntimes not in powers_of_two:
@@ -195,8 +195,8 @@ def fdmt_initialization(
     delta_t = int(
         np.ceil(
             (max_dt - 1)
-            * (1.0 / f_min ** 2 - 1.0 / (f_min + delta_f) ** 2)
-            / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+            * (1.0 / f_min**2 - 1.0 / (f_min + delta_f) ** 2)
+            / (1.0 / f_min**2 - 1.0 / f_max**2)
         )
     )
 
@@ -248,8 +248,8 @@ def fdmtfft_initialization(
     delta_t = int(
         np.ceil(
             (max_dt - 1)
-            * (1.0 / f_min ** 2 - 1.0 / (f_min + delta_f) ** 2)
-            / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+            * (1.0 / f_min**2 - 1.0 / (f_min + delta_f) ** 2)
+            / (1.0 / f_min**2 - 1.0 / f_max**2)
         )
     )
 
@@ -303,8 +303,8 @@ def fdmt_iteration(
     delta_t = int(
         np.ceil(
             (max_dt - 1)
-            * (1.0 / f_min ** 2 - 1.0 / (f_min + delta_f) ** 2)
-            / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+            * (1.0 / f_min**2 - 1.0 / (f_min + delta_f) ** 2)
+            / (1.0 / f_min**2 - 1.0 / f_max**2)
         )
     )
     logging.debug("deltaT = %.2f", delta_t)
@@ -352,23 +352,23 @@ def fdmt_iteration(
         delta_t_local = int(
             np.ceil(
                 (max_dt - 1)
-                * (1.0 / f_start ** 2 - 1.0 / (f_end) ** 2)
-                / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+                * (1.0 / f_start**2 - 1.0 / (f_end) ** 2)
+                / (1.0 / f_min**2 - 1.0 / f_max**2)
             )
         )
 
         for i_dt in range(delta_t_local + 1):
             dt_middle = round(
                 i_dt
-                * (1.0 / f_middle ** 2 - 1.0 / f_start ** 2)
-                / (1.0 / f_end ** 2 - 1.0 / f_start ** 2)
+                * (1.0 / f_middle**2 - 1.0 / f_start**2)
+                / (1.0 / f_end**2 - 1.0 / f_start**2)
             )
             dt_middle_index = dt_middle + shift_input
 
             dt_middle_larger = round(
                 i_dt
-                * (1.0 / f_middle_larger ** 2 - 1.0 / f_start ** 2)
-                / (1.0 / f_end ** 2 - 1.0 / f_start ** 2)
+                * (1.0 / f_middle_larger**2 - 1.0 / f_start**2)
+                / (1.0 / f_end**2 - 1.0 / f_start**2)
             )
 
             dt_rest = i_dt - dt_middle_larger
@@ -435,8 +435,8 @@ def fdmtfft_iteration(
     delta_t = int(
         np.ceil(
             (max_dt - 1)
-            * (1.0 / f_min ** 2 - 1.0 / (f_min + delta_f) ** 2)
-            / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+            * (1.0 / f_min**2 - 1.0 / (f_min + delta_f) ** 2)
+            / (1.0 / f_min**2 - 1.0 / f_max**2)
         )
     )
     logging.debug("delta_t: %.2f", delta_t)
@@ -458,12 +458,12 @@ def fdmtfft_iteration(
     # see remark about this correction in the FDMT implementation.
     correction = d_f / 2.0
 
-    f_min_fac = 1.0 / f_min ** 2.0
+    f_min_fac = 1.0 / f_min**2.0
     delta_t_shift = (
         np.ceil(
             (max_dt - 1)
             * (f_min_fac - 1.0 / (f_min + delta_f / 2.0 + d_f / 2.0) ** 2.0)
-            / (f_min_fac - 1.0 / f_max ** 2.0)
+            / (f_min_fac - 1.0 / f_max**2.0)
         )
         + 3
     )
@@ -477,21 +477,21 @@ def fdmtfft_iteration(
         delta_t_local = int(
             np.ceil(
                 (max_dt - 1)
-                * (1.0 / f_start ** 2 - 1.0 / (f_end) ** 2)
-                / (1.0 / f_min ** 2 - 1.0 / f_max ** 2)
+                * (1.0 / f_start**2 - 1.0 / (f_end) ** 2)
+                / (1.0 / f_min**2 - 1.0 / f_max**2)
             )
         )
         for i_dt in range(delta_t_local + 1):
             dt_middle = round(
                 i_dt
-                * (1.0 / f_middle ** 2 - 1.0 / f_start ** 2)
-                / (1.0 / f_end ** 2 - 1.0 / f_start ** 2)
+                * (1.0 / f_middle**2 - 1.0 / f_start**2)
+                / (1.0 / f_end**2 - 1.0 / f_start**2)
             )
             dt_middle_index = dt_middle + shift_input
             dt_middle_larger = round(
                 i_dt
-                * (1.0 / f_middle_larger ** 2 - 1.0 / f_start ** 2)
-                / (1.0 / f_end ** 2 - 1.0 / f_start ** 2)
+                * (1.0 / f_middle_larger**2 - 1.0 / f_start**2)
+                / (1.0 / f_end**2 - 1.0 / f_start**2)
             )
 
             dt_rest = i_dt - dt_middle_larger
@@ -544,7 +544,7 @@ def coherent_dedispersion(
     exponental = np.e ** (
         -(
             2 * np.pi * complex(0, 1) * practical_dm / (f_min + freqs)
-            + 2 * np.pi * complex(0, 1) * practical_dm * freqs / (f_max ** 2)
+            + 2 * np.pi * complex(0, 1) * practical_dm * freqs / (f_max**2)
         )
     )
     if not already_ffted:
@@ -617,11 +617,11 @@ def hybrid_dedispersion(
     # ConversionConst is used to convert from Dispersion measure in units of pc*cm^-3
     # to time bins
     conversion_const = (
-        DISPERSION_CONSTANT * (1.0 / f_min ** 2 - 1.0 / f_max ** 2) * (f_max - f_min)
+        DISPERSION_CONSTANT * (1.0 / f_min**2 - 1.0 / f_max**2) * (f_max - f_min)
     )
     n_d = dm_max * conversion_const
 
-    n_coherent = (np.ceil(n_d / (n_p ** 2))).astype(int)
+    n_coherent = (np.ceil(n_d / (n_p**2))).astype(int)
     logging.debug("Number of coherent iterations: %i", n_coherent)
     ffted_signal = np.fft.fft(raw_signal)
 
@@ -657,7 +657,7 @@ def hybrid_dedispersion(
         fdmt_input -= np.mean(fdmt_input)
         std = np.std(fdmt_input)
         fdmt_input /= 0.25 * std
-        var = std ** 2
+        var = std**2
         fdmt_output = fdmt(fdmt_input, f_min, f_max, n_p, np.int64)
         fdmt_output /= np.sqrt(fdmt_normalization * var + 0.000001)
         if np.max(fdmt_output) > sigma_bound:

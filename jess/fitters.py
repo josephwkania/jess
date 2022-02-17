@@ -16,6 +16,7 @@ as a loss function, fits twice to be even more robust
 """
 
 import logging
+from typing import Callable
 
 import numpy as np
 from scipy import ndimage, sparse, stats
@@ -28,7 +29,7 @@ from sklearn.pipeline import make_pipeline
 logger = logging.getLogger()
 
 
-def get_fitter(fitter: str) -> object:
+def get_fitter(fitter: str) -> Callable:
     """
     Get the fitter object for a given string
 
@@ -360,19 +361,26 @@ def cheb_fitter(
 def median_fitter(
     bandpass: np.ndarray,
     chans_per_fit: int = 19,
+    interations: int = 1,
 ) -> np.ndarray:
     """
     Uses a median filter to fit for the bandpass shape
 
     Args:
-        bandpass: the bandpass to fit
+        bandpass: ndarray to fit
 
-        chans_per_fit: humber of channels to run the median filter over
+        chans_per_fit: Number of channels to run the median filter over
 
-        mask_sigma: standard deviation at which to mask outlying channels
+        iterations: Number of iterations to run the median filter. Must be
+                    greater that one.
 
     Returns:
         Fit to bandpass
+
+    Notes:
+        The idea to run this multiple times is from GSL.
+        A recursive median filter might be worth investigating.
+        See https://www.gnu.org/software/gsl/doc/html/filter.html
 
     Example:
         yr = Your(input_file)
@@ -380,7 +388,15 @@ def median_fitter(
         bandpass = np.median(section, axis=0)
         fit = median_fitter(bandpass)
     """
-    return ndimage.median_filter(bandpass, size=chans_per_fit, mode="mirror")
+    if interations < 1:
+        raise ValueError(f"Must have at least one iteration, {interations=}")
+
+    bandpass = bandpass.copy()
+    for _ in range(interations):
+        ndimage.median_filter(
+            bandpass, size=chans_per_fit, mode="mirror", output=bandpass
+        )
+    return bandpass
 
 
 def poly_fitter(
