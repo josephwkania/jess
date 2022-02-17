@@ -3,14 +3,12 @@
 Makes a channel mask for a given .fits/.fil
 
 This is a cli wrapper for jess.channel_masks.channel_masker
-
-
 """
+
 import argparse
 import logging
 import os
 import textwrap
-from typing import List
 
 import numpy as np
 from rich.logging import RichHandler
@@ -23,7 +21,7 @@ from jess.channel_masks import channel_masker
 logger = logging.getLogger()
 
 
-def file_saver(mask: List[bool], out_file: str):
+def file_saver(mask: np.ndarray, out_file: str):
     """
     Saves the mask to a file,
     """
@@ -35,17 +33,17 @@ def file_saver(mask: List[bool], out_file: str):
 def channel_mask_maker(
     file: str,
     test: str,
-    sigma: float = 3.0,
+    sigma: float = 4.0,
     start: int = 0,
     nspec: int = 65536,
     decimation_factor: int = None,
-    fitter: str = "bspline_fitter",
-    chans_per_fit: int = 47,
+    fitter: str = "median_fitter",
+    chans_per_fit: int = 40,
     flagger="z_score_flagger",
     flag_above: bool = True,
     flag_below: bool = True,
     out_file: str = None,
-):
+) -> None:
     """
     Reads data from the given file, does a statistical test,
     flags outlying channels.
@@ -122,7 +120,7 @@ if __name__ == "__main__":
         "--sigma",
         help="Sigma at which to cut data, (z_score_flagger only)",
         type=float,
-        default=3.0,
+        default=4.0,
         required=False,
     )
     parser.add_argument(
@@ -139,7 +137,7 @@ if __name__ == "__main__":
         "--chans_per_fit",
         help="Number of channels for each fit degree of freedom.",
         type=int,
-        default=47,
+        default=40,
         required=False,
     )
     parser.add_argument(

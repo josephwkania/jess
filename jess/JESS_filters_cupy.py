@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 This contains cupy versions of some of JESS_filters
- """
+"""
+
 import logging
 from typing import NamedTuple
 

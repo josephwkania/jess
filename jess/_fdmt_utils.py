@@ -3,15 +3,16 @@
 Fast Dispersion Measure Transform utilities.
 Based on Barak Zackay, see __License__
 """
+
 import logging
-from typing import Any, Callable, List, Tuple
+from typing import Callable, List, Tuple, Union
 
 import numpy as np
 
 DISPERSION_CONSTANT = 4.148808 * 10**9  # Mhz * pc^-1 * cm^3
 
 
-def get_dmt_function(func_name: str) -> Tuple[Callable[..., Any], np.dtype]:
+def get_dmt_function(func_name: str) -> Tuple[Callable, type]:
     """
     Get the Dedispersion function
     """
@@ -55,7 +56,7 @@ def fdmt(
     f_min: float,
     f_max: float,
     max_dt: int,
-    dtype: np.dtype,
+    dtype: Union[np.dtype, type],
 ) -> np.ndarray:
     """
     This function implements the  FDMT algorithm.
@@ -163,7 +164,7 @@ def fdmt_initialization(
     f_min: float,
     f_max: float,
     max_dt: int,
-    dtype: np.dtype,
+    dtype: Union[np.dtype, type],
 ) -> np.ndarray:
     """
     dynamic_spectra - Dynamic Spectra to dedisperse
@@ -271,7 +272,7 @@ def fdmt_iteration(
     f_min: float,
     f_max: float,
     iteration_num: int,
-    dtype: np.dtype,
+    dtype: Union[np.dtype, type],
 ) -> np.ndarray:
     """
     Input:
@@ -569,7 +570,7 @@ def stft(raw_signal: np.ndarray, block_size: int) -> np.ndarray:
     Note: absolute value squared is not performed!
     """
     blocks = np.transpose(
-        raw_signal[: len(raw_signal) / block_size * block_size].reshape(
+        raw_signal[: len(raw_signal) // block_size * block_size].reshape(
             [len(raw_signal) / block_size, block_size]
         )
     )

@@ -39,9 +39,11 @@ def dedisperse(
     _, num_freq = data.shape
     if delays is not None:
         assert len(delays) == num_freq
-    else:
+    elif chan_freqs is not None:
         assert num_freq == len(chan_freqs)
         delays = calc_dispersion_delays(dm, chan_freqs)
+    else:
+        raise RuntimeError("Must provide chan_freqs or delays")
 
     delay_bins = np.round(delays / tsamp).astype("int64")
 
