@@ -3,6 +3,8 @@
 Tests for channel_masks
 """
 
+from unittest import mock
+
 import numpy as np
 import pytest
 from scipy import stats
@@ -237,6 +239,14 @@ class TestDBScan:
 
         assert np.array_equal(self.should_mask, mask)
 
+    def test_dbscan_plot(self):
+        """
+        Test if plot is called when show_plot=True
+        """
+        with mock.patch("matplotlib.pyplot.show") as show:
+            dbscan_flagger(self.rand, eps=0.8, show_plot=True)
+            show.assert_called_once()
+
 
 class TestZScoreFlagger:
     """
@@ -299,6 +309,14 @@ class TestZScoreFlagger:
         with pytest.raises(ValueError):
             z_score_flagger(self.rand, flag_above=False, flag_below=False)
 
+    def test_z_score_plot(self):
+        """
+        Test if plot is called when show_plot=True
+        """
+        with mock.patch("matplotlib.pyplot.show") as show:
+            z_score_flagger(self.rand, show_plots=True)
+            show.assert_called_once()
+
 
 class TestChannelMasker:
     """
@@ -346,3 +364,11 @@ class TestChannelMasker:
 
         with pytest.raises(ValueError):
             channel_masker(self.rand, "stand-dev", flagger="joe")
+
+    def test_channel_masker_plot(self):
+        """
+        Test if plot is called twice when show_plot=True
+        """
+        with mock.patch("matplotlib.pyplot.show") as show:
+            channel_masker(self.rand, "stand-dev", show_plots=True)
+            assert show.call_count == 2
