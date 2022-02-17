@@ -6,7 +6,7 @@ A somewhat robust way to fit bandpasses
 cheb_fitter() Fits Chebyshev polynomials, does to fits to be
 robust.
 
-bandpass_fitter() Fits polynomals twice to get a robust fit.
+bandpass_fitter() Fits polynomials twice to get a robust fit.
 
 bspline_fitt() Fits bsplines using the Huber Regressor
 as a loss function

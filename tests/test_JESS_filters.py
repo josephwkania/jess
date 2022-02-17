@@ -316,7 +316,7 @@ class TestMadSpectra:
         """
         clean = Jf.mad_spectra(
             self.fake_with_rfi.copy(), chans_per_subband=16, sigma=15
-        )
+        ).dynamic_spectra
 
         assert np.allclose(self.fake, clean, rtol=0.20)
 
@@ -324,9 +324,11 @@ class TestMadSpectra:
         """
         Test if mask is correct
         """
-        _, mask = Jf.mad_spectra(
-            self.fake_with_rfi, chans_per_subband=16, sigma=15, return_mask=True
-        )
+        mask = Jf.mad_spectra(
+            self.fake_with_rfi,
+            chans_per_subband=16,
+            sigma=15,
+        ).mask
 
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[200, 10] = True
@@ -367,7 +369,9 @@ class TestFftMad:
         Had to increase the sigma to 6.5 or it would flag good data
         """
 
-        fake_clean = Jf.fft_mad(self.fake_with_rfi, chans_per_subband=32, sigma=6.5)
+        fake_clean = Jf.fft_mad(
+            self.fake_with_rfi, chans_per_subband=32, sigma=6.5
+        ).dynamic_spectra
         fake_clean[:, self.mid] = fake_clean[:, self.mid] - self.average_power
         np.testing.assert_allclose(self.fake, fake_clean, rtol=0.05)
 
@@ -375,12 +379,11 @@ class TestFftMad:
         """
         Test if mask is correct
         """
-        _, mask = Jf.fft_mad(
+        mask = Jf.fft_mad(
             self.fake_with_rfi,
             chans_per_subband=32,
-            return_mask=True,
             sigma=6.5,
-        )
+        ).mask
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[self.max_bin, self.mid] = True
         np.testing.assert_array_equal(mask, mask_true)
@@ -392,7 +395,7 @@ class TestFftMad:
         bad_chans = np.asarray([15])
         fake_clean = Jf.fft_mad(
             self.fake_with_rfi, chans_per_subband=32, bad_chans=bad_chans
-        )
+        ).dynamic_spectra
         assert np.isclose(np.std(fake_clean, axis=0)[bad_chans], 0)
 
 
@@ -419,7 +422,7 @@ class TestMadSpectraFlat:
         """
         fake_clean = Jf.mad_spectra_flat(
             self.fake_with_rfi, chans_per_subband=32, sigma=7
-        )
+        ).dynamic_spectra
 
         assert np.allclose(fake_clean, self.fake, rtol=0.1)
 
@@ -427,9 +430,11 @@ class TestMadSpectraFlat:
         """
         Test if returned mask is correct
         """
-        _, mask = Jf.mad_spectra_flat(
-            self.fake_with_rfi, chans_per_subband=32, sigma=7, return_mask=True
-        )
+        mask = Jf.mad_spectra_flat(
+            self.fake_with_rfi,
+            chans_per_subband=32,
+            sigma=7,
+        ).mask
         mask_true = np.zeros_like(mask, dtype=bool)
         mask_true[12, 12] = True
         mask_true[20, 20] = True
