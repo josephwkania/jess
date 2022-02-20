@@ -123,6 +123,14 @@ class TestAutoCorrelate:
             calc.autocorrelate(self.rand, axis=3)
 
 
+def test_find_largest_factor():
+    """
+    Test if find_largest factor retruns common powers of two
+    """
+    np.testing.assert_equal(calc.closest_larger_factor(4090, 16), 4096)
+    np.testing.assert_equal(calc.closest_larger_factor(1020, 8), 1024)
+
+
 class TestMedianAbsDeviation:
     """
     Test MedianAbsDeviation that also returns the

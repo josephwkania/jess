@@ -295,7 +295,7 @@ def dbscan_flagger(
 def channel_masker(
     dynamic_spectra: np.ndarray,
     test: str,
-    sigma: float = 3.0,
+    sigma: float = 4.0,
     fitter: str = "median_fitter",
     chans_per_fit: int = 30,
     flagger: str = "z_score_flagger",

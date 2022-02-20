@@ -79,7 +79,24 @@ def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
     return correlation
 
 
-def mean(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
+def closest_larger_factor(num: int, factor: int) -> np.int64:
+    """
+    Find the closest factor that is larger than a number.
+
+    args:
+        num: The number of to find the largest factor
+
+        factor: Factor to divide by
+
+    returns:
+        Closest factor of `factor` larger than `num`
+    """
+    return (np.ceil(num / factor) * factor).astype(int)
+
+
+def mean(
+    data_array: np.ndarray, factor: int, axis: int, pad: str = "median"
+) -> np.ndarray:
     """
     Reduce the data along an axis by taking the mean of a 'factor' of rows along
     the axis
@@ -91,20 +108,33 @@ def mean(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
 
         axis: axis to operate on
 
+        pad: method to pad if axis is not divisible. If None
+             will not pad
+
     returns:
         array with axis reduced by factor
     """
+    if axis > 1:
+        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
+    axis_length = data_array.shape[axis]
+    if axis_length % factor != 0 and pad is not None:
+        new_length = closest_larger_factor(axis_length, factor)
+        data_array = pad_along_axis(
+            data_array, new_length=new_length, axis=axis, mode=pad
+        )
+        axis_length = new_length
+
     if axis == 0:
         reshaped = data_array.reshape(
-            data_array.shape[0] // factor, factor, data_array.shape[1]
+            axis_length // factor, factor, data_array.shape[1]
         )
         return reshaped.mean(axis=1)
     if axis == 1:
         reshaped = data_array.reshape(
-            data_array.shape[0], data_array.shape[1] // factor, factor
+            data_array.shape[0], axis_length // factor, factor
         )
         return reshaped.mean(axis=2)
-    raise NotImplementedError(f"Asked for axis {axis} which is not available")
 
 
 def median_abs_deviation_med(
@@ -548,6 +578,54 @@ def noise_calculator(
     zero_dm_noise = np.median(zero_dm_stds)
 
     return ideal_noise, zero_dm_noise
+
+
+def pad_along_axis(
+    array: np.ndarray,
+    new_length: int,
+    axis: int = 0,
+    mode: str = "median",
+    location: str = "middle",
+):
+    """
+    Pad along an axis.
+
+    args:
+        array: Array to pad
+
+        new_length: New length of the axis
+
+        axis: Axis to be padded
+
+        mode: mode to pad, see numpy.pad
+
+        location: Location of the pad. Options are
+                  [end, start, middle]
+
+        return:
+            Array padded along `axis`
+
+    Based on
+    https://stackoverflow.com/a/49766444
+    """
+
+    pad_size = new_length - array.shape[axis]
+
+    if pad_size <= 0:
+        return array
+
+    npad = [(0, 0)] * array.ndim
+    location = location.casefold()
+    if location == "end":
+        npad[axis] = (0, pad_size)
+    elif location == "start":
+        npad[axis] = (pad_size, 0)
+    elif location == "middle":
+        start = np.ceil(pad_size / 2).astype(int)
+        end = np.floor(pad_size / 2).astype(int)
+        npad[axis] = (start, end)
+
+    return np.pad(array, pad_width=npad, mode=mode)
 
 
 def preprocess(
