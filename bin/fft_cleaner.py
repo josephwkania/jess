@@ -98,7 +98,11 @@ def cpu_backend(
     logging.debug("Using CPU backend")
     bandpass = None
     # loop through all the data
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
         else:
@@ -165,7 +169,11 @@ def gpu_backend(
     logging.debug("Using GPU backend")
     bandpass = None
     # loop through all the data
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
         else:

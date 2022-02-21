@@ -111,7 +111,11 @@ def clean_cpu(
 
     total_flag = np.zeros(3)
     n_iter = 0
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
@@ -216,7 +220,11 @@ def clean_gpu(
 
     total_flag = cp.zeros(3)
     n_iter = 0
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
@@ -335,7 +343,11 @@ def clean_dispersion(
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
     # loop through all the data we can dedisperse
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
         logging.debug("Cleaning samples starting at %i", j)
 
         if 2 * samples_lost + j + gulp < yr_input.your_header.nspectra:

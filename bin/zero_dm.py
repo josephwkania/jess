@@ -114,7 +114,11 @@ def zero_dm_cleaner(
     sigproc_object.write_header(out_file)
     bandpass = None
     # loop through all the data
-    for j in track(range(0, yr_input.your_header.nspectra, gulp)):
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Zero-dm Cleaning",
+        transient=True,
+    ):
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
         else:
