@@ -291,6 +291,7 @@ def clean_dispersion(
     flatten_to: int,
     channels_per_subband: int,
     time_median_size: int,
+    modes_to_zero: int,
     out_file: str,
     sigproc_object: sigproc_object_from_writer,
 ) -> None:
@@ -307,10 +308,12 @@ def clean_dispersion(
 
         gulp: The amount of data to process.
 
-        latten_to: make this the median out the out data.
+        flatten_to: make this the median out the out data.
 
         channels_per_subband: the number of channels for each MAD
                               subband
+
+        modes_to_zero: zero dm fft modes to remove
 
         out_file: name of the file to write out
 
@@ -330,18 +333,51 @@ def clean_dispersion(
     logging.debug("yr_input.your_header.tsamp: %f", yr_input.your_header.tsamp)
     logging.debug("samples_lost: %i", samples_lost)
 
+    # need a bandpass if we do zero_dming, put outside the loop
+    if modes_to_zero >= 1:
+        bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
+
     # add data that can't be dispersed
     # because its at the start
     # if not remove_ends:
-    cleaned = mad_spectra_flat(
+    cleaned, _, mad_percentage = mad_spectra_flat(
         cp.asarray(yr_input.get_data(0, samples_lost)),
         chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
         time_median_size=time_median_size,
-    ).dynamic_spectra
+        return_same_dtype=False,
+    )
+    cleaned, _, fft_percentage = fft_mad(
+        cleaned,
+        sigma=sigma,
+        chans_per_subband=channels_per_subband,
+        return_same_dtype=False,
+    )
+
+    if modes_to_zero == 1:
+        logging.debug("Zero DMing: Subtracting Mean")
+        cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
+    elif modes_to_zero > 1:
+        logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
+        cleaned, dm_percentage = zero_dm_fft(
+            cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+        )
+    else:
+        dm_percentage = 0
+
+    logging.info(
+        "Start of file - MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
+        mad_percentage,
+        fft_percentage,
+        dm_percentage,
+        mad_percentage + fft_percentage + dm_percentage,
+    )
+
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
+    n_iter = 0
+    total_flag = cp.zeros(3)
     # loop through all the data we can dedisperse
     for j in track(
         range(0, yr_input.your_header.nspectra, gulp),
@@ -360,17 +396,45 @@ def clean_dispersion(
             yr_input.your_header.tsamp,
             yr_input.chan_freqs,
         )
-        dedisp[0:-samples_lost, :] = mad_spectra_flat(
+        dedisp[0:-samples_lost, :], _, mad_percentage = mad_spectra_flat(
             dedisp[0:-samples_lost, :],
             chans_per_subband=channels_per_subband,
             sigma=sigma,
             flatten_to=flatten_to,
             time_median_size=time_median_size,
+            return_same_dtype=False,
         )
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
-        redisip = redisip.astype(yr_input.your_header.dtype)
+        cleaned, _, fft_percentage = fft_mad(
+            cleaned,
+            sigma=sigma,
+            chans_per_subband=channels_per_subband,
+            return_same_dtype=False,
+        )
+
+        if modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
+            cleaned, dm_percentage = zero_dm_fft(
+                cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+        else:
+            dm_percentage = 0
+
+        n_iter += 1
+        total_flag += cp.asarray((mad_percentage, fft_percentage, dm_percentage))
+        logging.info(
+            "MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
+            mad_percentage,
+            fft_percentage,
+            dm_percentage,
+            mad_percentage + fft_percentage + dm_percentage,
+        )
+        redisip = to_dtype(redisip, yr_input.your_header.dtype)
         sigproc_object.append_spectra(
             redisip[samples_lost:-samples_lost, :].get(), out_file
         )
@@ -379,17 +443,40 @@ def clean_dispersion(
     # because its at the end
 
     # if not remove_ends:
-    cleaned = mad_spectra_flat(
-        cp.asarray(
-            yr_input.get_data(
-                yr_input.your_header.nspectra - samples_lost, samples_lost
-            )
-        ),
+    cleaned, _, mad_percentage = mad_spectra_flat(
+        cp.asarray(yr_input.get_data(0, samples_lost)),
         chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
         time_median_size=time_median_size,
-    ).dynamic_spectra
+        return_same_dtype=False,
+    )
+    cleaned, _, fft_percentage = fft_mad(
+        cleaned,
+        sigma=sigma,
+        chans_per_subband=channels_per_subband,
+        return_same_dtype=False,
+    )
+
+    if modes_to_zero == 1:
+        logging.debug("Zero DMing: Subtracting Mean")
+        cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
+    elif modes_to_zero > 1:
+        logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
+        cleaned, dm_percentage = zero_dm_fft(
+            cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+        )
+    else:
+        dm_percentage = 0
+
+    logging.info(
+        "Start of file - MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
+        mad_percentage,
+        fft_percentage,
+        dm_percentage,
+        mad_percentage + fft_percentage + dm_percentage,
+    )
+    cleaned = to_dtype(cleaned, yr_input.your_header.dtype)
     sigproc_object.append_spectra(
         cleaned.get(),
         out_file,
@@ -431,19 +518,19 @@ def master_cleaner(
     sigproc_object.write_header(out_file)
 
     if dispersion_measure > 0:
-        raise NotImplementedError("This isn't working quite right yet")
-        # logging.debug("Cleaning at DM %f", dispersion_measure)
-        # clean_dispersion(
-        #     yr_input,
-        #     dispersion_measure=dispersion_measure,
-        #     sigma=sigma,
-        #     gulp=gulp,
-        #     flatten_to=flatten_to,
-        #     channels_per_subband=channels_per_subband,
-        #     time_median_size=time_median_size,
-        #     out_file=out_file,
-        #     sigproc_object=sigproc_object,
-        # )
+        logging.debug("Cleaning at DM %f", dispersion_measure)
+        clean_dispersion(
+            yr_input,
+            dispersion_measure=dispersion_measure,
+            sigma=sigma,
+            gulp=gulp,
+            flatten_to=flatten_to,
+            channels_per_subband=channels_per_subband,
+            time_median_size=time_median_size,
+            modes_to_zero=modes_to_zero,
+            out_file=out_file,
+            sigproc_object=sigproc_object,
+        )
     else:
         logging.debug("No DM given, cleaning at 0 DM")
         if BACKEND_GPU:
@@ -476,7 +563,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="mad_filter.py",
         description=textwrap.dedent(
-            """Runs a Medain Absolute Deviation (MAD) filter
+            """Runs a Composite (MAD/FFT/Zero DM) filter
          over subbands of .fits/.fil"""
         ),
         epilog=__doc__,
@@ -531,6 +618,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-modes_to_zero",
         "--modes_to_zero",
         help="Number of modes to zero",
         type=int,

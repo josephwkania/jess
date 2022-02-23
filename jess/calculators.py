@@ -5,11 +5,12 @@ The repository for all calculators
 
 import logging
 import random
-from typing import Tuple
+from typing import Callable, Tuple, Union
 
 import numpy as np
 from scipy import ndimage, signal, stats
 from scipy.stats import entropy, median_abs_deviation
+from your import Your
 
 random.seed(2021)
 
@@ -79,7 +80,7 @@ def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
     return correlation
 
 
-def closest_larger_factor(num: int, factor: int) -> np.int64:
+def closest_larger_factor(num: int, factor: int) -> int:
     """
     Find the closest factor that is larger than a number.
 
@@ -91,7 +92,7 @@ def closest_larger_factor(num: int, factor: int) -> np.int64:
     returns:
         Closest factor of `factor` larger than `num`
     """
-    return (np.ceil(num / factor) * factor).astype(int)
+    return int(np.ceil(num / factor) * factor)
 
 
 def mean(
@@ -114,8 +115,6 @@ def mean(
     returns:
         array with axis reduced by factor
     """
-    if axis > 1:
-        raise NotImplementedError(f"Asked for axis {axis} which is not available")
 
     axis_length = data_array.shape[axis]
     if axis_length % factor != 0 and pad is not None:
@@ -129,12 +128,15 @@ def mean(
         reshaped = data_array.reshape(
             axis_length // factor, factor, data_array.shape[1]
         )
-        return reshaped.mean(axis=1)
-    if axis == 1:
+        reduced = reshaped.mean(axis=1)
+    elif axis == 1:
         reshaped = data_array.reshape(
             data_array.shape[0], axis_length // factor, factor
         )
-        return reshaped.mean(axis=2)
+        reduced = reshaped.mean(axis=2)
+    elif axis > 1:
+        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+    return reduced
 
 
 def median_abs_deviation_med(
@@ -291,7 +293,7 @@ def decimate(
     dynamic_spectra: np.ndarray,
     time_factor: int = None,
     freq_factor: int = None,
-    backend: object = signal.decimate,
+    backend: Callable = signal.decimate,
 ) -> np.ndarray:
     """
     Makes decimates along either/both time and frequency axes.
@@ -314,12 +316,12 @@ def decimate(
     if time_factor is not None:
         if not isinstance(time_factor, int):
             time_factor = int(time_factor)
-        logging.warning("time_factor was not an int: now is %i", time_factor)
+        logging.debug("time_factor was not an int: now is %i", time_factor)
         dynamic_spectra = backend(dynamic_spectra, time_factor, axis=0)
     if freq_factor is not None:
         if not isinstance(freq_factor, int):
             freq_factor = int(freq_factor)
-        logging.warning("freq_factor was not an int: now is %i", freq_factor)
+        logging.debug("freq_factor was not an int: now is %i", freq_factor)
         dynamic_spectra = backend(
             dynamic_spectra - np.median(dynamic_spectra, axis=0), freq_factor, axis=1
         )
@@ -332,8 +334,8 @@ def flattner_median(
     kernel_size: int = 0,
     return_same_dtype: bool = False,
     return_time_series: bool = False,
-    intermediate_dtype: object = np.float32,
-) -> np.ndarray:
+    intermediate_dtype: type = np.float32,
+) -> Union[np.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
     and then the medians of the of bandpass. Then add flatten_to to all the pixels
@@ -396,8 +398,8 @@ def flattner_mix(
     kernel_size: int = 0,
     return_same_dtype: bool = False,
     return_time_series: bool = False,
-    intermediate_dtype: object = np.float32,
-) -> np.ndarray:
+    intermediate_dtype: type = np.float32,
+) -> Union[np.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
     and then the medians of the of bandpass. Then add flatten_to to all the pixels
@@ -497,7 +499,7 @@ def guassian_noise_adder(standard_deviations: np.ndarray) -> float:
 
 
 def noise_calculator(
-    yr_obj: object,
+    yr_obj: Your,
     num_samples: int = 1000,
     len_block: int = 128,
     detrend: bool = True,
@@ -706,7 +708,9 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     return entropies
 
 
-def balance_chans_per_subband(num_chans: int, chans_per_subband: int) -> np.ndarray:
+def balance_chans_per_subband(
+    num_chans: int, chans_per_subband: int
+) -> Tuple[int, np.ndarray]:
     """
     Balance chan_per_subband when they are not evenly dividable
 
@@ -745,7 +749,7 @@ def divide_range(length: int, num_sections: int) -> np.ndarray:
     return np.array(section_sizes, dtype=int).cumsum()
 
 
-def to_dtype(data: np.ndarray, dtype: object) -> np.ndarray:
+def to_dtype(data: np.ndarray, dtype: np.dtype) -> np.ndarray:
     """
     Takes a chunk of data and changes it to a given data type.
 
