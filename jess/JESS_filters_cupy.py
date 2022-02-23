@@ -4,17 +4,24 @@ This contains cupy versions of some of JESS_filters
 """
 
 import logging
-from typing import NamedTuple
+from functools import partial
+from typing import Callable, NamedTuple
 
 import cupy as cp
 import numpy as np
 from cupyx.scipy import ndimage
 
 from jess.calculators import balance_chans_per_subband
-from jess.calculators_cupy import flattner_median, flattner_mix, to_dtype
+from jess.calculators_cupy import (
+    decimate,
+    flattner_median,
+    flattner_mix,
+    mean,
+    to_dtype,
+)
 
 # from jess.fitters import poly_fitter
-from jess.fitters_cupy import poly_fitter
+from jess.fitters_cupy import median_fitter, poly_fitter
 from jess.scipy_cupy.stats import median_abs_deviation, median_abs_deviation_med
 
 
@@ -399,6 +406,139 @@ def mad_spectra_flat(
         flattened = to_dtype(flattened, dtype=data_type)
 
     return FilterMaskResult(flattened, mask, percent_masked)
+
+
+def filter_weights(
+    dynamic_spectra: np.ndarray,
+    metric: Callable = np.median,
+    bandpass_smooth_length: int = 50,
+    cut_sigma: float = 2 / 3,
+    smooth_sigma: int = 30,
+) -> np.ndarray:
+    """
+    Makes weights based on low values of some meteric.
+    This is designed to ignore bandpass filters or tapers
+    at the end of the bandpass.
+
+    Args:
+        dynamic_spectra - 2D dynamic spectra with time on the
+                          vertical axis
+
+        metric - The statistic to sample.
+
+        bandpass_smooth_length - length of the median filter to
+                                 smooth the bandpass
+
+        sigma_cut - Cut values below (standard deviation)*(sigma cut)
+
+        smooth_sigma - Gaussian filter smoothing sigma. If =0, return
+                       the mask where True=good channels
+
+    Returns:
+        Bandpass weights for sections of spectra with low values.
+        0 where the value is below the threshold and 1 elsewhere,
+        with a Gaussian taper.
+    """
+    bandpass = metric(dynamic_spectra, axis=0)
+    bandpass_std = median_abs_deviation(bandpass, scale="normal")
+    threshold = bandpass_std * cut_sigma
+    if bandpass_smooth_length > 1:
+        bandpass = median_fitter(bandpass, chans_per_fit=bandpass_smooth_length)
+    mask = bandpass > threshold
+
+    if smooth_sigma > 0:
+        return ndimage.gaussian_filter1d((mask).astype(float), sigma=smooth_sigma)
+    return mask
+
+
+def iterative_mad(
+    dynamic_spectra: np.ndarray,
+    factor: int,
+    sigma: float = 4,
+    time_median_size: int = 64,
+    chans_per_subband: int = 256,
+    flatten_to: int = 64,
+    **filter_weight_args,
+) -> np.ndarray:
+    """
+    Interatively clean a chunk of dynamic spectra.
+    If filter_weight_args is not `None`, masks channels that
+    are unlickely to have signal. MAD and MAD FFT are run.
+    Then the channels are decimated by `factor` and MAD is run
+    again, decreasing `chans_per_subband` by `factor`. This
+    is repeated until `factor` channels, when the mean is taken
+
+    Args:
+        dynamic_spectra: a dynamic spectra with time on the vertical axis,
+                        and freq on the horizontal
+
+        factor - Factor to reduce each iteration
+
+        chans_per_subband: Number of channels to calculate the MAD
+
+        sigma: sigma which to reject outliers
+
+        flatten_to: the median of the output data
+
+        time_median_size: the length of the median filter to run in time
+
+        filter_weight_args: Passed to `filter_weights`, if `None` no
+                            filter of channels.
+
+    Returns:
+        Cleaned Time Series
+
+    """
+    if filter_weight_args is not None:
+        chan_mask = filter_weights(
+            dynamic_spectra, smooth_sigma=0, **filter_weight_args
+        )
+        dynamic_spectra = dynamic_spectra[:, chan_mask]
+
+    dynamic_spectra, _, mask_percentage = mad_spectra_flat(
+        dynamic_spectra,
+        no_time_detrend=True,
+        sigma=sigma,
+        time_median_size=time_median_size,
+        return_same_dtype=False,
+    )
+    dynamic_spectra, _, fft_mask_percentage, = fft_mad(
+        dynamic_spectra,
+        sigma=sigma,
+        time_median_size=time_median_size // 2,
+        return_same_dtype=False,
+    )
+
+    loop_mask_percentage = 0.0
+    while dynamic_spectra.shape[1] > factor * factor:
+        logging.debug("Number channels %i", dynamic_spectra.shape[1])
+        dynamic_spectra = decimate(
+            dynamic_spectra,
+            freq_factor=factor,
+            backend=partial(mean, pad="reflect"),
+        )
+
+        chans_per_subband = np.around(chans_per_subband / factor).astype(int)
+        dynamic_spectra, _, looped_mask = mad_spectra_flat(
+            dynamic_spectra,
+            no_time_detrend=True,
+            sigma=sigma,
+            time_median_size=time_median_size,
+            return_same_dtype=False,
+            chans_per_subband=chans_per_subband,
+            flatten_to=flatten_to,
+        )
+        loop_mask_percentage += looped_mask
+    total_mask = mask_percentage + fft_mask_percentage + loop_mask_percentage
+    logging.debug(
+        "Inital Mad: %.2f, FFT %.2f, Loop Mask %.2f, Total Masked %.2f",
+        mask_percentage,
+        fft_mask_percentage,
+        loop_mask_percentage,
+        total_mask,
+    )
+    decimated = dynamic_spectra.mean(axis=1)
+    return FilterResult(decimated, total_mask)
 
 
 def zero_dm(

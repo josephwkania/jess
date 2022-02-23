@@ -4,6 +4,7 @@ The repository for all calculators
 """
 
 import logging
+from typing import Callable
 
 import cupy as cp
 from cupyx.scipy import ndimage
@@ -12,7 +13,24 @@ from cupyx.scipy import ndimage
 # pylint: disable=W0201
 
 
-def mean(data_array: cp.ndarray, factor: int, axis: int) -> cp.ndarray:
+def closest_larger_factor(num: int, factor: int) -> int:
+    """
+    Find the closest factor that is larger than a number.
+
+    args:
+        num: The number of to find the largest factor
+
+        factor: Factor to divide by
+
+    returns:
+        Closest factor of `factor` larger than `num`
+    """
+    return int(cp.ceil(num / factor) * factor)
+
+
+def mean(
+    data_array: cp.ndarray, factor: int, axis: int, pad: str = "median"
+) -> cp.ndarray:
     """
     Reduce the data along an axis by taking the mean of a 'factor' of rows along
     the axis
@@ -24,26 +42,40 @@ def mean(data_array: cp.ndarray, factor: int, axis: int) -> cp.ndarray:
 
         axis: axis to operate on
 
+        pad: method to pad if axis is not divisible. If None
+             will not pad
+
     returns:
         array with axis reduced by factor
     """
+    axis_length = data_array.shape[axis]
+    if axis_length % factor != 0 and pad is not None:
+        new_length = closest_larger_factor(axis_length, factor)
+        data_array = pad_along_axis(
+            data_array, new_length=new_length, axis=axis, mode=pad
+        )
+        axis_length = new_length
+
     if axis == 0:
         reshaped = data_array.reshape(
-            data_array.shape[0] // factor, factor, data_array.shape[1]
+            axis_length // factor, factor, data_array.shape[1]
         )
-        return reshaped.mean(axis=1)
-    if axis == 1:
+        reduced = reshaped.mean(axis=1)
+    elif axis == 1:
         reshaped = data_array.reshape(
-            data_array.shape[0], data_array.shape[1] // factor, factor
+            data_array.shape[0], axis_length // factor, factor
         )
-        return reshaped.mean(axis=2)
-    raise NotImplementedError(f"Asked for axis {axis} which is not available")
+        reduced = reshaped.mean(axis=2)
+    elif axis > 1:
+        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+    return reduced
 
 
 def decimate(
     dynamic_spectra: cp.ndarray,
     time_factor: int = None,
     freq_factor: int = None,
+    backend: Callable = mean,
 ) -> cp.ndarray:
     """
     Makes decimates along either/both time and frequency axes.
@@ -72,7 +104,7 @@ def decimate(
         if not isinstance(freq_factor, int):
             freq_factor = int(freq_factor)
         logging.warning("freq_factor was not an int: now is %i", freq_factor)
-        dynamic_spectra = mean(
+        dynamic_spectra = backend(
             dynamic_spectra - cp.median(dynamic_spectra, axis=0), freq_factor, axis=1
         )
     return dynamic_spectra - cp.median(dynamic_spectra, axis=0)
@@ -206,6 +238,54 @@ def flattner_mix(
     if return_time_series:
         return result, ts_medians
     return result
+
+
+def pad_along_axis(
+    array: cp.ndarray,
+    new_length: int,
+    axis: int = 0,
+    mode: str = "median",
+    location: str = "middle",
+):
+    """
+    Pad along an axis.
+
+    args:
+        array: Array to pad
+
+        new_length: New length of the axis
+
+        axis: Axis to be padded
+
+        mode: mode to pad, see numpy.pad
+
+        location: Location of the pad. Options are
+                  [end, start, middle]
+
+        return:
+            Array padded along `axis`
+
+    Based on
+    https://stackoverflow.com/a/49766444
+    """
+
+    pad_size = new_length - array.shape[axis]
+
+    if pad_size <= 0:
+        return array
+
+    npad = [(0, 0)] * array.ndim
+    location = location.casefold()
+    if location == "end":
+        npad[axis] = (0, pad_size)
+    elif location == "start":
+        npad[axis] = (pad_size, 0)
+    elif location == "middle":
+        start = cp.ceil(pad_size / 2).astype(int)
+        end = cp.floor(pad_size / 2).astype(int)
+        npad[axis] = (start, end)
+
+    return cp.pad(array, pad_width=npad, mode=mode)
 
 
 def to_dtype(data: cp.ndarray, dtype: object) -> cp.ndarray:

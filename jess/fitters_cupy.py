@@ -7,7 +7,7 @@ import logging
 
 import cupy as cp
 from cupy.linalg import cholesky
-from cupyx.scipy import sparse
+from cupyx.scipy import ndimage, sparse
 from cupyx.scipy.sparse.linalg import spsolve
 
 from jess.scipy_cupy.stats import median_abs_deviation
@@ -104,6 +104,47 @@ def arpls_fitter(
             break
         weights = weights_iter
     return fit
+
+
+def median_fitter(
+    bandpass: cp.ndarray,
+    chans_per_fit: int = 19,
+    interations: int = 1,
+) -> cp.ndarray:
+    """
+    Uses a median filter to fit for the bandpass shape
+
+    Args:
+        bandpass: ndarray to fit
+
+        chans_per_fit: Number of channels to run the median filter over
+
+        iterations: Number of iterations to run the median filter. Must be
+                    greater that one.
+
+    Returns:
+        Fit to bandpass
+
+    Notes:
+        The idea to run this multiple times is from GSL.
+        A recursive median filter might be worth investigating.
+        See https://www.gnu.org/software/gsl/doc/html/filter.html
+
+    Example:
+        yr = Your(input_file)
+        data = yr.get_data(0, 8192)
+        bandpass = np.median(section, axis=0)
+        fit = median_fitter(bandpass)
+    """
+    if interations < 1:
+        raise ValueError(f"Must have at least one iteration, {interations=}")
+
+    bandpass = bandpass.copy()
+    for _ in range(interations):
+        ndimage.median_filter(
+            bandpass, size=chans_per_fit, mode="mirror", output=bandpass
+        )
+    return bandpass
 
 
 def poly_fitter(
