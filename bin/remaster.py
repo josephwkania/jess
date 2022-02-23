@@ -347,6 +347,7 @@ def clean_dispersion(
         flatten_to=flatten_to,
         time_median_size=time_median_size,
         return_same_dtype=False,
+        no_time_detrend=True,
     )
     cleaned, _, fft_percentage = fft_mad(
         cleaned,
@@ -402,6 +403,7 @@ def clean_dispersion(
             sigma=sigma,
             flatten_to=flatten_to,
             time_median_size=time_median_size,
+            no_time_detrend=True,
             return_same_dtype=False,
         )
         redisip = dedisperse(
@@ -449,6 +451,7 @@ def clean_dispersion(
         sigma=sigma,
         flatten_to=flatten_to,
         time_median_size=time_median_size,
+        no_time_detrend=True,
         return_same_dtype=False,
     )
     cleaned, _, fft_percentage = fft_mad(
