@@ -374,7 +374,7 @@ def clean_dispersion(
         dm_percentage,
         mad_percentage + fft_percentage + dm_percentage,
     )
-
+    cleaned = to_dtype(cleaned, yr_input.your_header.dtype)
     sigproc_object.append_spectra(cleaned.get(), out_file)
 
     n_iter = 0
@@ -409,8 +409,8 @@ def clean_dispersion(
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
         )
-        cleaned, _, fft_percentage = fft_mad(
-            cleaned,
+        redisip, _, fft_percentage = fft_mad(
+            redisip,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
             return_same_dtype=False,
@@ -418,11 +418,11 @@ def clean_dispersion(
 
         if modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
+            redisip, dm_percentage = zero_dm(redisip, bandpass, return_same_dtype=False)
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
-            cleaned, dm_percentage = zero_dm_fft(
-                cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            redisip, dm_percentage = zero_dm_fft(
+                redisip, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
         else:
             dm_percentage = 0
@@ -446,7 +446,11 @@ def clean_dispersion(
 
     # if not remove_ends:
     cleaned, _, mad_percentage = mad_spectra_flat(
-        cp.asarray(yr_input.get_data(0, samples_lost)),
+        cp.asarray(
+            yr_input.get_data(
+                yr_input.your_header.nspectra - samples_lost, samples_lost
+            )
+        ),
         chans_per_subband=channels_per_subband,
         sigma=sigma,
         flatten_to=flatten_to,
