@@ -65,6 +65,7 @@ def run_filter(
         raise NotImplementedError(f"You asked for {filter}, which is not available!")
 
     mask = central_limit_masker(test_values, window=window)
+    _ = mask
 
 
 def central_limit_masker(
