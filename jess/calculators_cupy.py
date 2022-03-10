@@ -48,6 +48,9 @@ def mean(
     returns:
         array with axis reduced by factor
     """
+    if axis > 1:
+        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
     axis_length = data_array.shape[axis]
     if axis_length % factor != 0 and pad is not None:
         new_length = closest_larger_factor(axis_length, factor)
@@ -61,13 +64,13 @@ def mean(
             axis_length // factor, factor, data_array.shape[1]
         )
         reduced = reshaped.mean(axis=1)
-    elif axis == 1:
+    else:
+        # axis == 1
         reshaped = data_array.reshape(
             data_array.shape[0], axis_length // factor, factor
         )
         reduced = reshaped.mean(axis=2)
-    elif axis > 1:
-        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
     return reduced
 
 

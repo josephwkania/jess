@@ -107,7 +107,9 @@ def clean_cpu(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = np.array([flatten_to] * yr_input.your_header.nchans)
+        bandpass = np.array(
+            [flatten_to] * yr_input.your_header.nchans, dtype=np.float32
+        )
 
     total_flag = np.zeros(3)
     n_iter = 0
@@ -166,12 +168,13 @@ def clean_cpu(
         sigproc_object.append_spectra(cleaned, out_file)
 
     n_iter = yr_input.your_header.nspectra / gulp
+    total_flag /= n_iter
     logging.info(
         "Full file - mad: %.1f%%, fft: %.1f%%, highpass: %.1f%%, total flagged: %.1f%%",
-        total_flag[0] / n_iter,
-        total_flag[1] / n_iter,
-        total_flag[2] / n_iter,
-        total_flag.sum() / n_iter,
+        total_flag[0],
+        total_flag[1],
+        total_flag[2],
+        total_flag.sum(),
     )
 
 
@@ -216,7 +219,9 @@ def clean_gpu(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
+        bandpass = cp.array(
+            [flatten_to] * yr_input.your_header.nchans, dtype=cp.float32
+        )
 
     total_flag = cp.zeros(3)
     n_iter = 0
@@ -247,6 +252,7 @@ def clean_gpu(
             sigma=sigma,
             chans_per_subband=channels_per_subband,
             return_same_dtype=False,
+            time_median_size=1,
         )
 
         if modes_to_zero == 1:
@@ -258,7 +264,7 @@ def clean_gpu(
                 cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
         else:
-            dm_percentage = 0
+            dm_percentage = cp.asarray((0))
 
         n_iter += 1
         total_flag += cp.asarray((mad_percentage, fft_percentage, dm_percentage))
@@ -274,12 +280,13 @@ def clean_gpu(
 
         sigproc_object.append_spectra(cleaned.get(), out_file)
 
+    total_flag /= n_iter
     logging.info(
         "Full file - MAD: %.1f%%, FFT: %.1f%%, Highpass: %.1f%%, Total: %.1f%%",
-        total_flag[0] / n_iter,
-        total_flag[1] / n_iter,
-        total_flag[2] / n_iter,
-        total_flag.sum() / n_iter,
+        total_flag[0],
+        total_flag[1],
+        total_flag[2],
+        total_flag.sum(),
     )
 
 
@@ -335,7 +342,9 @@ def clean_dispersion(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = cp.array([flatten_to] * yr_input.your_header.nchans)
+        bandpass = cp.array(
+            [flatten_to] * yr_input.your_header.nchans, dtype=cp.float32
+        )
 
     # add data that can't be dispersed
     # because its at the start
@@ -664,9 +673,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    LOGGING_FORMAT = (
-        "%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s"
-    )
+    LOGGING_FORMAT = "%(funcName)s - %(name)s - %(levelname)s - %(message)s"
 
     if args.verbose:
         logging.basicConfig(

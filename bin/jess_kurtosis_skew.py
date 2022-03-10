@@ -16,15 +16,22 @@ from your import Writer, Your
 from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
+from jess.JESS_filters_generic import kurtosis_and_skew
+from jess.scipy_cupy.stats import iqr_med
+
 try:
-    import cupy as cp
+    import cupy as xp
 
     from jess.calculators_cupy import flattner_median, to_dtype
-    from jess.JESS_filters_cupy import kurtosis_and_skew
-    from jess.scipy_cupy.stats import iqr_med
 
-except ModuleNotFoundError as not_found:
-    raise NotImplementedError("No cpu version yet!") from not_found
+    BACKEND_GPU = True
+
+except ModuleNotFoundError:
+    import numpy as xp
+
+    from jess.calculators import flattner_median, to_dtype
+
+    BACKEND_GPU = False
 
 
 def get_outfile(file: str, out_file: str) -> str:
@@ -51,7 +58,7 @@ def get_outfile(file: str, out_file: str) -> str:
     return out_file
 
 
-def clean_gpu(
+def clean(
     yr_input: Your,
     samples_per_block: int,
     no_time_detrend: bool,
@@ -92,7 +99,7 @@ def clean_gpu(
     mask_chans: bool = True
 
     n_iter = 0
-    total_flag = cp.zeros(3)
+    total_flag = xp.zeros(3)
     for j in track(
         range(0, yr_input.your_header.nspectra, gulp),
         description="Cleaning File",
@@ -104,7 +111,8 @@ def clean_gpu(
         else:
             data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
 
-        data = cp.asarray(data)
+        if BACKEND_GPU:
+            data = xp.asarray(data)
         _, mask, mask_percentage = kurtosis_and_skew(
             dynamic_spectra=data,
             samples_per_block=samples_per_block,
@@ -113,22 +121,22 @@ def clean_gpu(
             nan_policy=None,
         )
 
-        data = data.astype(cp.float32)
-        data[mask] = cp.nan
+        data = data.astype(xp.float32)
+        data[mask] = xp.nan
         data, time_series = flattner_median(
             data, flatten_to=flatten_to, return_time_series=True
         )
 
         if mask_chans:
-            means = cp.nanmean(data, axis=0)
-            chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy=None)
+            means = xp.nanmean(data, axis=0)
+            chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy="omit")
             chan_mask = means - chan_mid > sigma * chan_noise
             mask += chan_mask
             chan_mask_percent = 100 * chan_mask.mean(0)
 
         mask_percentage_total = 100 * mask.mean()
         n_iter += 1
-        total_flag += cp.asarray(
+        total_flag += xp.asarray(
             [mask_percentage, chan_mask_percent, mask_percentage_total]
         )
         logging.info(
@@ -141,14 +149,15 @@ def clean_gpu(
         data[mask] = flatten_to
 
         if no_time_detrend:
-            time_series -= cp.median(time_series)
+            time_series -= xp.median(time_series)
             data += time_series[:, None]
 
         data = to_dtype(data, dtype=yr_input.your_header.dtype)
 
-        sigproc_object.append_spectra(data.get(), out_file)
+        if BACKEND_GPU:
+            data = data.get()
+        sigproc_object.append_spectra(data, out_file)
 
-    print(f"{total_flag=}, {n_iter=}")
     total_flag /= n_iter
     logging.info(
         "Total: Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
@@ -212,9 +221,9 @@ if __name__ == "__main__":
         "-no_td",
         "--no_time_detrend",
         help="No time series detrend (for low DM sources)",
-        type=bool,
         default=False,
         required=False,
+        action="store_true",
     )
     parser.add_argument(
         "-winsorize_std",
@@ -271,7 +280,7 @@ if __name__ == "__main__":
     sigproc_obj = sigproc_object_from_writer(wrt)
     sigproc_obj.write_header(outfile)
 
-    clean_gpu(
+    clean(
         yr_input=yrinput,
         samples_per_block=args.samples_per_block,
         no_time_detrend=args.no_time_detrend,

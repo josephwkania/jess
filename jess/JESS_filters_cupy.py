@@ -5,7 +5,7 @@ This contains cupy versions of some of JESS_filters
 
 import logging
 from functools import partial
-from typing import Callable, NamedTuple, Tuple, Union
+from typing import Callable, NamedTuple
 
 import cupy as cp
 import numpy as np
@@ -22,12 +22,7 @@ from jess.calculators_cupy import (
 
 # from jess.fitters import poly_fitter
 from jess.fitters_cupy import median_fitter, poly_fitter
-from jess.scipy_cupy.stats import (
-    combined,
-    iqr_med,
-    median_abs_deviation,
-    median_abs_deviation_med,
-)
+from jess.scipy_cupy.stats import median_abs_deviation, median_abs_deviation_med
 
 
 class FilterMaskResult(NamedTuple):
@@ -172,80 +167,6 @@ def fft_mad(
         dynamic_spectra_cleaned = to_dtype(dynamic_spectra_cleaned, dtype=data_type)
 
     return FilterMaskResult(dynamic_spectra_cleaned, mask, percent_masked)
-
-
-def kurtosis_and_skew(
-    dynamic_spectra: cp.ndarray,
-    samples_per_block: int = 4096,
-    sigma: float = 4,
-    detrend: Union[Tuple, None] = (median_fitter, 20),
-    winsorize_args: Union[Tuple, None] = (5, 40),
-    nan_policy: Union[str, None] = None,
-) -> cp.ndarray:
-    """
-    Gaussainity test using Kurtosis and Skew. We calculate Kurtosis and skew along
-    the time axis in blocks of `samples_per_block`. This is balanced if the number
-    of samples is not evenly divisible. We then use the central limit theorem to
-    flag outlying samples in Kurtosis and Skew individually. These masks are then
-    added together.
-
-    Args:
-        dynamic_spectra - Section spectra time on the vertical axis
-
-        samples_per_block - Time samples for each channel block
-
-        detrend - Detrend Kurtosis and Skew values (fitter, chans_per_fit).
-                  If `None`, no detrend
-
-        winsorize_args - Winsorize the second moments. See scipy_cupy.stats.winsorize
-                         If `None`, no winorization.
-
-        nan_policy - How to propagate nans. If None, does not check for nans.
-
-    Returns:
-        bool Mask with True=bad data
-
-    Notes:
-        Flagging based on
-        https://www.worldscientific.com/doi/10.1142/S225117171940004X
-    """
-    num_cols, limits = balance_chans_per_subband(
-        dynamic_spectra.shape[0], samples_per_block
-    )
-    skew = cp.zeros((num_cols, dynamic_spectra.shape[1]), dtype=cp.float64)
-    kurtosis = cp.zeros_like(skew)
-    for jcol in range(num_cols):
-        column = cp.index_exp[limits[jcol] : limits[jcol + 1]]
-        skew[jcol], kurtosis[jcol] = combined(
-            dynamic_spectra[column],
-            axis=0,
-            nan_policy=nan_policy,
-            winsorize_args=winsorize_args,
-        )
-
-    if detrend is not None:
-        skew -= detrend[0](cp.median(skew, axis=0), chans_per_fit=detrend[1])
-        kurtosis -= median_fitter(cp.median(kurtosis, axis=0))
-    skew_scale, skew_mid = iqr_med(
-        skew, scale="normal", axis=None, nan_policy=nan_policy
-    )
-    kurt_scale, kurt_mid = iqr_med(
-        kurtosis, scale="normal", axis=None, nan_policy=nan_policy
-    )
-    skew_mask = skew - skew_mid > sigma * skew_scale
-    kurt_mask = kurtosis - kurt_mid > sigma * kurt_scale
-    mask = skew_mask + kurt_mask
-    mask_percent = 100 * mask.mean()
-    logging.debug(
-        "skew_mask:%.2f kurtosis_mask:%.2f, mask:%.2f",
-        100 * skew_mask.mean(),
-        100 * kurt_mask.mean(),
-        mask_percent,
-    )
-    # repeat needs a list
-    repeats = cp.diff(limits).tolist()
-    mask = cp.repeat(mask, repeats=repeats, axis=0)
-    return FilterMaskResult(np.nan, mask, mask_percent)
 
 
 def mad_spectra(

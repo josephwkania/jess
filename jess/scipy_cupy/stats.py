@@ -7,9 +7,18 @@ Cupy versions of scipy functions.
 import warnings
 from typing import List, Tuple, Union
 
-import cupy as cp
 import numpy as np
-from cupyx.scipy import ndimage
+
+try:
+    import cupy as xp
+    from cupyx.scipy import ndimage
+
+    BACKEND_GPU = True
+except ModuleNotFoundError:
+    xp = np
+    from scipy import ndimage
+
+    BACKEND_GPU = False
 
 
 def _mad_1d_gpu(x, center, nan_policy):
@@ -20,17 +29,17 @@ def _mad_1d_gpu(x, center, nan_policy):
     # 'propagate', it is assumed to be 'omit', because 'raise' is handled
     # in `median_abs_deviation`.
     # No warning is generated if x is empty or all nan.
-    isnan = cp.isnan(x)
+    isnan = xp.isnan(x)
     if isnan.any():
         if nan_policy == "propagate":
-            return cp.nan
+            return xp.nan
         x = x[~isnan]
     if x.size == 0:
         # MAD of an empty array is nan.
-        return cp.nan
+        return xp.nan
     # Edge cases have been handled, so do the basic MAD calculation.
     med = center(x)
-    mad = cp.median(cp.abs(x - med))
+    mad = xp.median(xp.abs(x - med))
     return mad
 
 
@@ -44,12 +53,12 @@ def _contains_nan(a, nan_policy="propagate"):
         # Calling np.sum to avoid creating a huge array into memory
         # e.g. np.isnan(a).any()
         with np.errstate(invalid="ignore"):
-            contains_nan = cp.isnan(cp.sum(a))
+            contains_nan = xp.isnan(xp.sum(a))
     except TypeError:
         # This can happen when attempting to sum things which are not
         # numbers (e.g. as in the function `mode`). Try an alternative method:
         try:
-            contains_nan = cp.nan in set(a.ravel())
+            contains_nan = xp.nan in set(a.ravel())
         except TypeError:
             # Don't know what to do. Fall back to omitting nan values and
             # issue a warning.
@@ -68,7 +77,7 @@ def _contains_nan(a, nan_policy="propagate"):
 
 
 def median_abs_deviation(
-    x, axis=0, center=cp.median, scale=1.0, nan_policy="propagate"
+    x, axis=0, center=xp.median, scale=1.0, nan_policy="propagate"
 ):
     r"""
     Compute the median absolute deviation of the data along the given axis.
@@ -174,42 +183,42 @@ def median_abs_deviation(
         else:
             raise ValueError(f"{scale} is not a valid scale value.")
 
-    x = cp.asarray(x)
+    x = xp.asarray(x)
 
     # Consistent with `np.var` and `np.std`.
     if not x.size:
         if axis is None:
-            return cp.nan
+            return xp.nan
         nan_shape = tuple(item for i, item in enumerate(x.shape) if i != axis)
         if nan_shape == ():
             # Return nan, not array(nan)
-            return cp.nan
-        return cp.full(nan_shape, cp.nan)
+            return xp.nan
+        return xp.full(nan_shape, xp.nan)
 
     contains_nan, nan_policy = _contains_nan(x, nan_policy)
-    x = cp.array(x)
+    x = xp.array(x)
     if contains_nan:
         if axis is None:
             mad = _mad_1d_gpu(x.ravel(), center, nan_policy)
         else:
-            mad = cp.apply_along_axis(_mad_1d_gpu, axis, x, center, nan_policy)
+            mad = xp.apply_along_axis(_mad_1d_gpu, axis, x, center, nan_policy)
     else:
         if axis is None:
             med = center(x, axis=None)
-            mad = cp.median(cp.abs(x - med))
+            mad = xp.median(xp.abs(x - med))
         else:
             # Wrap the call to center() in expand_dims() so it acts like
             # keepdims=True was used.
-            med = cp.expand_dims(center(x, axis=axis), axis)
-            mad = cp.median(cp.abs(x - med), axis=axis)
+            med = xp.expand_dims(center(x, axis=axis), axis)
+            mad = xp.median(xp.abs(x - med), axis=axis)
 
     return mad / scale
 
 
 def median_abs_deviation_med(
-    x: cp.ndarray,
+    x: xp.ndarray,
     axis: int = 0,
-    center: object = cp.median,
+    center: object = xp.median,
     scale: Union[float, str] = 1.0,
     nan_policy: str = "propagate",
 ):
@@ -321,17 +330,17 @@ def median_abs_deviation_med(
         else:
             raise ValueError(f"{scale} is not a valid scale value.")
 
-    x = cp.asarray(x)
+    x = xp.asarray(x)
 
     # Consistent with `np.var` and `np.std`.
     if not x.size:
         if axis is None:
-            return cp.nan, cp.nan
+            return xp.nan, xp.nan
         nan_shape = tuple(item for i, item in enumerate(x.shape) if i != axis)
         if nan_shape == ():
             # Return nan, not array(nan)
-            return cp.nan, cp.nan
-        return cp.full(nan_shape, cp.nan), cp.nan
+            return xp.nan, xp.nan
+        return xp.full(nan_shape, xp.nan), xp.nan
 
     contains_nan, nan_policy = _contains_nan(x, nan_policy)
 
@@ -340,31 +349,31 @@ def median_abs_deviation_med(
             mad = _mad_1d_gpu(x.ravel(), center, nan_policy)
             centers = center(x.ravel())
         else:
-            mad = cp.apply_along_axis(_mad_1d_gpu, axis, x, center, nan_policy)
+            mad = xp.apply_along_axis(_mad_1d_gpu, axis, x, center, nan_policy)
             centers = center(x, axis=axis)
     else:
         if axis is None:
             centers = center(x, axis=None)
-            mad = cp.median(cp.abs(x - centers))
+            mad = xp.median(xp.abs(x - centers))
         else:
             # Wrap the call to center() in expand_dims() so it acts like
             # keepdims=True was used.
             centers = center(x, axis=axis)
-            med = cp.expand_dims(centers, axis)
-            mad = cp.median(cp.abs(x - med), axis=axis)
+            med = xp.expand_dims(centers, axis)
+            mad = xp.median(xp.abs(x - med), axis=axis)
 
     return mad / scale, centers
 
 
 def iqr_med(
-    x: cp.ndarray,
+    x: xp.ndarray,
     axis: int = None,
     rng: Union[Tuple, List] = (25, 75),
     scale: Union[float, str] = 1.0,
     nan_policy: Union[str, None] = "propagate",
     interpolation: str = "linear",
     keepdims: bool = False,
-) -> cp.ndarray:
+) -> xp.ndarray:
     r"""
     Compute the interquartile range of the data along the specified axis.
     The interquartile range (IQR) is the difference between the 75th and
@@ -477,12 +486,12 @@ def iqr_med(
     array([[ 3.],
            [ 1.]])
     """
-    x = cp.asarray(x)
+    x = xp.asarray(x)
 
     # This check prevents percentile from raising an error later. Also, it is
     # consistent with `np.var` and `np.std`.
     if not x.size:
-        return cp.nan
+        return xp.nan
 
     # An error may be raised here, so fail-fast, before doing lengthy
     # computations, even though `scale` is not used until later
@@ -506,9 +515,15 @@ def iqr_med(
         nan_policy = "propagate"
 
     if contains_nan and nan_policy == "omit":
-        percentile_func = cp.nanpercentile
+        # cupy does not have nanpercentile
+        # it seems like nans are being omitted using cp.percentile
+        # so I think this is ok
+        if BACKEND_GPU:
+            percentile_func = xp.percentile
+        else:
+            percentile_func = xp.nanpercentile
     else:
-        percentile_func = cp.percentile
+        percentile_func = xp.percentile
 
     if len(rng) != 2:
         raise TypeError("quantile range must be two element sequence")
@@ -520,7 +535,7 @@ def iqr_med(
     pct = percentile_func(
         x, rng + [50], axis=axis, interpolation=interpolation, keepdims=keepdims
     )
-    out = cp.subtract(pct[1], pct[0])
+    out = xp.subtract(pct[1], pct[0])
 
     if scale != 1.0:
         out /= scale
@@ -529,7 +544,7 @@ def iqr_med(
 
 
 def _moment(
-    array: cp.ndarray, axis: int, test: str, mean: Union[cp.ndarray, None] = None
+    array: xp.ndarray, axis: int, test: str, mean: Union[xp.ndarray, None] = None
 ) -> List:
     """
     Calculate the moments for a given test.
@@ -548,10 +563,10 @@ def _moment(
         Moments need for a given test along the axis
     """
     if mean is None:
-        mean = cp.nanmean(array, axis=axis, keepdims=True)
-        mean_func = cp.nanmean
+        mean = xp.nanmean(array, axis=axis, keepdims=True)
+        mean_func = xp.nanmean
     else:
-        mean_func = cp.mean
+        mean_func = xp.mean
     a_zero_mean = array - mean
 
     square = a_zero_mean**2
@@ -568,8 +583,8 @@ def _moment(
 
 
 def winsorize(
-    array: cp.ndarray, sigma: float, chans_per_fit: int, nan_policy: Union[str, None]
-) -> cp.ndarray:
+    array: xp.ndarray, sigma: float, chans_per_fit: int, nan_policy: Union[str, None]
+) -> xp.ndarray:
     """
     Winsorize a array by clipping values `sigma` above the fit. The trend
     is flitted using the median fitter. The noise is calculated from the
@@ -602,20 +617,20 @@ def _chk_asarray(array, axis):
     array
     """
     if axis is None:
-        array = cp.ravel(array)
+        array = xp.ravel(array)
         outaxis = 0
     else:
-        array = cp.asarray(array)
+        array = xp.asarray(array)
         outaxis = axis
 
     if array.ndim == 0:
-        array = cp.atleast_1d(array)
+        array = xp.atleast_1d(array)
 
     return array, outaxis
 
 
 def combined(
-    array: cp.ndarray,
+    array: xp.ndarray,
     axis: int = 0,
     fisher: bool = True,
     bias: bool = True,
@@ -716,29 +731,29 @@ def combined(
         m_2 = winsorize(m_2, *winsorize_args, nan_policy=nan_policy)
 
     with np.errstate(all="ignore"):
-        zero = m_2 <= (cp.finfo(m_2.dtype).resolution * mean.squeeze(axis)) ** 2
-        vals_skew = cp.where(zero, 0, m_3 / m_2**1.5)
-        vals_kurtosis = cp.where(zero, 0, m_4 / m_2**2.0)
+        zero = m_2 <= (xp.finfo(m_2.dtype).resolution * mean.squeeze(axis)) ** 2
+        vals_skew = xp.where(zero, 0, m_3 / m_2**1.5)
+        vals_kurtosis = xp.where(zero, 0, m_4 / m_2**2.0)
 
     if not bias:
         can_correct_skew = ~zero & (n_el > 2)
         can_correct_kurtosis = ~zero & (n_el > 3)
         if can_correct_skew.any():
-            m_2 = cp.extract(can_correct_skew, m_2)
-            m_3 = cp.extract(can_correct_skew, m_3)
-            nval_skew = cp.sqrt((n_el - 1.0) * n_el) / (n_el - 2.0) * m_3 / m_2**1.5
-            cp.place(vals_skew, can_correct_skew, nval_skew)
+            m_2 = xp.extract(can_correct_skew, m_2)
+            m_3 = xp.extract(can_correct_skew, m_3)
+            nval_skew = xp.sqrt((n_el - 1.0) * n_el) / (n_el - 2.0) * m_3 / m_2**1.5
+            xp.place(vals_skew, can_correct_skew, nval_skew)
 
         if can_correct_kurtosis.any():
-            m_2 = cp.extract(can_correct_kurtosis, m_2)
-            m_4 = cp.extract(can_correct_kurtosis, m_4)
+            m_2 = xp.extract(can_correct_kurtosis, m_2)
+            m_4 = xp.extract(can_correct_kurtosis, m_4)
             nval_kutosis = (
                 1.0
                 / (n_el - 2)
                 / (n_el - 3)
                 * ((n_el**2 - 1.0) * m_4 / m_2**2.0 - 3 * (n_el - 1) ** 2.0)
             )
-            cp.place(vals_kurtosis, can_correct_kurtosis, nval_kutosis + 3.0)
+            xp.place(vals_kurtosis, can_correct_kurtosis, nval_kutosis + 3.0)
 
     if vals_skew.ndim == 0:
         return vals_skew.item(), vals_kurtosis.item()
