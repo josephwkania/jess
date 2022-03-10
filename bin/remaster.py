@@ -47,7 +47,7 @@ def get_outfile(file: str, out_file: Union[str, None]) -> str:
     Makes the outfile name by:
     if no str is given -> append _mad to the original file name
     if str is given with an extension other than .fil -> assert error
-    if str is given without extention  -> add .fil
+    if str is given without extention -> add .fil
     """
     if not out_file:
         # if no out file is given, create the string

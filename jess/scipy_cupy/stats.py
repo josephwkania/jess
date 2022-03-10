@@ -9,6 +9,7 @@ from typing import List, Tuple, Union
 
 import cupy as cp
 import numpy as np
+from cupyx.scipy import ndimage
 
 
 def _mad_1d_gpu(x, center, nan_policy):
@@ -209,7 +210,7 @@ def median_abs_deviation_med(
     x: cp.ndarray,
     axis: int = 0,
     center: object = cp.median,
-    scale: float = 1.0,
+    scale: Union[float, str] = 1.0,
     nan_policy: str = "propagate",
 ):
     r"""
@@ -525,3 +526,224 @@ def iqr_med(
         out /= scale
 
     return out, pct[2]
+
+
+def _moment(
+    array: cp.ndarray, axis: int, test: str, mean: Union[cp.ndarray, None] = None
+) -> List:
+    """
+    Calculate the moments for a given test.
+
+    Args:
+        array - Array to consider
+
+        axis - Axis to compute values along
+
+        test - Statistical test: multi m2, m3, m4
+               skew: m2, m3, kurtosis: m2, m4
+
+        mean - Mean values, if `None` calculates uses nanmean
+
+    Returns:
+        Moments need for a given test along the axis
+    """
+    if mean is None:
+        mean = cp.nanmean(array, axis=axis, keepdims=True)
+        mean_func = cp.nanmean
+    else:
+        mean_func = cp.mean
+    a_zero_mean = array - mean
+
+    square = a_zero_mean**2
+    if test == "multi":
+        moments_list: Tuple = (square, square * a_zero_mean, square * square)
+    elif test == "skew":
+        moments_list = (square, square * a_zero_mean)
+    elif test == "kurtosis":
+        moments_list = (square, square * square)
+    else:
+        raise NotADirectoryError(f"You Requested {test} which is not implemented")
+
+    return [mean_func(moment, axis) for moment in moments_list]
+
+
+def winsorize(
+    array: cp.ndarray, sigma: float, chans_per_fit: int, nan_policy: Union[str, None]
+) -> cp.ndarray:
+    """
+    Winsorize a array by clipping values `sigma` above the fit. The trend
+    is flitted using the median fitter. The noise is calculated from the
+    difference between the array and fit using IQR.
+
+    Args:
+        array - Array to Winsorize, processed in place.
+
+        sigma - Sigma to clip at
+
+        chans_per_fit - Channels per fitting order, see
+                        `jess.fitters.median_fitter`
+
+        nan_policy - nan policy, if `None` IQR doesn't check for nans
+
+    Returns:
+        winsorized array
+    """
+    fit = ndimage.median_filter(array, size=chans_per_fit, mode="reflect")
+    noise, _ = iqr_med(array - fit, scale="normal", nan_policy=nan_policy)
+    top_value = fit + sigma * noise
+    mask = array > top_value
+    array[mask] = top_value[mask]
+    return array
+
+
+def _chk_asarray(array, axis):
+    """
+    Handles None axis and turning to
+    array
+    """
+    if axis is None:
+        array = cp.ravel(array)
+        outaxis = 0
+    else:
+        array = cp.asarray(array)
+        outaxis = axis
+
+    if array.ndim == 0:
+        array = cp.atleast_1d(array)
+
+    return array, outaxis
+
+
+def combined(
+    array: cp.ndarray,
+    axis: int = 0,
+    fisher: bool = True,
+    bias: bool = True,
+    nan_policy: Union[str, None] = "propagate",
+    winsorize_args: Union[Tuple, None] = None,
+):
+    r"""
+    Compute the kurtosis (Fisher or Pearson) and skewness of a dataset.
+    Kurtosis is the fourth central moment divided by the square of the
+    variance. If Fisher's definition is used, then 3.0 is subtracted from
+    the result to give 0.0 for a normal distribution.
+    If bias is False then the kurtosis is calculated using k statistics to
+    eliminate bias coming from biased moment estimators
+
+    For normally distributed data, the skewness should be about zero. For
+    unimodal continuous distributions, a skewness value greater than zero means
+    that there is more weight in the right tail of the distribution. The
+    function `skewtest` can be used to determine if the skewness value
+    is close enough to zero, statistically speaking.
+    Parameters
+    ----------
+    a : ndarray
+        Input array.
+    axis : int or None, optional
+        Axis along which skewness is calculated. Default is 0.
+        If None, compute over the whole array `a`.
+    bias : bool, optional
+        If False, then the calculations are corrected for statistical bias.
+    fisher : bool, optional
+        If True, Fisher's definition is used (normal ==> 0.0). If False,
+        Pearson's definition is used (normal ==> 3.0).
+    bias : bool, optional
+        If False, then the calculations are corrected for statistical bias.
+    nan_policy : {'propagate', 'raise', 'omit'}, optional
+        Defines how to handle when input contains nan.
+        The following options are available (default is 'propagate'):
+          * 'propagate': returns nan
+          * 'raise': throws an error
+          * 'omit': performs the calculations ignoring nan values
+          * `None`: Don't check for nans, omit
+    winsorize_args : If not `None`, this array gets passed to winsorize, see
+                     stats.winsorize
+
+    Returns
+    -------
+    (skewness : ndarray  kurtosis : array)
+        The skewness of values along an axis, returning 0 where all values are
+        equal. The kurtosis of values along an axis. If all values are equal,
+        return -3 for Fisher's definition and 0 for Pearson's definition.
+    Notes
+    -----
+    The sample skewness is computed as the Fisher-Pearson coefficient
+    of skewness, i.e.
+    .. math::
+        g_1=\frac{m_3}{m_2^{3/2}}
+    where
+    .. math::
+        m_i=\frac{1}{N}\sum_{n=1}^N(x[n]-\bar{x})^i
+    is the biased sample :math:`i\texttt{th}` central moment, and
+    :math:`\bar{x}` is
+    the sample mean.  If ``bias`` is False, the calculations are
+    corrected for bias and the value computed is the adjusted
+    Fisher-Pearson standardized moment coefficient, i.e.
+    .. math::
+        G_1=\frac{k_3}{k_2^{3/2}}=
+            \frac{\sqrt{N(N-1)}}{N-2}\frac{m_3}{m_2^{3/2}}.
+    References
+    ----------
+    .. [1] Zwillinger, D. and Kokoska, S. (2000). CRC Standard
+       Probability and Statistics Tables and Formulae. Chapman & Hall: New
+       York. 2000.
+       Section 2.2.24.1
+    Examples
+    --------
+    >>> from scipy.stats import skew
+    >>> combined([1, 2, 3, 4, 5])
+    (0.0, 1.7)
+    >>> combined([2, 8, 0, 4, 1, 9, 9, 0])
+    (0.2650554122698573, 1.333998924716149)
+    """
+    array, axis = _chk_asarray(array, axis)
+    n_el = array.shape[axis]
+
+    if nan_policy is not None:
+        _, nan_policy = _contains_nan(array, nan_policy)
+
+    # if contains_nan and nan_policy == "omit":
+    #     raise NotImplementedError()
+    #     a = ma.masked_invalid(a)
+    #     return mstats_basic.skew(a, axis, bias)
+
+    mean = array.mean(axis, keepdims=True)
+    # mean = cp.median(a, axis, keepdims=True)
+    # m2, m3, m4 = _moment_simple(a, [2, 3, 4], axis, mean=mean)
+    m_2, m_3, m_4 = _moment(array, axis, test="multi", mean=mean)
+
+    if winsorize_args is not None:
+        m_2 = winsorize(m_2, *winsorize_args, nan_policy=nan_policy)
+
+    with np.errstate(all="ignore"):
+        zero = m_2 <= (cp.finfo(m_2.dtype).resolution * mean.squeeze(axis)) ** 2
+        vals_skew = cp.where(zero, 0, m_3 / m_2**1.5)
+        vals_kurtosis = cp.where(zero, 0, m_4 / m_2**2.0)
+
+    if not bias:
+        can_correct_skew = ~zero & (n_el > 2)
+        can_correct_kurtosis = ~zero & (n_el > 3)
+        if can_correct_skew.any():
+            m_2 = cp.extract(can_correct_skew, m_2)
+            m_3 = cp.extract(can_correct_skew, m_3)
+            nval_skew = cp.sqrt((n_el - 1.0) * n_el) / (n_el - 2.0) * m_3 / m_2**1.5
+            cp.place(vals_skew, can_correct_skew, nval_skew)
+
+        if can_correct_kurtosis.any():
+            m_2 = cp.extract(can_correct_kurtosis, m_2)
+            m_4 = cp.extract(can_correct_kurtosis, m_4)
+            nval_kutosis = (
+                1.0
+                / (n_el - 2)
+                / (n_el - 3)
+                * ((n_el**2 - 1.0) * m_4 / m_2**2.0 - 3 * (n_el - 1) ** 2.0)
+            )
+            cp.place(vals_kurtosis, can_correct_kurtosis, nval_kutosis + 3.0)
+
+    if vals_skew.ndim == 0:
+        return vals_skew.item(), vals_kurtosis.item()
+
+    if fisher:
+        vals_kurtosis -= 3
+
+    return vals_skew, vals_kurtosis

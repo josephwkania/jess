@@ -112,7 +112,8 @@ def median_fitter(
     interations: int = 1,
 ) -> cp.ndarray:
     """
-    Uses a median filter to fit for the bandpass shape
+    Uses a median filter to fit for the bandpass shape.
+    Note: does inplace
 
     Args:
         bandpass: ndarray to fit
@@ -139,7 +140,7 @@ def median_fitter(
     if interations < 1:
         raise ValueError(f"Must have at least one iteration, {interations=}")
 
-    bandpass = bandpass.copy()
+    # bandpass = bandpass.copy()
     for _ in range(interations):
         ndimage.median_filter(
             bandpass, size=chans_per_fit, mode="mirror", output=bandpass

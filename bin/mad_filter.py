@@ -270,7 +270,7 @@ def get_outfile(file: str, out_file: str) -> str:
 
 
 def clean_gpu(
-    yr_input: object,
+    yr_input: Your,
     sigma: float,
     gulp: int,
     flatten_to: int,
@@ -322,7 +322,7 @@ def clean_gpu(
 
 
 def clean_cpu(
-    yr_input: object,
+    yr_input: Your,
     sigma: float,
     gulp: int,
     flatten_to: int,
@@ -374,7 +374,7 @@ def clean_cpu(
 
 
 def clean_dispersion_gpu(
-    yr_input: object,
+    yr_input: Your,
     dispersion_measure: float,
     sigma: float,
     gulp: int,
@@ -485,7 +485,7 @@ def clean_dispersion_gpu(
 
 
 def clean_dispersion_cpu(
-    yr_input: object,
+    yr_input: Your,
     dispersion_measure: float,
     sigma: float,
     gulp: int,

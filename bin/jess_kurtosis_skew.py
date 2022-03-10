@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""
+Runs a Kurtosis and Skew filter over a .fits/.fil file
+writing out a .fil
+"""
+
+import argparse
+import logging
+import os
+import textwrap
+from typing import Tuple
+
+from rich.logging import RichHandler
+from rich.progress import track
+from your import Writer, Your
+from your.formats.filwriter import sigproc_object_from_writer
+from your.utils.misc import YourArgparseFormatter
+
+try:
+    import cupy as cp
+
+    from jess.calculators_cupy import flattner_median, to_dtype
+    from jess.JESS_filters_cupy import kurtosis_and_skew
+    from jess.scipy_cupy.stats import iqr_med
+
+except ModuleNotFoundError as not_found:
+    raise NotImplementedError("No cpu version yet!") from not_found
+
+
+def get_outfile(file: str, out_file: str) -> str:
+    """
+    Makes the outfile name by:
+    if no str is given -> append _mad to the original file name
+    if str is given with an extension other than .fil -> assert error
+    if str is given without extention -> add .fil
+    """
+    if not out_file:
+        # if no out file is given, create the string
+        path, file_ext = os.path.splitext(file[0])
+        out_file = path + "_gauss.fil"
+        logging.info("No outfile given, writing to %s", out_file)
+        return out_file
+
+    # if a file is given, make sure it has a .fil ext
+    path, file_ext = os.path.splitext(out_file)
+    if file_ext:
+        assert file_ext == ".fil", f"I can only write .fil, you gave: {file_ext}!"
+        return out_file
+
+    out_file += ".fil"
+    return out_file
+
+
+def clean_gpu(
+    yr_input: Your,
+    samples_per_block: int,
+    no_time_detrend: bool,
+    winsorize_args: Tuple,
+    sigma: float,
+    flatten_to: int,
+    gulp: int,
+    out_file: str,
+    sigproc_object: sigproc_object_from_writer,
+) -> None:
+    """
+    Run a kurtosis and skew filter on chunks of data `gulp` long.
+    This wraps jess_filters_cupy.kurtosis_and_skew
+
+     Args:
+        yr_input: the your object of the file you want to clean
+
+        samples_per_block: Number of time samples for each block
+
+        winsorize_args: (std, channeles_per_fit) to winsorize m2
+
+        sigma: Sigma at which to remove outliers
+
+        gulp: The amount of data to process.
+
+        flatten_to: make this the median out the out data.
+
+        channels_per_subband: the number of channels for each MAD
+                              subband
+
+        out_file: name of the file to write out
+
+        sigproc_obj: sigproc object to write out
+
+    Returns:
+        None
+    """
+    mask_chans: bool = True
+
+    n_iter = 0
+    total_flag = cp.zeros(3)
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+    ):
+        logging.debug("Cleaning samples starting at %i", j)
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+
+        data = cp.asarray(data)
+        _, mask, mask_percentage = kurtosis_and_skew(
+            dynamic_spectra=data,
+            samples_per_block=samples_per_block,
+            sigma=sigma,
+            winsorize_args=winsorize_args,
+            nan_policy=None,
+        )
+
+        data = data.astype(cp.float32)
+        data[mask] = cp.nan
+        data, time_series = flattner_median(
+            data, flatten_to=flatten_to, return_time_series=True
+        )
+
+        if mask_chans:
+            means = cp.nanmean(data, axis=0)
+            chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy=None)
+            chan_mask = means - chan_mid > sigma * chan_noise
+            mask += chan_mask
+            chan_mask_percent = 100 * chan_mask.mean(0)
+
+        mask_percentage_total = 100 * mask.mean()
+        n_iter += 1
+        total_flag += cp.asarray(
+            [mask_percentage, chan_mask_percent, mask_percentage_total]
+        )
+        logging.info(
+            "Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
+            mask_percentage,
+            chan_mask_percent,
+            mask_percentage_total,
+        )
+
+        data[mask] = flatten_to
+
+        if no_time_detrend:
+            time_series -= cp.median(time_series)
+            data += time_series[:, None]
+
+        data = to_dtype(data, dtype=yr_input.your_header.dtype)
+
+        sigproc_object.append_spectra(data.get(), out_file)
+
+    print(f"{total_flag=}, {n_iter=}")
+    total_flag /= n_iter
+    logging.info(
+        "Total: Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
+        total_flag[0],
+        total_flag[1],
+        total_flag[2],
+    )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        prog="kurtosis_skew_filter.py",
+        description=textwrap.dedent(
+            """A Kurtosis and Skew filter
+         on a .fits/.fil"""
+        ),
+        epilog=__doc__,
+        formatter_class=YourArgparseFormatter,
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Set logging to DEBUG",
+        action="store_true",
+        required=False,
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        help=".fil or .fits file to process",
+        type=str,
+        required=True,
+        nargs="+",
+    )
+    parser.add_argument(
+        "-sig",
+        "--sigma",
+        help="Sigma at which to cut data",
+        type=float,
+        default=4.0,
+        required=False,
+    )
+    parser.add_argument(
+        "-spb",
+        "--samples_per_block",
+        help="Number of channels in each subband",
+        type=int,
+        default=64,
+        required=False,
+    )
+    parser.add_argument(
+        "-flatten_to",
+        "--flatten_to",
+        help="Flatten data to this number (Only used for mad_specta_flat)",
+        type=int,
+        default=64,
+        required=False,
+    )
+    parser.add_argument(
+        "-no_td",
+        "--no_time_detrend",
+        help="No time series detrend (for low DM sources)",
+        type=bool,
+        default=False,
+        required=False,
+    )
+    parser.add_argument(
+        "-winsorize_std",
+        "--winsorize_std",
+        help="Number of samples to process at each loop",
+        type=int,
+        default=5,
+        required=False,
+    )
+    parser.add_argument(
+        "-winsorize_chans_per_fit",
+        "--winsorize_chans_per_fit",
+        help="Winsorize",
+        type=int,
+        default=40,
+        required=False,
+    )
+    parser.add_argument(
+        "-g",
+        "--gulp",
+        help="Number of samples to process at each loop",
+        type=int,
+        default=16384,
+        required=False,
+    )
+    parser.add_argument(
+        "-o",
+        "--out_file",
+        help="output file, default: input filename with _gauss appended",
+        type=str,
+        default=None,
+        required=False,
+    )
+    args = parser.parse_args()
+
+    LOGGING_FORMAT = "%(funcName)s - %(name)s - %(levelname)s - %(message)s"
+
+    if args.verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format=LOGGING_FORMAT,
+            handlers=[RichHandler(rich_tracebacks=True)],
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format=LOGGING_FORMAT,
+            handlers=[RichHandler(rich_tracebacks=True)],
+        )
+
+    outfile = get_outfile(file=args.file, out_file=args.out_file)
+    yrinput = Your(args.file)
+    wrt = Writer(yrinput, outname=outfile)
+    sigproc_obj = sigproc_object_from_writer(wrt)
+    sigproc_obj.write_header(outfile)
+
+    clean_gpu(
+        yr_input=yrinput,
+        samples_per_block=args.samples_per_block,
+        no_time_detrend=args.no_time_detrend,
+        winsorize_args=(args.winsorize_std, args.winsorize_chans_per_fit),
+        flatten_to=args.flatten_to,
+        sigma=args.sigma,
+        gulp=args.gulp,
+        out_file=outfile,
+        sigproc_object=sigproc_obj,
+    )
