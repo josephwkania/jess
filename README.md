@@ -29,7 +29,8 @@ git clone https://github.com/josephwkania/jess.git
 pip install jess
 ```
 
-If you have a GPU to use, `pip install jess[cupy]`, for tests `pip install jess[tests]`
+If you have a GPU to use, `pip install jess[cupy]`, for tests `pip install jess[tests]`, and for
+doc `pip install jess[docs]`
 
 # Questions + Contributing
 See [CONTRIBUTING.md](https://github.com/josephwkania/jess/tree/master/CONTRIBUTING.md)
