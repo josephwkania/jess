@@ -113,6 +113,7 @@ def clean(
 
         if BACKEND_GPU:
             data = xp.asarray(data)
+
         _, mask, mask_percentage = kurtosis_and_skew(
             dynamic_spectra=data,
             samples_per_block=samples_per_block,
@@ -130,7 +131,7 @@ def clean(
         if mask_chans:
             means = xp.nanmean(data, axis=0)
             chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy="omit")
-            chan_mask = means - chan_mid > sigma * chan_noise
+            chan_mask = xp.abs(means - chan_mid) > sigma * chan_noise
             mask += chan_mask
             chan_mask_percent = 100 * chan_mask.mean(0)
 
@@ -226,19 +227,13 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "-winsorize_std",
-        "--winsorize_std",
-        help="Number of samples to process at each loop",
-        type=int,
-        default=5,
-        required=False,
-    )
-    parser.add_argument(
-        "-winsorize_chans_per_fit",
-        "--winsorize_chans_per_fit",
-        help="Winsorize",
-        type=int,
-        default=40,
+        "-winsorize_args",
+        "--winsorize_args",
+        help="""Winsorize 2nd moment along freq axis (std, chan_per_fit);
+        if None, don't Winsorize""",
+        nargs="+",
+        type=float,
+        default=(5, 40),
         required=False,
     )
     parser.add_argument(
@@ -279,12 +274,16 @@ if __name__ == "__main__":
     wrt = Writer(yrinput, outname=outfile)
     sigproc_obj = sigproc_object_from_writer(wrt)
     sigproc_obj.write_header(outfile)
+    if args.winsorize_args[0] == -1:
+        winsorize = None
+    else:
+        winsorize = args.winsorize_args
 
     clean(
         yr_input=yrinput,
         samples_per_block=args.samples_per_block,
         no_time_detrend=args.no_time_detrend,
-        winsorize_args=(args.winsorize_std, args.winsorize_chans_per_fit),
+        winsorize_args=winsorize,
         flatten_to=args.flatten_to,
         sigma=args.sigma,
         gulp=args.gulp,

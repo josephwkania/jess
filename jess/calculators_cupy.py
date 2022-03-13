@@ -147,7 +147,7 @@ def flattner_median(
     """
     original_dtype = dynamic_spectra.dtype
     spectra_medians = cp.nanmedian(dynamic_spectra, axis=0).astype(intermediate_dtype)
-    spectra_medians = spectra_medians - flatten_to
+    spectra_medians -= flatten_to
 
     if kernel_size > 1:
         ndimage.median_filter(
@@ -164,7 +164,7 @@ def flattner_median(
         dynamic_spectra = dynamic_spectra - spectra_medians
         ts_medians = cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype)
 
-    ts_medians = ts_medians - flatten_to
+    ts_medians -= flatten_to
     result = dynamic_spectra - ts_medians[:, None]
 
     if return_same_dtype:
@@ -213,7 +213,7 @@ def flattner_mix(
     """
     original_dtype = dynamic_spectra.dtype
     ts_medians = cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype)
-    ts_medians = ts_medians - flatten_to
+    ts_medians -= flatten_to
 
     if kernel_size > 1:
         ndimage.median_filter(
@@ -232,15 +232,15 @@ def flattner_mix(
         dynamic_spectra = dynamic_spectra - ts_medians[:, None]
         spectra_means = cp.nanmean(dynamic_spectra, axis=0)
 
-    spectra_means = spectra_means - flatten_to
-    result = dynamic_spectra - spectra_means
+    spectra_means -= flatten_to
+    dynamic_spectra -= spectra_means
 
     if return_same_dtype:
-        result = to_dtype(result, dtype=original_dtype)
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=original_dtype)
 
     if return_time_series:
-        return result, ts_medians
-    return result
+        return dynamic_spectra, ts_medians
+    return dynamic_spectra
 
 
 def pad_along_axis(
