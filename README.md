@@ -6,7 +6,7 @@
 Radio Frequency Interference are anthropomorphic signals that can corrupt radio observations. In the context of Fast Radio Burst (FRB) and Pulsar searches, RFI can significantly reduce sensitivity to the astronomical signal and increase the amount of false positives. jess aims to provide a set flexible Python filters that should work on data from a wide variety of telescopes. We use Cupy to optionally leverage Graphical Processing Units (GPUs) to greatly accelerate the filters.
 
 ## Command Lines Interfaces Highlights
-- `remaster.py` A composite MAD/FFT/Highpass 2D filter
+- `jess_composite.py` A composite MAD/FFT/Highpass 2D filter
 - `jess_kurtosis_skew.py` A Kurtosis and Skew outlier 2D filter
 - `rfi_view.py` View 2D dynamic spectra, bandpass, time series, and summery statistics.
 - `channel_mask_maker.py` Make channel makes basked on user specified statistics.

@@ -461,4 +461,4 @@ def test_zero_dm():
     data_with_rfi[20] += 20
     data_with_rfi[25] -= 20
 
-    assert np.array_equal(Jf.zero_dm(data_with_rfi), data_flat)
+    assert np.array_equal(Jf.zero_dm(data_with_rfi).dynamic_spectra, data_flat)

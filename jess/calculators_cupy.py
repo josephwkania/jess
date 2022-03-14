@@ -291,7 +291,7 @@ def pad_along_axis(
     return cp.pad(array, pad_width=npad, mode=mode)
 
 
-def to_dtype(data: cp.ndarray, dtype: object) -> cp.ndarray:
+def to_dtype(data: cp.ndarray, dtype: cp.dtype) -> cp.ndarray:
     """
     Takes a chunk of data and changes it to a given data type.
 

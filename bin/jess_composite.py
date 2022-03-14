@@ -52,7 +52,7 @@ def get_outfile(file: str, out_file: Union[str, None]) -> str:
     if not out_file:
         # if no out file is given, create the string
         path, file_ext = os.path.splitext(file[0])
-        out_file = path + "_remastered.fil"
+        out_file = path + "_composite.fil"
         logger.info("No outfile given, writing to %s", out_file)
         return out_file
 
@@ -139,6 +139,7 @@ def clean_cpu(
             cleaned,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
+            time_median_size=1,
             return_same_dtype=False,
         )
 
@@ -251,8 +252,8 @@ def clean_gpu(
             cleaned,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
-            return_same_dtype=False,
             time_median_size=1,
+            return_same_dtype=False,
         )
 
         if modes_to_zero == 1:
@@ -362,6 +363,7 @@ def clean_dispersion(
         cleaned,
         sigma=sigma,
         chans_per_subband=channels_per_subband,
+        time_median_size=1,
         return_same_dtype=False,
     )
 
@@ -422,6 +424,7 @@ def clean_dispersion(
             redisip,
             sigma=sigma,
             chans_per_subband=channels_per_subband,
+            time_median_size=1,
             return_same_dtype=False,
         )
 
@@ -471,6 +474,7 @@ def clean_dispersion(
         cleaned,
         sigma=sigma,
         chans_per_subband=channels_per_subband,
+        time_median_size=1,
         return_same_dtype=False,
     )
 
@@ -502,12 +506,12 @@ def clean_dispersion(
 def master_cleaner(
     file: str,
     dispersion_measure: float,
-    sigma: float = 3,
+    sigma: float = 4,
     gulp: int = 16384,
     flatten_to: int = 64,
     channels_per_subband: int = 256,
-    time_median_size: int = 0,
-    modes_to_zero: int = 6,
+    time_median_size: int = 32,
+    modes_to_zero: int = 1,
     out_file: Union[str, None] = None,
 ) -> None:
     """
@@ -614,7 +618,7 @@ if __name__ == "__main__":
         "--sigma",
         help="Sigma at which to cut data",
         type=float,
-        default=3.0,
+        default=4.0,
         required=False,
     )
     parser.add_argument(
@@ -630,7 +634,7 @@ if __name__ == "__main__":
         "--time_median_size",
         help="The length of kernel for median of median and median of MADs in time",
         type=int,
-        default=0,
+        default=32,
         required=False,
     )
     parser.add_argument(
@@ -638,7 +642,7 @@ if __name__ == "__main__":
         "--modes_to_zero",
         help="Number of modes to zero",
         type=int,
-        default=6,
+        default=1,
         required=False,
     )
     parser.add_argument(

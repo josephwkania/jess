@@ -1305,7 +1305,7 @@ def zero_dm(
     bandpass: np.ndarray = None,
     return_same_dtype: bool = True,
     intermediate_dtype: type = np.float32,
-) -> np.ndarray:
+) -> FilterResult:
     """
     Mask-safe zero-dm subtraction
 
@@ -1363,7 +1363,7 @@ def zero_dm(
     percent_masked = 1 / len(bandpass) * 100
 
     if return_same_dtype:
-        return to_dtype(dynamic_spectra, dtype=data_type)
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
 
     return FilterResult(dynamic_spectra, percent_masked)
 
@@ -1373,7 +1373,7 @@ def zero_dm_fft(
     bandpass: np.ndarray = None,
     modes_to_zero: int = 2,
     return_same_dtype: bool = True,
-) -> np.ndarray:
+) -> FilterResult:
     """
     This removes low frequency components from each spectra. This extends 0-DM
     subtraction. 0-DM subtraction as described in Eatough 2009, involves subtraction
