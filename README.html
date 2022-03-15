@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>JESS - Just in Time Elimination of Spurious Signals &#8212; jess 0.1.2 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Welcome to jess’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="jess-just-in-time-elimination-of-spurious-signals">
+<h1>JESS - Just in Time Elimination of Spurious Signals<a class="headerlink" href="#jess-just-in-time-elimination-of-spurious-signals" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">jess</span></code> is Python library to analyze and remove Radio Frequency Interference (RFI) for radio search mode data.</p>
+</section>
+<section id="overview">
+<h1>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h1>
+<p>Radio Frequency Interference are anthropomorphic signals that can corrupt radio observations. In the context of Fast Radio Burst (FRB) and Pulsar searches, RFI can significantly reduce sensitivity to the astronomical signal and increase the amount of false positives. jess aims to provide a set flexible Python filters that should work on data from a wide variety of telescopes. We use Cupy to optionally leverage Graphical Processing Units (GPUs) to greatly accelerate the filters.</p>
+<section id="command-lines-interfaces-highlights">
+<h2>Command Lines Interfaces Highlights<a class="headerlink" href="#command-lines-interfaces-highlights" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">jess_composite.py</span></code> A composite MAD/FFT/Highpass 2D filter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jess_kurtosis_skew.py</span></code> A Kurtosis and Skew outlier 2D filter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rfi_view.py</span></code> View 2D dynamic spectra, bandpass, time series, and summery statistics.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">channel_mask_maker.py</span></code> Make channel makes basked on user specified statistics.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jess_combine_mocks.py</span></code> A clone of the your script that applies the composite filter.</p></li>
+</ul>
+</section>
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">channel_masks.py</span></code> Make channel masks based on statistics and outlier algorithms</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dispersion/dispersion_cupy</span></code> dispersion routines, roll and FDMT</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fitters/fitters_cupy</span></code> Useful curve fitting, robust spline, arPLS, interactive polynomial, etc</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JESS_filters/JESS_filters_cupy/JESS_filters_generic</span></code> Repository with all the filters</p></li>
+</ul>
+</section>
+</section>
+<section id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<p>To install directly into your current Python environment</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install git+https://github.com/josephwkania/jess.git
+</pre></div>
+</div>
+<p>If you want a local version</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git clone https://github.com/josephwkania/jess.git
+pip install jess
+</pre></div>
+</div>
+<p>If you have a GPU to use, <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">jess[cupy]</span></code>, for tests <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">jess[tests]</span></code>, and for
+doc <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">jess[docs]</span></code></p>
+</section>
+<section id="questions-contributing">
+<h1>Questions + Contributing<a class="headerlink" href="#questions-contributing" title="Permalink to this headline">¶</a></h1>
+<p>See <a class="reference external" href="https://github.com/josephwkania/jess/tree/master/CONTRIBUTING.md">CONTRIBUTING.md</a></p>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">jess</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">JESS - Just in Time Elimination of Spurious Signals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#overview">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#command-lines-interfaces-highlights">Command Lines Interfaces Highlights</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#questions-contributing">Questions + Contributing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to jess’s documentation!</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Joseph W Kania.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/README.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

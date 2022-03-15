@@ -1,0 +1,578 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>jess.scipy_cupy package &#8212; jess 0.1.2 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="jess-scipy-cupy-package">
+<h1>jess.scipy_cupy package<a class="headerlink" href="#jess-scipy-cupy-package" title="Permalink to this headline">¶</a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-jess.scipy_cupy.stats">
+<span id="jess-scipy-cupy-stats-module"></span><h2>jess.scipy_cupy.stats module<a class="headerlink" href="#module-jess.scipy_cupy.stats" title="Permalink to this headline">¶</a></h2>
+<p>Cupy versions of scipy functions.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="jess.scipy_cupy.stats.combined">
+<span class="sig-prename descclassname"><span class="pre">jess.scipy_cupy.stats.</span></span><span class="sig-name descname"><span class="pre">combined</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">array</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">cupy._core.core.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fisher</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'propagate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">winsorize_args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#jess.scipy_cupy.stats.combined" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the kurtosis (Fisher or Pearson) and skewness of a dataset.
+Kurtosis is the fourth central moment divided by the square of the
+variance. If Fisher’s definition is used, then 3.0 is subtracted from
+the result to give 0.0 for a normal distribution.
+If bias is False then the kurtosis is calculated using k statistics to
+eliminate bias coming from biased moment estimators</p>
+<p>For normally distributed data, the skewness should be about zero. For
+unimodal continuous distributions, a skewness value greater than zero means
+that there is more weight in the right tail of the distribution. The
+function <cite>skewtest</cite> can be used to determine if the skewness value
+is close enough to zero, statistically speaking.
+Parameters
+———-
+a : ndarray</p>
+<blockquote>
+<div><p>Input array.</p>
+</div></blockquote>
+<dl>
+<dt>axis<span class="classifier">int or None, optional</span></dt><dd><p>Axis along which skewness is calculated. Default is 0.
+If None, compute over the whole array <cite>a</cite>.</p>
+</dd>
+<dt>bias<span class="classifier">bool, optional</span></dt><dd><p>If False, then the calculations are corrected for statistical bias.</p>
+</dd>
+<dt>fisher<span class="classifier">bool, optional</span></dt><dd><p>If True, Fisher’s definition is used (normal ==&gt; 0.0). If False,
+Pearson’s definition is used (normal ==&gt; 3.0).</p>
+</dd>
+<dt>bias<span class="classifier">bool, optional</span></dt><dd><p>If False, then the calculations are corrected for statistical bias.</p>
+</dd>
+<dt>nan_policy<span class="classifier">{‘propagate’, ‘raise’, ‘omit’}, optional</span></dt><dd><p>Defines how to handle when input contains nan.
+The following options are available (default is ‘propagate’):</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘propagate’: returns nan</p></li>
+<li><p>‘raise’: throws an error</p></li>
+<li><p>‘omit’: performs the calculations ignoring nan values</p></li>
+<li><p><cite>None</cite>: Don’t check for nans, omit</p></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>winsorize_args<span class="classifier">If not <cite>None</cite>, this array gets passed to winsorize, see</span></dt><dd><p>stats.winsorize</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>(skewness<span class="classifier">ndarray  kurtosis</span><span class="classifier">array)</span></dt><dd><p>The skewness of values along an axis, returning 0 where all values are
+equal. The kurtosis of values along an axis. If all values are equal,
+return -3 for Fisher’s definition and 0 for Pearson’s definition.</p>
+</dd>
+</dl>
+<p>The sample skewness is computed as the Fisher-Pearson coefficient
+of skewness, i.e.
+.. math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">g_1</span><span class="o">=</span>\<span class="n">frac</span><span class="p">{</span><span class="n">m_3</span><span class="p">}{</span><span class="n">m_2</span><span class="o">^</span><span class="p">{</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">}}</span>
+</pre></div>
+</div>
+<p>where
+.. math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">m_i</span><span class="o">=</span>\<span class="n">frac</span><span class="p">{</span><span class="mi">1</span><span class="p">}{</span><span class="n">N</span><span class="p">}</span>\<span class="n">sum_</span><span class="p">{</span><span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">}</span><span class="o">^</span><span class="n">N</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="o">-</span>\<span class="n">bar</span><span class="p">{</span><span class="n">x</span><span class="p">})</span><span class="o">^</span><span class="n">i</span>
+</pre></div>
+</div>
+<p>is the biased sample <span class="math notranslate nohighlight">\(i\texttt{th}\)</span> central moment, and
+<span class="math notranslate nohighlight">\(\bar{x}\)</span> is
+the sample mean.  If <code class="docutils literal notranslate"><span class="pre">bias</span></code> is False, the calculations are
+corrected for bias and the value computed is the adjusted
+Fisher-Pearson standardized moment coefficient, i.e.
+.. math:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">G_1</span><span class="o">=</span>\<span class="n">frac</span><span class="p">{</span><span class="n">k_3</span><span class="p">}{</span><span class="n">k_2</span><span class="o">^</span><span class="p">{</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">}}</span><span class="o">=</span>
+    \<span class="n">frac</span><span class="p">{</span>\<span class="n">sqrt</span><span class="p">{</span><span class="n">N</span><span class="p">(</span><span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">)}}{</span><span class="n">N</span><span class="o">-</span><span class="mi">2</span><span class="p">}</span>\<span class="n">frac</span><span class="p">{</span><span class="n">m_3</span><span class="p">}{</span><span class="n">m_2</span><span class="o">^</span><span class="p">{</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">}}</span><span class="o">.</span>
+</pre></div>
+</div>
+<dl class="footnote brackets">
+<dt class="label" id="id1"><span class="brackets">1</span></dt>
+<dd><p>Zwillinger, D. and Kokoska, S. (2000). CRC Standard
+Probability and Statistics Tables and Formulae. Chapman &amp; Hall: New
+York. 2000.
+Section 2.2.24.1</p>
+</dd>
+</dl>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">skew</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">combined</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">])</span>
+<span class="go">(0.0, 1.7)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">combined</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="go">(0.2650554122698573, 1.333998924716149)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="jess.scipy_cupy.stats.iqr_med">
+<span class="sig-prename descclassname"><span class="pre">jess.scipy_cupy.stats.</span></span><span class="sig-name descname"><span class="pre">iqr_med</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">cupy._core.core.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(25,</span> <span class="pre">75)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'propagate'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interpolation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'linear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keepdims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">cupy._core.core.ndarray</span></span></span><a class="headerlink" href="#jess.scipy_cupy.stats.iqr_med" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the interquartile range of the data along the specified axis.
+The interquartile range (IQR) is the difference between the 75th and
+25th percentile of the data. It is a measure of the dispersion
+similar to standard deviation or variance, but is much more robust
+against outliers <a href="#id12"><span class="problematic" id="id2">[2]_</span></a>.
+The <code class="docutils literal notranslate"><span class="pre">rng</span></code> parameter allows this function to compute other
+percentile ranges than the actual IQR. For example, setting
+<code class="docutils literal notranslate"><span class="pre">rng=(0,</span> <span class="pre">100)</span></code> is equivalent to <cite>numpy.ptp</cite>.
+The IQR of an empty array is <cite>np.nan</cite>.
+.. versionadded:: 0.18.0
+Parameters
+———-
+x : array_like</p>
+<blockquote>
+<div><p>Input array or object that can be converted to an array.</p>
+</div></blockquote>
+<dl>
+<dt>axis<span class="classifier">int or sequence of int, optional</span></dt><dd><p>Axis along which the range is computed. The default is to
+compute the IQR for the entire array.</p>
+</dd>
+<dt>rng<span class="classifier">Two-element sequence containing floats in range of [0,100] optional</span></dt><dd><p>Percentiles over which to compute the range. Each must be
+between 0 and 100, inclusive. The default is the true IQR:
+<cite>(25, 75)</cite>. The order of the elements is not important.</p>
+</dd>
+<dt>scale<span class="classifier">scalar or str, optional</span></dt><dd><p>The numerical value of scale will be divided out of the final
+result. The following string values are recognized:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘raw’ : No scaling, just return the raw IQR.
+<strong>Deprecated!</strong>  Use <cite>scale=1</cite> instead.</p></li>
+<li><p>‘normal’ : Scale by
+<span class="math notranslate nohighlight">\(2 \sqrt{2} erf^{-1}(\frac{1}{2}) \approx 1.349\)</span>.</p></li>
+</ul>
+</div></blockquote>
+<p>The default is 1.0. The use of scale=’raw’ is deprecated.
+Array-like scale is also allowed, as long
+as it broadcasts correctly to the output such that
+<code class="docutils literal notranslate"><span class="pre">out</span> <span class="pre">/</span> <span class="pre">scale</span></code> is a valid operation. The output dimensions
+depend on the input array, <cite>x</cite>, the <cite>axis</cite> argument, and the
+<cite>keepdims</cite> flag.</p>
+</dd>
+<dt>nan_policy<span class="classifier">{‘propagate’, ‘raise’, ‘omit’, <cite>None</cite>}, optional</span></dt><dd><p>Defines how to handle when input contains nan.
+The following options are available (default is ‘propagate’):</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘propagate’: returns nan</p></li>
+<li><p>‘raise’: throws an error</p></li>
+<li><p>‘omit’: performs the calculations ignoring nan values</p></li>
+<li><p><cite>None</cite>: Don’t check for nans, uses cp.percentile</p></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>interpolation<span class="classifier">{‘linear’, ‘lower’, ‘higher’, ‘midpoint’,</span></dt><dd><blockquote>
+<div><p>‘nearest’}, optional</p>
+</div></blockquote>
+<p>Specifies the interpolation method to use when the percentile
+boundaries lie between two data points <cite>i</cite> and <cite>j</cite>.
+The following options are available (default is ‘linear’):</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘linear’: <cite>i + (j - i) * fraction</cite>, where <cite>fraction</cite> is the
+fractional part of the index surrounded by <cite>i</cite> and <cite>j</cite>.</p></li>
+<li><p>‘lower’: <cite>i</cite>.</p></li>
+<li><p>‘higher’: <cite>j</cite>.</p></li>
+<li><p>‘nearest’: <cite>i</cite> or <cite>j</cite> whichever is nearest.</p></li>
+<li><p>‘midpoint’: <cite>(i + j) / 2</cite>.</p></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>keepdims<span class="classifier">bool, optional</span></dt><dd><p>If this is set to <cite>True</cite>, the reduced axes are left in the
+result as dimensions with size one. With this option, the result
+will broadcast correctly against the original array <cite>x</cite>.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>iqr<span class="classifier">scalar or ndarray</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">axis=None</span></code>, a scalar is returned. If the input contains
+integers or floats of smaller precision than <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>, then the
+output data-type is <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>. Otherwise, the output data-type is
+the same as that of the input.</p>
+</dd>
+</dl>
+<p>numpy.std, numpy.var
+Notes
+—–
+From <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.iqr.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.iqr.html</a>
+modifled to also return the median</p>
+<p>This function is heavily dependent on the version of <cite>numpy</cite> that is
+installed. Versions greater than 1.11.0b3 are highly recommended, as they
+include a number of enhancements and fixes to <cite>numpy.percentile</cite> and
+<cite>numpy.nanpercentile</cite> that affect the operation of this function. The
+following modifications apply:
+Below 1.10.0 : <cite>nan_policy</cite> is poorly defined.</p>
+<blockquote>
+<div><p>The default behavior of <cite>numpy.percentile</cite> is used for ‘propagate’. This
+is a hybrid of ‘omit’ and ‘propagate’ that mostly yields a skewed
+version of ‘omit’ since NaNs are sorted to the end of the data. A
+warning is raised if there are NaNs in the data.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>Below 1.9.0: <cite>numpy.nanpercentile</cite> does not exist.</dt><dd><p>This means that <cite>numpy.percentile</cite> is used regardless of <cite>nan_policy</cite>
+and a warning is issued. See previous item for a description of the
+behavior.</p>
+</dd>
+<dt>Below 1.9.0: <cite>keepdims</cite> and <cite>interpolation</cite> are not supported.</dt><dd><p>The keywords get ignored with a warning if supplied with non-default
+values. However, multiple axes are still supported.</p>
+</dd>
+</dl>
+<dl class="footnote brackets">
+<dt class="label" id="id3"><span class="brackets">1</span></dt>
+<dd><p>“Interquartile range” <a class="reference external" href="https://en.wikipedia.org/wiki/Interquartile_range">https://en.wikipedia.org/wiki/Interquartile_range</a></p>
+</dd>
+<dt class="label" id="id4"><span class="brackets">2</span></dt>
+<dd><p>“Robust measures of scale”
+<a class="reference external" href="https://en.wikipedia.org/wiki/Robust_measures_of_scale">https://en.wikipedia.org/wiki/Robust_measures_of_scale</a></p>
+</dd>
+<dt class="label" id="id5"><span class="brackets">3</span></dt>
+<dd><p>“Quantile” <a class="reference external" href="https://en.wikipedia.org/wiki/Quantile">https://en.wikipedia.org/wiki/Quantile</a></p>
+</dd>
+</dl>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">iqr</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span>
+<span class="go">array([[10,  7,  4],</span>
+<span class="go">       [ 3,  2,  1]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iqr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">4.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iqr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="go">array([ 3.5,  2.5,  1.5])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iqr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="go">array([ 3.,  1.])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">iqr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">array([[ 3.],</span>
+<span class="go">       [ 1.]])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="jess.scipy_cupy.stats.median_abs_deviation">
+<span class="sig-prename descclassname"><span class="pre">jess.scipy_cupy.stats.</span></span><span class="sig-name descname"><span class="pre">median_abs_deviation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis=0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center=&lt;function</span> <span class="pre">median&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale=1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan_policy='propagate'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#jess.scipy_cupy.stats.median_abs_deviation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the median absolute deviation of the data along the given axis.
+The median absolute deviation (MAD, <a href="#id13"><span class="problematic" id="id6">[1]_</span></a>) computes the median over the
+absolute deviations from the median. It is a measure of dispersion
+similar to the standard deviation but more robust to outliers <a href="#id14"><span class="problematic" id="id7">[2]_</span></a>.
+The MAD of an empty array is <code class="docutils literal notranslate"><span class="pre">np.nan</span></code>.
+.. versionadded:: 1.5.0
+Parameters
+———-
+x : array_like</p>
+<blockquote>
+<div><p>Input array or object that can be converted to an array.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>axis<span class="classifier">int or None, optional</span></dt><dd><p>Axis along which the range is computed. Default is 0. If None, compute
+the MAD over the entire array.</p>
+</dd>
+<dt>center<span class="classifier">callable, optional</span></dt><dd><p>A function that will return the central value. The default is to use
+np.median. Any user defined function used will need to have the
+function signature <code class="docutils literal notranslate"><span class="pre">func(arr,</span> <span class="pre">axis)</span></code>.</p>
+</dd>
+<dt>scale<span class="classifier">scalar or str, optional</span></dt><dd><p>The numerical value of scale will be divided out of the final
+result. The default is 1.0. The string “normal” is also accepted,
+and results in <cite>scale</cite> being the inverse of the standard normal
+quantile function at 0.75, which is approximately 0.67449.
+Array-like scale is also allowed, as long as it broadcasts correctly
+to the output such that <code class="docutils literal notranslate"><span class="pre">out</span> <span class="pre">/</span> <span class="pre">scale</span></code> is a valid operation. The
+output dimensions depend on the input array, <cite>x</cite>, and the <cite>axis</cite>
+argument.</p>
+</dd>
+<dt>nan_policy<span class="classifier">{‘propagate’, ‘raise’, ‘omit’}, optional</span></dt><dd><p>Defines how to handle when input contains nan.
+The following options are available (default is ‘propagate’):
+* ‘propagate’: returns nan
+* ‘raise’: throws an error
+* ‘omit’: performs the calculations ignoring nan values</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>mad<span class="classifier">scalar or ndarray</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">axis=None</span></code>, a scalar is returned. If the input contains
+integers or floats of smaller precision than <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>, then the
+output data-type is <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>. Otherwise, the output data-type is
+the same as that of the input.</p>
+</dd>
+</dl>
+<p>numpy.std, numpy.var, numpy.median, scipy.stats.iqr, scipy.stats.tmean,
+scipy.stats.tstd, scipy.stats.tvar
+Notes
+—–
+The <cite>center</cite> argument only affects the calculation of the central value
+around which the MAD is calculated. That is, passing in <code class="docutils literal notranslate"><span class="pre">center=np.mean</span></code>
+will calculate the MAD around the mean - it will not calculate the <em>mean</em>
+absolute deviation.
+The input array may contain <cite>inf</cite>, but if <cite>center</cite> returns <cite>inf</cite>, the
+corresponding MAD for that data will be <cite>nan</cite>.
+References
+———-
+.. [1] “Median absolute deviation”,</p>
+<blockquote>
+<div><p><a class="reference external" href="https://en.wikipedia.org/wiki/Median_absolute_deviation">https://en.wikipedia.org/wiki/Median_absolute_deviation</a></p>
+</div></blockquote>
+<dl class="footnote brackets">
+<dt class="label" id="id8"><span class="brackets">2</span></dt>
+<dd><p>“Robust measures of scale”,
+<a class="reference external" href="https://en.wikipedia.org/wiki/Robust_measures_of_scale">https://en.wikipedia.org/wiki/Robust_measures_of_scale</a></p>
+</dd>
+</dl>
+<p>When comparing the behavior of <cite>median_abs_deviation</cite> with <code class="docutils literal notranslate"><span class="pre">np.std</span></code>,
+the latter is affected when we change a single value of an array to have an
+outlier value while the MAD hardly changes:
+&gt;&gt;&gt; from scipy import stats
+&gt;&gt;&gt; x = stats.norm.rvs(size=100, scale=1, random_state=123456)
+&gt;&gt;&gt; x.std()
+0.9973906394005013
+&gt;&gt;&gt; stats.median_abs_deviation(x)
+0.82832610097857
+&gt;&gt;&gt; x[0] = 345.6
+&gt;&gt;&gt; x.std()
+34.42304872314415
+&gt;&gt;&gt; stats.median_abs_deviation(x)
+0.8323442311590675
+Axis handling example:
+&gt;&gt;&gt; x = np.array([[10, 7, 4], [3, 2, 1]])
+&gt;&gt;&gt; x
+array([[10,  7,  4],</p>
+<blockquote>
+<div><p>[ 3,  2,  1]])</p>
+</div></blockquote>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">array([3.5, 2.5, 1.5])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<span class="go">2.0</span>
+<span class="go">Scale normal example:</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">norm</span><span class="o">.</span><span class="n">rvs</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="mi">1000000</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123456</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">1.3487398527041636</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="s1">&#39;normal&#39;</span><span class="p">)</span>
+<span class="go">1.9996446978061115</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="jess.scipy_cupy.stats.median_abs_deviation_med">
+<span class="sig-prename descclassname"><span class="pre">jess.scipy_cupy.stats.</span></span><span class="sig-name descname"><span class="pre">median_abs_deviation_med</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x:</span> <span class="pre">cupy._core.core.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center:</span> <span class="pre">object</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">median&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale:</span> <span class="pre">typing.Union[float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">str]</span> <span class="pre">=</span> <span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan_policy:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'propagate'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#jess.scipy_cupy.stats.median_abs_deviation_med" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the median absolute deviation of the data along the given axis.
+The median absolute deviation (MAD, <a href="#id15"><span class="problematic" id="id9">[1]_</span></a>) computes the median over the
+absolute deviations from the median. It is a measure of dispersion
+similar to the standard deviation but more robust to outliers <a href="#id16"><span class="problematic" id="id10">[2]_</span></a>.
+The MAD of an empty array is <code class="docutils literal notranslate"><span class="pre">np.nan</span></code>.
+.. versionadded:: 1.5.0
+Parameters
+———-
+x : array_like</p>
+<blockquote>
+<div><p>Input array or object that can be converted to an array.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>axis<span class="classifier">int or None, optional</span></dt><dd><p>Axis along which the range is computed. Default is 0. If None, compute
+the MAD over the entire array.</p>
+</dd>
+<dt>center<span class="classifier">callable, optional</span></dt><dd><p>A function that will return the central value. The default is to use
+np.median. Any user defined function used will need to have the
+function signature <code class="docutils literal notranslate"><span class="pre">func(arr,</span> <span class="pre">axis)</span></code>.</p>
+</dd>
+<dt>scale<span class="classifier">scalar or str, optional</span></dt><dd><p>The numerical value of scale will be divided out of the final
+result. The default is 1.0. The string “normal” is also accepted,
+and results in <cite>scale</cite> being the inverse of the standard normal
+quantile function at 0.75, which is approximately 0.67449.
+Array-like scale is also allowed, as long as it broadcasts correctly
+to the output such that <code class="docutils literal notranslate"><span class="pre">out</span> <span class="pre">/</span> <span class="pre">scale</span></code> is a valid operation. The
+output dimensions depend on the input array, <cite>x</cite>, and the <cite>axis</cite>
+argument.</p>
+</dd>
+<dt>nan_policy<span class="classifier">{‘propagate’, ‘raise’, ‘omit’}, optional</span></dt><dd><p>Defines how to handle when input contains nan.
+The following options are available (default is ‘propagate’):
+* ‘propagate’: returns nan
+* ‘raise’: throws an error
+* ‘omit’: performs the calculations ignoring nan values</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>mad<span class="classifier">scalar or ndarray</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">axis=None</span></code>, a scalar is returned. If the input contains
+integers or floats of smaller precision than <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>, then the
+output data-type is <code class="docutils literal notranslate"><span class="pre">np.float64</span></code>. Otherwise, the output data-type is
+the same as that of the input.</p>
+</dd>
+</dl>
+<p>center : The centers of each array
+See Also
+——–
+numpy.std, numpy.var, numpy.median, scipy.stats.iqr, scipy.stats.tmean,
+scipy.stats.tstd, scipy.stats.tvar
+Notes
+—–
+Modifed from scipy.stats.median_abs_devation</p>
+<p>The <cite>center</cite> argument only affects the calculation of the central value
+around which the MAD is calculated. That is, passing in <code class="docutils literal notranslate"><span class="pre">center=np.mean</span></code>
+will calculate the MAD around the mean - it will not calculate the <em>mean</em>
+absolute deviation.
+The input array may contain <cite>inf</cite>, but if <cite>center</cite> returns <cite>inf</cite>, the
+corresponding MAD for that data will be <cite>nan</cite>.
+References
+———-
+.. [1] “Median absolute deviation”,</p>
+<blockquote>
+<div><p><a class="reference external" href="https://en.wikipedia.org/wiki/Median_absolute_deviation">https://en.wikipedia.org/wiki/Median_absolute_deviation</a></p>
+</div></blockquote>
+<dl class="footnote brackets">
+<dt class="label" id="id11"><span class="brackets">2</span></dt>
+<dd><p>“Robust measures of scale”,
+<a class="reference external" href="https://en.wikipedia.org/wiki/Robust_measures_of_scale">https://en.wikipedia.org/wiki/Robust_measures_of_scale</a></p>
+</dd>
+</dl>
+<p>When comparing the behavior of <cite>median_abs_deviation</cite> with <code class="docutils literal notranslate"><span class="pre">np.std</span></code>,
+the latter is affected when we change a single value of an array to have an
+outlier value while the MAD hardly changes:
+&gt;&gt;&gt; from scipy import stats
+&gt;&gt;&gt; x = stats.norm.rvs(size=100, scale=1, random_state=123456)
+&gt;&gt;&gt; x.std()
+0.9973906394005013
+&gt;&gt;&gt; stats.median_abs_deviation(x)
+0.82832610097857
+&gt;&gt;&gt; x[0] = 345.6
+&gt;&gt;&gt; x.std()
+34.42304872314415
+&gt;&gt;&gt; stats.median_abs_deviation(x)
+0.8323442311590675
+Axis handling example:
+&gt;&gt;&gt; x = np.array([[10, 7, 4], [3, 2, 1]])
+&gt;&gt;&gt; x
+array([[10,  7,  4],</p>
+<blockquote>
+<div><p>[ 3,  2,  1]])</p>
+</div></blockquote>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">array([3.5, 2.5, 1.5])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<span class="go">2.0</span>
+<span class="go">Scale normal example:</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">norm</span><span class="o">.</span><span class="n">rvs</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="mi">1000000</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">123456</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="go">1.3487398527041636</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">stats</span><span class="o">.</span><span class="n">median_abs_deviation</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="s1">&#39;normal&#39;</span><span class="p">)</span>
+<span class="go">1.9996446978061115</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="jess.scipy_cupy.stats.winsorize">
+<span class="sig-prename descclassname"><span class="pre">jess.scipy_cupy.stats.</span></span><span class="sig-name descname"><span class="pre">winsorize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">array</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">cupy._core.core.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chans_per_fit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">cupy._core.core.ndarray</span></span></span><a class="headerlink" href="#jess.scipy_cupy.stats.winsorize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Winsorize a array by clipping values <cite>sigma</cite> above the fit. The trend
+is flitted using the median fitter. The noise is calculated from the
+difference between the array and fit using IQR.</p>
+<dl>
+<dt>Args:</dt><dd><p>array - Array to Winsorize, processed in place.</p>
+<p>sigma - Sigma to clip at</p>
+<dl class="simple">
+<dt>chans_per_fit - Channels per fitting order, see</dt><dd><p><cite>jess.fitters.median_fitter</cite></p>
+</dd>
+</dl>
+<p>nan_policy - nan policy, if <cite>None</cite> IQR doesn’t check for nans</p>
+</dd>
+<dt>Returns:</dt><dd><p>winsorized array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-jess.scipy_cupy">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-jess.scipy_cupy" title="Permalink to this headline">¶</a></h2>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">jess</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="README.html">JESS - Just in Time Elimination of Spurious Signals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="README.html#overview">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="README.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="README.html#questions-contributing">Questions + Contributing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Joseph W Kania.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/jess.scipy_cupy.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
