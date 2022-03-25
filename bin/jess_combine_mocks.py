@@ -21,6 +21,8 @@ from your import Your
 from your.formats.pysigproc import SigprocFile
 from your.utils.misc import YourArgparseFormatter
 
+from jess.scipy_cupy.stats import iqr_med
+
 try:
     import cupy as cp
 
@@ -274,8 +276,16 @@ def read_and_combine_subint(
             data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
         )
 
-    data -= xp.mean(data)
-    data /= xp.std(data)
+    if sigma > 0:
+        # data is cleaned, non-robust stats ok
+        data -= xp.mean(data)
+        data /= xp.std(data)
+    else:
+        # use robust stats
+        std, mid = iqr_med(data, axis=None, scale="Normal")
+        data -= mid
+        data /= std
+
     data *= scale
     data += flatten_to
 

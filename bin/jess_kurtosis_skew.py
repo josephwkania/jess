@@ -8,7 +8,7 @@ import argparse
 import logging
 import os
 import textwrap
-from typing import Tuple
+from typing import Tuple, Union
 
 from rich.logging import RichHandler
 from rich.progress import track
@@ -62,7 +62,7 @@ def clean(
     yr_input: Your,
     samples_per_block: int,
     no_time_detrend: bool,
-    winsorize_args: Tuple,
+    winsorize_args: Union[Tuple, None],
     sigma: float,
     flatten_to: int,
     gulp: int,
@@ -133,7 +133,7 @@ def clean(
             chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy="omit")
             chan_mask = xp.abs(means - chan_mid) > sigma * chan_noise
             mask += chan_mask
-            chan_mask_percent = 100 * chan_mask.mean(0)
+            chan_mask_percent = 100 * chan_mask.mean()
 
         mask_percentage_total = 100 * mask.mean()
         n_iter += 1
@@ -154,6 +154,82 @@ def clean(
             data += time_series[:, None]
 
         data = to_dtype(data, dtype=yr_input.your_header.dtype)
+
+        if BACKEND_GPU:
+            data = data.get()
+        sigproc_object.append_spectra(data, out_file)
+
+    total_flag /= n_iter
+    logging.info(
+        "Total: Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
+        total_flag[0],
+        total_flag[1],
+        total_flag[2],
+    )
+
+
+def clean_fast(
+    yr_input: Your,
+    sigma: float,
+    samples_per_block: int,
+    winsorize_args: Union[Tuple, None],
+    gulp: int,
+    out_file: str,
+    sigproc_object: sigproc_object_from_writer,
+) -> xp.ndarray:
+    """
+    A striped down version clean that does not do the
+    detrending in time and frequency.
+    """
+
+    n_iter = 0
+    total_flag = xp.zeros(3)
+    for j in track(
+        range(0, yr_input.your_header.nspectra, gulp),
+        description="Cleaning File",
+        transient=True,
+        refresh_per_second=1,
+    ):
+        logging.debug("Cleaning samples starting at %i", j)
+        if j + gulp < yr_input.your_header.nspectra:
+            data = yr_input.get_data(j, gulp)
+        else:
+            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
+
+        if BACKEND_GPU:
+            data = xp.asarray(data)
+
+        _, mask, mask_percentage = kurtosis_and_skew(
+            data,
+            samples_per_block=samples_per_block,
+            detrend=None,  # (median_fitter, 50),
+            sigma=sigma,
+            winsorize_args=winsorize_args,
+            nan_policy=None,
+        )
+
+        means = xp.mean(data, axis=0)
+        medians = xp.median(data, axis=0).astype(yr_input.your_header.dtype)
+        diff = means - medians
+        chan_noise, chan_mid = iqr_med(diff, scale="normal", nan_policy=None)
+        chan_mask = xp.abs(diff - chan_mid) > sigma * chan_noise
+        chan_mask_percent = chan_mask.mean()
+        mask += chan_mask
+
+        mask_percentage_total = 100 * mask.mean()
+        n_iter += 1
+        total_flag += xp.asarray(
+            [mask_percentage, chan_mask_percent, mask_percentage_total]
+        )
+        logging.info(
+            "Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
+            mask_percentage,
+            chan_mask_percent,
+            mask_percentage_total,
+        )
+
+        # https://stackoverflow.com/a/61485863
+        xp.putmask(data, mask, medians)
 
         if BACKEND_GPU:
             data = data.get()
@@ -245,6 +321,14 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-fast",
+        "--fast",
+        help="Run the fast version that does a less robust filtering/deterend",
+        default=False,
+        required=False,
+        action="store_true",
+    )
+    parser.add_argument(
         "-o",
         "--out_file",
         help="output file, default: input filename with _gauss appended",
@@ -275,18 +359,29 @@ if __name__ == "__main__":
     sigproc_obj = sigproc_object_from_writer(wrt)
     sigproc_obj.write_header(outfile)
     if args.winsorize_args[0] == -1:
-        winsorize = None
+        WINSORIZE = None
     else:
-        winsorize = args.winsorize_args
+        WINSORIZE = args.winsorize_args
 
-    clean(
-        yr_input=yrinput,
-        samples_per_block=args.samples_per_block,
-        no_time_detrend=args.no_time_detrend,
-        winsorize_args=winsorize,
-        flatten_to=args.flatten_to,
-        sigma=args.sigma,
-        gulp=args.gulp,
-        out_file=outfile,
-        sigproc_object=sigproc_obj,
-    )
+    if args.fast:
+        clean_fast(
+            yr_input=yrinput,
+            samples_per_block=args.samples_per_block,
+            winsorize_args=None,
+            sigma=args.sigma,
+            gulp=args.gulp,
+            out_file=outfile,
+            sigproc_object=sigproc_obj,
+        )
+    else:
+        clean(
+            yr_input=yrinput,
+            samples_per_block=args.samples_per_block,
+            no_time_detrend=args.no_time_detrend,
+            winsorize_args=WINSORIZE,
+            flatten_to=args.flatten_to,
+            sigma=args.sigma,
+            gulp=args.gulp,
+            out_file=outfile,
+            sigproc_object=sigproc_obj,
+        )
