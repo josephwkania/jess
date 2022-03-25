@@ -24,13 +24,14 @@ from your.utils.misc import YourArgparseFormatter
 from jess.scipy_cupy.stats import iqr_med
 
 try:
-    import cupy as cp
+    import cupy as xp
 
     from jess.calculators_cupy import to_dtype
     from jess.JESS_filters_cupy import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
+    xp = np
     from jess.calculators import to_dtype
     from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
 
@@ -125,14 +126,14 @@ def mad_clean(
         time_median_size=time_median_size,
         return_same_dtype=False,
         no_time_detrend=True,
-    )
+    ).dynamic_spectra
     cleaned = fft_mad(
         cleaned,
         sigma=sigma,
         chans_per_subband=channels_per_subband,
         time_median_size=time_median_size,
         return_same_dtype=False,
-    )
+    ).dynamic_spectra
     return cleaned
 
 
@@ -210,11 +211,8 @@ def read_and_combine_subint(
 
     if BACKEND_GPU:
         logging.debug("Using GPU")
-        upsub_data = cp.asarray(upsub_data)
-        lowsub_data = cp.asarray(lowsub_data)
-        xp = cp  # pylint: disable=invalid-name
-    else:
-        xp = np  # pylint: disable=invalid-name
+        upsub_data = xp.asarray(upsub_data)
+        lowsub_data = xp.asarray(lowsub_data)
 
     if lowband_obj.nbits == 16:
         flatten_to = 2**15
@@ -269,12 +267,12 @@ def read_and_combine_subint(
     bandpass = xp.array([flatten_to] * nchans)
     if modes_to_zero == 1:
         logging.debug("Zero DMing: Subtracting Mean")
-        data = zero_dm(data, bandpass, return_same_dtype=False)
+        data = zero_dm(data, bandpass, return_same_dtype=False).dynamic_spectra
     elif modes_to_zero > 1:
         logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
         data = zero_dm_fft(
             data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
-        )
+        ).dynamic_spectra
 
     if sigma > 0:
         # data is cleaned, non-robust stats ok
@@ -282,7 +280,7 @@ def read_and_combine_subint(
         data /= xp.std(data)
     else:
         # use robust stats
-        std, mid = iqr_med(data, axis=None, scale="Normal")
+        std, mid = iqr_med(data, axis=None, scale="Normal", nan_policy=None)
         data -= mid
         data /= std
 
