@@ -23,6 +23,7 @@ try:
     import cupy as xp
 
     from jess.calculators_cupy import flattner_median, to_dtype
+    from jess.JESS_filters_cupy import zero_dm, zero_dm_fft
 
     BACKEND_GPU = True
 
@@ -30,6 +31,7 @@ except ModuleNotFoundError:
     import numpy as xp
 
     from jess.calculators import flattner_median, to_dtype
+    from jess.JESS_filters import zero_dm, zero_dm_fft
 
     BACKEND_GPU = False
 
@@ -61,7 +63,7 @@ def get_outfile(file: str, out_file: str) -> str:
 def clean(
     yr_input: Your,
     samples_per_block: int,
-    no_time_detrend: bool,
+    modes_to_zero: int,
     winsorize_args: Union[Tuple, None],
     sigma: float,
     flatten_to: int,
@@ -77,6 +79,8 @@ def clean(
         yr_input: the your object of the file you want to clean
 
         samples_per_block: Number of time samples for each block
+
+        modes_to_zero: number of Fourier modes to zero in the highpass
 
         winsorize_args: (std, channeles_per_fit) to winsorize m2
 
@@ -98,12 +102,18 @@ def clean(
     """
     mask_chans: bool = True
 
+    if modes_to_zero >= 1:
+        bandpass = xp.full(
+            yr_input.your_header.nchans, fill_value=flatten_to, dtype=xp.float32
+        )
+
     n_iter = 0
     total_flag = xp.zeros(3)
     for j in track(
         range(0, yr_input.your_header.nspectra, gulp),
         description="Cleaning File",
         transient=True,
+        refresh_per_second=1,
     ):
         logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
@@ -116,6 +126,7 @@ def clean(
 
         _, mask, mask_percentage = kurtosis_and_skew(
             dynamic_spectra=data,
+            detrend=None,
             samples_per_block=samples_per_block,
             sigma=sigma,
             winsorize_args=winsorize_args,
@@ -140,18 +151,31 @@ def clean(
         total_flag += xp.asarray(
             [mask_percentage, chan_mask_percent, mask_percentage_total]
         )
-        logging.info(
-            "Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
-            mask_percentage,
-            chan_mask_percent,
-            mask_percentage_total,
-        )
 
         data[mask] = flatten_to
 
-        if no_time_detrend:
+        if modes_to_zero < 0:
             time_series -= xp.median(time_series)
             data += time_series[:, None]
+        elif modes_to_zero == 1:
+            logging.debug("Zero DMing: Subtracting Mean")
+            data, dm_percentage = zero_dm(data, bandpass, return_same_dtype=False)
+        elif modes_to_zero > 1:
+            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
+            data, dm_percentage = zero_dm_fft(
+                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+            )
+        else:
+            dm_percentage = 0
+
+        total_flag += dm_percentage
+        logging.info(
+            "Gauss Flag %.2f%%, Chan Flag %.2f%%, Highpass %.2f%%, Total %.2f%%",
+            mask_percentage,
+            chan_mask_percent,
+            dm_percentage,
+            mask_percentage_total,
+        )
 
         data = to_dtype(data, dtype=yr_input.your_header.dtype)
 
@@ -161,9 +185,10 @@ def clean(
 
     total_flag /= n_iter
     logging.info(
-        "Total: Gauss Flag %.2f%%, Chan Flag %.2f%%, Total %.2f%%",
+        "Total: Gauss Flag %.2f%%, Chan Flag %.2f%%,  Highpass %.2f%%, Total %.2f%%",
         total_flag[0],
         total_flag[1],
+        dm_percentage,
         total_flag[2],
     )
 
@@ -213,7 +238,7 @@ def clean_fast(
         diff = means - medians
         chan_noise, chan_mid = iqr_med(diff, scale="normal", nan_policy=None)
         chan_mask = xp.abs(diff - chan_mid) > sigma * chan_noise
-        chan_mask_percent = chan_mask.mean()
+        chan_mask_percent = 100 * chan_mask.mean()
         mask += chan_mask
 
         mask_percentage_total = 100 * mask.mean()
@@ -295,12 +320,13 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "-no_td",
-        "--no_time_detrend",
-        help="No time series detrend (for low DM sources)",
-        default=False,
+        "-mtz",
+        "--modes_to_zero",
+        help="""Number of Modes to zero; -1 perserve time seres; 0 subtracted mean;
+        >1 number of Fourier Modes to remove""",
+        type=int,
+        default=0,
         required=False,
-        action="store_true",
     )
     parser.add_argument(
         "-winsorize_args",
@@ -377,7 +403,7 @@ if __name__ == "__main__":
         clean(
             yr_input=yrinput,
             samples_per_block=args.samples_per_block,
-            no_time_detrend=args.no_time_detrend,
+            modes_to_zero=args.modes_to_zero,
             winsorize_args=WINSORIZE,
             flatten_to=args.flatten_to,
             sigma=args.sigma,

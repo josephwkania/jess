@@ -4,7 +4,7 @@ The repository for all calculators
 """
 
 import logging
-from typing import Callable
+from typing import Callable, Tuple, Union
 
 import cupy as cp
 from cupyx.scipy import ndimage
@@ -119,8 +119,8 @@ def flattner_median(
     kernel_size: int = 0,
     return_same_dtype: bool = False,
     return_time_series: bool = False,
-    intermediate_dtype: object = cp.float32,
-) -> cp.ndarray:
+    intermediate_dtype: type = cp.float32,
+) -> Union[cp.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
     and then the medians of the of bandpass. Then add flatten_to to all the pixels
@@ -181,8 +181,8 @@ def flattner_mix(
     kernel_size: int = 0,
     return_same_dtype: bool = False,
     return_time_series: bool = False,
-    intermediate_dtype: object = cp.float32,
-) -> cp.ndarray:
+    intermediate_dtype: type = cp.float32,
+) -> Union[cp.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
     and then the medians of the of bandpass. Then add flatten_to to all the pixels

@@ -107,8 +107,8 @@ def clean_cpu(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = np.array(
-            [flatten_to] * yr_input.your_header.nchans, dtype=np.float32
+        bandpass = np.full(
+            yr_input.your_header.nchans, fill_value=flatten_to, dtype=np.float32
         )
 
     total_flag = np.zeros(3)
@@ -220,8 +220,8 @@ def clean_gpu(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = cp.array(
-            [flatten_to] * yr_input.your_header.nchans, dtype=cp.float32
+        bandpass = cp.full(
+            yr_input.your_header.nchans, fill_value=flatten_to, dtype=cp.float32
         )
 
     total_flag = cp.zeros(3)
@@ -343,8 +343,8 @@ def clean_dispersion(
 
     # need a bandpass if we do zero_dming, put outside the loop
     if modes_to_zero >= 1:
-        bandpass = cp.array(
-            [flatten_to] * yr_input.your_header.nchans, dtype=cp.float32
+        bandpass = cp.full(
+            yr_input.your_header.nchans, fill_value=flatten_to, dtype=cp.float32
         )
 
     # add data that can't be dispersed
