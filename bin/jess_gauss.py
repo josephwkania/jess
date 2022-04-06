@@ -8,7 +8,7 @@ import argparse
 import logging
 import os
 import textwrap
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 from rich.logging import RichHandler
 from rich.progress import track
@@ -16,7 +16,7 @@ from your import Writer, Your
 from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
-from jess.JESS_filters_generic import kurtosis_and_skew
+from jess.JESS_filters_generic import jarque_bera, kurtosis_and_skew
 from jess.scipy_cupy.stats import iqr_med
 
 try:
@@ -64,6 +64,7 @@ def clean(
     yr_input: Your,
     samples_per_block: int,
     modes_to_zero: int,
+    test: Callable,
     winsorize_args: Union[Tuple, None],
     sigma: float,
     flatten_to: int,
@@ -81,6 +82,8 @@ def clean(
         samples_per_block: Number of time samples for each block
 
         modes_to_zero: number of Fourier modes to zero in the highpass
+
+        test: Gaussianity test to use
 
         winsorize_args: (std, channeles_per_fit) to winsorize m2
 
@@ -124,7 +127,7 @@ def clean(
         if BACKEND_GPU:
             data = xp.asarray(data)
 
-        _, mask, mask_percentage = kurtosis_and_skew(
+        _, mask, mask_percentage = test(
             dynamic_spectra=data,
             detrend=None,
             samples_per_block=samples_per_block,
@@ -197,6 +200,7 @@ def clean_fast(
     yr_input: Your,
     sigma: float,
     samples_per_block: int,
+    test: Callable,
     winsorize_args: Union[Tuple, None],
     gulp: int,
     out_file: str,
@@ -224,7 +228,7 @@ def clean_fast(
         if BACKEND_GPU:
             data = xp.asarray(data)
 
-        _, mask, mask_percentage = kurtosis_and_skew(
+        _, mask, mask_percentage = test(
             data,
             samples_per_block=samples_per_block,
             detrend=None,  # (median_fitter, 50),
@@ -329,6 +333,14 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
+        "-test",
+        "--test",
+        help="Test to use, [kurtosis_and_skew, jaqrue_bera]",
+        type=str,
+        default="kurtosis_and_skew",
+        required=False,
+    )
+    parser.add_argument(
         "-winsorize_args",
         "--winsorize_args",
         help="""Winsorize 2nd moment along freq axis (std, chan_per_fit);
@@ -384,15 +396,25 @@ if __name__ == "__main__":
     wrt = Writer(yrinput, outname=outfile)
     sigproc_obj = sigproc_object_from_writer(wrt)
     sigproc_obj.write_header(outfile)
+
     if args.winsorize_args[0] == -1:
         WINSORIZE = None
     else:
         WINSORIZE = args.winsorize_args
 
+    test_str = args.test.casefold()
+    if test_str == "kurtosis_and_skew":
+        _test = kurtosis_and_skew
+    elif test_str == "jarque_bera":
+        _test = jarque_bera
+    else:
+        raise NotImplementedError(f"Test {test_str} not available")
+
     if args.fast:
         clean_fast(
             yr_input=yrinput,
             samples_per_block=args.samples_per_block,
+            test=_test,
             winsorize_args=None,
             sigma=args.sigma,
             gulp=args.gulp,
@@ -404,6 +426,7 @@ if __name__ == "__main__":
             yr_input=yrinput,
             samples_per_block=args.samples_per_block,
             modes_to_zero=args.modes_to_zero,
+            test=_test,
             winsorize_args=WINSORIZE,
             flatten_to=args.flatten_to,
             sigma=args.sigma,
