@@ -23,18 +23,20 @@ from your.formats.filwriter import sigproc_object_from_writer
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
+from jess.JESS_filters_generic import mad_spectra_flat
+
 try:
     import cupy as cp
 
     from jess.calculators_cupy import to_dtype
     from jess.dispersion_cupy import dedisperse, delay_lost
-    from jess.JESS_filters_cupy import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
+    from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
     from jess.calculators import to_dtype
     from jess.dispersion import dedisperse, delay_lost
-    from jess.JESS_filters import fft_mad, mad_spectra_flat, zero_dm, zero_dm_fft
+    from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
 
     BACKEND_GPU = False
 
@@ -110,6 +112,9 @@ def clean_cpu(
         bandpass = np.full(
             yr_input.your_header.nchans, fill_value=flatten_to, dtype=np.float32
         )
+        no_time_detrend = False
+    else:
+        no_time_detrend = True
 
     total_flag = np.zeros(3)
     n_iter = 0
@@ -134,6 +139,8 @@ def clean_cpu(
             flatten_to=flatten_to,
             time_median_size=time_median_size,
             return_same_dtype=False,
+            mask_chans=True,
+            no_time_detrend=no_time_detrend,
         )
         cleaned, _, fft_percentage = fft_mad(
             cleaned,
@@ -223,6 +230,9 @@ def clean_gpu(
         bandpass = cp.full(
             yr_input.your_header.nchans, fill_value=flatten_to, dtype=cp.float32
         )
+        no_time_detrend = False
+    else:
+        no_time_detrend = True
 
     total_flag = cp.zeros(3)
     n_iter = 0
@@ -247,6 +257,8 @@ def clean_gpu(
             flatten_to=flatten_to,
             time_median_size=time_median_size,
             return_same_dtype=False,
+            mask_chans=True,
+            no_time_detrend=no_time_detrend,
         )
         cleaned, _, fft_percentage = fft_mad(
             cleaned,
@@ -358,6 +370,7 @@ def clean_dispersion(
         time_median_size=time_median_size,
         return_same_dtype=False,
         no_time_detrend=True,
+        mask_chans=True,
     )
     cleaned, _, fft_percentage = fft_mad(
         cleaned,
@@ -416,6 +429,7 @@ def clean_dispersion(
             time_median_size=time_median_size,
             no_time_detrend=True,
             return_same_dtype=False,
+            mask_chans=True,
         )
         redisip = dedisperse(
             dedisp, -dispersion_measure, yr_input.your_header.tsamp, yr_input.chan_freqs
@@ -469,6 +483,7 @@ def clean_dispersion(
         time_median_size=time_median_size,
         no_time_detrend=True,
         return_same_dtype=False,
+        mask_chans=True,
     )
     cleaned, _, fft_percentage = fft_mad(
         cleaned,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for dedispersion.py
+Tests for JESS_filters.py
 """
 # pylint: disable=C0413,W0201
 
@@ -125,7 +125,7 @@ class TestFftMad:
 
 
 class TestMadSpectraFlat:
-    """ "
+    """
     Test Mad Spectra Flat on some random data
     """
 
