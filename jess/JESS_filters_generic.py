@@ -23,7 +23,7 @@ try:
     from .fitters_cupy import median_fitter
 
 except ModuleNotFoundError:
-    import numpy as xp
+    xp = np
     from .fitters import median_fitter
     from scipy import ndimage
     from .calculators import flattner_median, to_dtype, flattner_mix
@@ -288,7 +288,7 @@ def mad_spectra_flat(
                 medians, size=time_median_size, mode="mirror", output=medians
             )
 
-        mask[subband] = xp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
+        mask[subband] += xp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
 
         flattened[subband][mask[subband]] = xp.nan
 
@@ -321,7 +321,7 @@ def mad_spectra_flat(
             )
 
         mask_new = xp.abs(flattened[subband] - medians[:, None]) > cut[:, None]
-        mask[subband] = mask[subband] + mask_new
+        mask[subband] += mask_new
         flattened[subband][mask[subband]] = xp.nan
 
     # mean frequency subtraction makes sure there is smooth
