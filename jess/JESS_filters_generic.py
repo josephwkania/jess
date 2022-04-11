@@ -262,13 +262,6 @@ def mad_spectra_flat(
     )
     mask = xp.zeros_like(flattened, dtype=bool)
 
-    if mask_chans:
-        means = xp.mean(flattened, axis=0)
-        chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy=None)
-        chan_mask = xp.abs(means - chan_mid) > sigma * chan_noise
-        mask += chan_mask
-        logging.debug("%.2f%% Channels flagged", 100 * chan_mask.mean())
-
     num_subbands, limits = balance_chans_per_subband(
         dynamic_spectra.shape[1], chans_per_subband
     )
@@ -297,6 +290,14 @@ def mad_spectra_flat(
     flattened, ts1 = flattner_median(
         flattened, flatten_to=flatten_to, kernel_size=1, return_time_series=True
     )
+
+    if mask_chans:
+        means = xp.nanmean(flattened, axis=0)
+        chan_noise, chan_mid = iqr_med(means, scale="normal", nan_policy="omit")
+        chan_mask = xp.abs(means - chan_mid) > sigma * chan_noise
+        mask += chan_mask
+        logging.debug("%.2f%% Channels flagged", 100 * chan_mask.mean())
+
     # set the masked values to what we want to flatten to
     # not obvious why this has to be done, because nans should be ok
     # but it works better this way
