@@ -17,6 +17,10 @@ Radio Frequency Interference are anthropomorphic signals that can corrupt radio 
 - `dispersion/dispersion_cupy` dispersion routines, roll and FDMT
 - `fitters/fitters_cupy` Useful curve fitting, robust spline, arPLS, interactive polynomial, etc
 - `JESS_filters/JESS_filters_cupy/JESS_filters_generic` Repository with all the filters
+- See the full [API documentation](https://josephwkania.github.io/jess/py-modindex.html)
+
+## Documentation
+We have a [docs website](https://josephwkania.github.io/jess/index.html)
 
 # Installation
 To install directly into your current Python environment
