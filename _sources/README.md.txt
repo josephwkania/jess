@@ -7,7 +7,7 @@ Radio Frequency Interference are anthropomorphic signals that can corrupt radio 
 
 ## Command Lines Interfaces Highlights
 - `jess_composite.py` A composite MAD/FFT/Highpass 2D filter
-- `jess_kurtosis_skew.py` A Kurtosis and Skew outlier 2D filter
+- `jess_gauss.py` Use Kurtosis and Skew as a 2D Gaussianity filter
 - `rfi_view.py` View 2D dynamic spectra, bandpass, time series, and summery statistics.
 - `channel_mask_maker.py` Make channel makes basked on user specified statistics.
 - `jess_combine_mocks.py` A clone of the your script that applies the composite filter.
