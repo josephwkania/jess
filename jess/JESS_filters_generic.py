@@ -44,7 +44,128 @@ class FilterMaskResult(NamedTuple):
     percent_masked: xp.float64
 
 
-def jarque_bera(
+def calculate_skew_and_kurtosis(
+    dynamic_spectra: xp.ndarray,
+    samples_per_block: int,
+    nan_policy: Union[str, None],
+    winsorize_args: Union[Tuple, None],
+) -> Tuple[xp.ndarray, xp.ndarray, xp.ndarray]:
+    """
+    Calculate the Kurtosis and Skew over a dynamic spectra using per-channel time blocks
+    the size of `samples_per_block`.
+
+    Args:
+        dynamic_spectra - The spectra we want the values
+
+        samples_per_block - Time samples for each channel block
+
+        nan_policy - How to propagate nans. If None, does not check for nans.
+
+        winsorize_args - Winsorize the second moments. See scipy_cupy.stats.winsorize
+                         If `None`, no winorization.
+
+    Return:
+        skew, kurtosis, block limits
+    """
+    num_cols, limits = balance_chans_per_subband(
+        dynamic_spectra.shape[0], samples_per_block
+    )
+    skew = xp.zeros((num_cols, dynamic_spectra.shape[1]), dtype=xp.float64)
+    kurtosis = xp.zeros_like(skew)
+    for jcol in range(num_cols):
+        column = xp.index_exp[limits[jcol] : limits[jcol + 1]]
+        skew[jcol], kurtosis[jcol] = combined(
+            dynamic_spectra[column],
+            axis=0,
+            nan_policy=nan_policy,
+            winsorize_args=winsorize_args,
+        )
+    return skew, kurtosis, limits
+
+
+def _calculate_skew_z(skew: xp.ndarray, spb: int) -> xp.ndarray:
+    """
+    Calculate the skew z score
+
+    Args:
+        skew - skew values
+
+        spd - samples per block
+
+    Returns:
+        skew z score
+    """
+    if spb < 8:
+        raise ValueError(
+            f"skewtest is not valid with less than 8 samples; {int(spb)} given."
+        )
+    if spb < 20:
+        logging.warning("kurtosistest only valid for n>=20 n=%i given", int(spb))
+
+    skew_cor = skew * xp.sqrt(((spb + 1) * (spb + 3)) / (6.0 * (spb - 2)))
+    beta2 = (
+        3.0
+        * (spb**2 + 27 * spb - 70)
+        * (spb + 1)
+        * (spb + 3)
+        / ((spb - 2.0) * (spb + 5) * (spb + 7) * (spb + 9))
+    )
+    weight_2 = -1 + xp.sqrt(2 * (beta2 - 1))
+    delta = 1 / xp.sqrt(0.5 * xp.log(weight_2))
+    alpha = xp.sqrt(2.0 / (weight_2 - 1))
+    skew_cor = xp.where(skew_cor == 0, 1, skew_cor)
+    return delta * xp.log(skew_cor / alpha + xp.sqrt((skew_cor / alpha) ** 2 + 1))
+
+
+def _calculate_kurtosis_z(kurtosis: xp.ndarray, spb: int) -> xp.ndarray:
+    """
+    Calculate the kurtosis z score
+
+    Args:
+        kurtosis - kurtosis values
+
+        spd - samples per block
+
+    Returns:
+        kurtosis z score
+    """
+    # calculate_skew_and_kurtosis returns fisher=True
+    # so we want the differnce
+    fisher_corr = 3.0 * ((spb - 1) / (spb + 1) - 1)
+    varb2 = (
+        24.0
+        * spb
+        * (spb - 2)
+        * (spb - 3)
+        / ((spb + 1) * (spb + 1.0) * (spb + 3) * (spb + 5))
+    )  # [1]_ Eq. 1
+    excess_kurt = (kurtosis - fisher_corr) / xp.sqrt(varb2)  # [1]_ Eq. 4
+    # [1]_ Eq. 2:
+    sqrtbeta1 = (
+        6.0
+        * (spb * spb - 5 * spb + 2)
+        / ((spb + 7) * (spb + 9))
+        * xp.sqrt((6.0 * (spb + 3) * (spb + 5)) / (spb * (spb - 2) * (spb - 3)))
+    )
+    # [1]_ Eq. 3:
+    num_corr = 6.0 + 8.0 / sqrtbeta1 * (
+        2.0 / sqrtbeta1 + xp.sqrt(1 + 4.0 / (sqrtbeta1**2))
+    )
+    term1 = 1 - 2 / (9.0 * num_corr)
+    denom = 1 + excess_kurt * xp.sqrt(2 / (num_corr - 4.0))
+    term2 = xp.sign(denom) * xp.where(
+        denom == 0.0, xp.nan, xp.power((1 - 2.0 / num_corr) / xp.abs(denom), 1 / 3.0)
+    )
+    if xp.any(denom == 0):
+        logging.warning(
+            "Test statistic not defined in some cases due to division by "
+            "zero. Return nan in that case..."
+        )
+
+    return (term1 - term2) / xp.sqrt(2 / (9.0 * num_corr))
+
+
+def dagostino(
     dynamic_spectra: xp.ndarray,
     samples_per_block: int = 4096,
     sigma: float = 4,
@@ -52,6 +173,85 @@ def jarque_bera(
     winsorize_args: Union[Tuple, None] = (5, 40),
     nan_policy: Union[str, None] = None,
 ) -> xp.ndarray:
+    """
+    D'agostino Gaussianity test, this uses a combination of Kurtosis and Skew,
+    taking into account the number of samples in each block
+    We calculate the D'Agostino along the time axis in blocks of `samples_per_block`.
+    This is balanced if the number of samples is not evenly divisible.
+    The D'Agostino K^2 statstic is tailed.
+    This makes our Gaussian outlier flagging remove more data than expected.
+    To combate this we take the squareroot of the K^2 Statistic, this makes the
+    distrabution more Gaussian and the flagging work better.
+
+    Args:
+        dynamic_spectra - Section spectra time on the vertical axis
+
+        samples_per_block - Time samples for each channel block
+
+        sigma - Sigma at which to flag
+
+        detrend - Detrend Kurtosis and Skew values (fitter, chans_per_fit).
+                  If `None`, no detrend
+
+        winsorize_args - Winsorize the second moments. See scipy_cupy.stats.winsorize
+                         If `None`, no winorization.
+
+        nan_policy - How to propagate nans. If None, does not check for nans.
+
+        alternative - Defines the alternative hypothesis.
+            The following options are available (default 'two-sided'):
+            - 'two-sided': the kurtosis of the distribution underlying the sample
+            is different from that of the normal distribution
+            - 'less': the kurtosis of the distribution underlying the sample
+            is less than that of the normal distribution
+            - 'greater': the kurtosis of the distribution underlying the sample
+            is greater than that of the normal distribution
+
+
+    Returns:
+        FilterMaskResult with mask True=bad data, and percent masked
+    """
+    skew, kurtosis, limits = calculate_skew_and_kurtosis(
+        dynamic_spectra,
+        samples_per_block=samples_per_block,
+        nan_policy=nan_policy,
+        winsorize_args=winsorize_args,
+    )
+    skew_z = _calculate_skew_z(skew=skew, spb=samples_per_block)
+    kurtosis_z = _calculate_kurtosis_z(kurtosis=kurtosis, spb=samples_per_block)
+
+    da_2 = skew_z * skew_z + kurtosis_z * kurtosis_z
+    # map to chi distrabution
+    xp.sqrt(da_2, out=da_2)
+
+    # should return the same as scipy.stats.normaltest
+    # return NormaltestResult(da_2, distributions.chi2.sf(da_2, 2))
+
+    if detrend is not None:
+        da_2 -= detrend[0](xp.median(da_2, axis=0), chans_per_fit=detrend[1])
+
+    da_scale, da_mid = iqr_med(da_2, scale="normal", axis=None, nan_policy=nan_policy)
+    mask = da_2 - da_mid > sigma * da_scale
+
+    mask_percent = 100 * mask.mean()
+    logging.debug(
+        "mask:%.2f",
+        mask_percent,
+    )
+    # repeat needs a list
+    repeats = xp.diff(limits).tolist()
+    mask = xp.repeat(mask, repeats=repeats, axis=0)
+    return FilterMaskResult(xp.array(xp.nan), mask, mask_percent)
+
+
+def jarque_bera(
+    dynamic_spectra: xp.ndarray,
+    samples_per_block: int = 4096,
+    sigma: float = 4,
+    detrend: Union[Tuple, None] = (median_fitter, 40),
+    winsorize_args: Union[Tuple, None] = (5, 40),
+    nan_policy: Union[str, None] = None,
+) -> FilterMaskResult:
     """
     Jarque-Bera Gaussianity test, this uses a combination of Kurtosis and Skew.
     We calculate Jarque-Bera along the time axis in blocks of `samples_per_block`.
@@ -76,21 +276,15 @@ def jarque_bera(
         nan_policy - How to propagate nans. If None, does not check for nans.
 
     Returns:
-        bool Mask with True=bad data
+        FilterMaskResult with mask True=bad data, and percent masked
     """
-    num_cols, limits = balance_chans_per_subband(
-        dynamic_spectra.shape[0], samples_per_block
+    skew, kurtosis, limits = calculate_skew_and_kurtosis(
+        dynamic_spectra,
+        samples_per_block=samples_per_block,
+        nan_policy=nan_policy,
+        winsorize_args=winsorize_args,
     )
-    skew = xp.zeros((num_cols, dynamic_spectra.shape[1]), dtype=xp.float64)
-    kurtosis = xp.zeros_like(skew)
-    for jcol in range(num_cols):
-        column = xp.index_exp[limits[jcol] : limits[jcol + 1]]
-        skew[jcol], kurtosis[jcol] = combined(
-            dynamic_spectra[column],
-            axis=0,
-            nan_policy=nan_policy,
-            winsorize_args=winsorize_args,
-        )
+
     # already calculate the excess kurtosis, so we don't need to
     # subtract 3
     j_b = samples_per_block / 6 * (skew**2 + kurtosis**2 / 4)
@@ -120,7 +314,7 @@ def kurtosis_and_skew(
     detrend: Union[Tuple, None] = (median_fitter, 40),
     winsorize_args: Union[Tuple, None] = (5, 40),
     nan_policy: Union[str, None] = None,
-) -> xp.ndarray:
+) -> FilterMaskResult:
     """
     Gaussainity test using Kurtosis and Skew. We calculate Kurtosis and skew along
     the time axis in blocks of `samples_per_block`. This is balanced if the number
@@ -148,19 +342,12 @@ def kurtosis_and_skew(
         Flagging based on
         https://www.worldscientific.com/doi/10.1142/S225117171940004X
     """
-    num_cols, limits = balance_chans_per_subband(
-        dynamic_spectra.shape[0], samples_per_block
+    skew, kurtosis, limits = calculate_skew_and_kurtosis(
+        dynamic_spectra,
+        samples_per_block=samples_per_block,
+        nan_policy=nan_policy,
+        winsorize_args=winsorize_args,
     )
-    skew = xp.zeros((num_cols, dynamic_spectra.shape[1]), dtype=xp.float64)
-    kurtosis = xp.zeros_like(skew)
-    for jcol in range(num_cols):
-        column = xp.index_exp[limits[jcol] : limits[jcol + 1]]
-        skew[jcol], kurtosis[jcol] = combined(
-            dynamic_spectra[column],
-            axis=0,
-            nan_policy=nan_policy,
-            winsorize_args=winsorize_args,
-        )
 
     if detrend is not None:
         skew -= detrend[0](xp.median(skew, axis=0), chans_per_fit=detrend[1])

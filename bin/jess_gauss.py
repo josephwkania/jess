@@ -16,7 +16,7 @@ from your import Writer, Your
 from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
-from jess.JESS_filters_generic import jarque_bera, kurtosis_and_skew
+from jess.JESS_filters_generic import dagostino, jarque_bera, kurtosis_and_skew
 from jess.scipy_cupy.stats import iqr_med
 
 try:
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-test",
         "--test",
-        help="Test to use, [kurtosis_and_skew, jaqrue_bera]",
+        help="Test to use, [kurtosis_and_skew, jaqrue_bera, dagostino]",
         type=str,
         default="kurtosis_and_skew",
         required=False,
@@ -407,6 +407,8 @@ if __name__ == "__main__":
         _test = kurtosis_and_skew
     elif test_str == "jarque_bera":
         _test = jarque_bera
+    elif test_str == "dagostino":
+        _test = dagostino
     else:
         raise NotImplementedError(f"Test {test_str} not available")
 
