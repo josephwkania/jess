@@ -13,37 +13,39 @@ import argparse
 import logging
 import os
 import textwrap
+from typing import Union
 
 import numpy as np
 from rich.logging import RichHandler
 from rich.progress import track
-from your import Your
-from your.formats.filwriter import make_sigproc_object
+from your import Writer, Your
+from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
 try:
-    import cupy as cp
-
+    import cupy as xp
     from jess.calculators_cupy import to_dtype
     from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
 
-    GPU_BACKEND = True
+    BACKEND_GPU = True
 except ModuleNotFoundError:
+    xp = np
+
     from jess.calculators import to_dtype
     from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
 
-    GPU_BACKEND = False
+    BACKEND_GPU = False
 
 
 logger = logging.getLogger()
 
 
-def get_outfile(file: str, out_file: str) -> str:
+def get_outfile(file: str, out_file: Union[None, str]) -> str:
     """
     Makes the outfile name by:
     if no str is given -> append _zeroDM to the original file name
     if str is given with an extension other than .fil -> Value error
-    if str is given without extention  -> add .fil
+    if str is given without extension -> add .fil
     """
     if not out_file:
         # if no out file is given, create the string
@@ -63,84 +65,14 @@ def get_outfile(file: str, out_file: str) -> str:
     return out_file
 
 
-def cpu_backend(
-    yr_input: object,
+def clean(
+    yr_input: Your,
     gulp: int,
-    sigproc_object: object,
+    sigproc_object: sigproc_object_from_writer,
     out_file: str,
     sigma: float,
     bad_chans: np.ndarray,
-    modes_to_zero: np.ndarray,
-) -> None:
-    """
-    Loops over the given yr_input file, cleans the data using CPU backend,
-    writes to the out_file
-
-    Args:
-        yr_input: the your object for the input file
-
-        gulp: amount of data to process each loop
-
-        sigproc_object: the object for the ourfile
-
-        out_file: name for the outfile
-
-        sigma: singa at which to clip narrowband Fourier Components
-
-        bad_chans: channels to be removed by zeroing non-DC components
-
-        modes_to_zero: number of Fourier modes to zero for zero-dm'ing
-
-
-    Returns:
-        None
-    """
-    logging.debug("Using CPU backend")
-    bandpass = None
-    # loop through all the data
-    for j in track(
-        range(0, yr_input.your_header.nspectra, gulp),
-        description="Cleaning File",
-        transient=True,
-    ):
-        if j + gulp < yr_input.your_header.nspectra:
-            data = yr_input.get_data(j, gulp)
-        else:
-            data = yr_input.get_data(j, yr_input.your_header.nspectra - j)
-
-        # can't do this with the cupy zero dmer
-        # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
-
-        # use one bandpass to prevent jumps
-        if bandpass is None:
-            logging.debug("Creating bandpass")
-            # I had np.ma.mean here before but
-            # this isn't a masked array
-            bandpass = np.mean(data, axis=0)
-
-        data = fft_mad(data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False)
-
-        if modes_to_zero == 1:
-            logging.debug("Zero DMing: Subtracting Mean")
-            data = zero_dm(data, bandpass, return_same_dtype=False)
-        elif modes_to_zero > 1:
-            logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
-            data = zero_dm_fft(
-                data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
-            )
-
-        data = to_dtype(data, dtype=yr_input.your_header.dtype)
-        sigproc_object.append_spectra(data, out_file)
-
-
-def gpu_backend(
-    yr_input: object,
-    gulp: int,
-    sigproc_object: object,
-    out_file: str,
-    sigma: float,
-    bad_chans: np.ndarray,
-    modes_to_zero: np.ndarray,
+    modes_to_zero: int,
 ) -> None:
     """
     Loops over the given yr_input file, cleans the data using GPU backend,
@@ -151,11 +83,11 @@ def gpu_backend(
 
         gulp: amount of data to process each loop
 
-        sigproc_object: the object for the ourfile
+        sigproc_object: the object for the outfile
 
         out_file: name for the outfile
 
-        sigma: singa at which to clip narrowband Fourier Components
+        sigma: sigma at which to clip narrow band Fourier Components
 
         bad_chans: channels to be removed by zeroing non-DC components
 
@@ -166,14 +98,17 @@ def gpu_backend(
     Returns:
         None
     """
-    logging.debug("Using GPU backend")
-    bandpass = None
+
     # loop through all the data
+    n_iter = 0
+    total_flag = xp.zeros(3)
     for j in track(
         range(0, yr_input.your_header.nspectra, gulp),
         description="Cleaning File",
         transient=True,
+        refresh_per_second=1,
     ):
+        logging.debug("Cleaning samples starting at %i", j)
         if j + gulp < yr_input.your_header.nspectra:
             data = yr_input.get_data(j, gulp)
         else:
@@ -182,28 +117,53 @@ def gpu_backend(
         # can't do this with the cupy zero dmer
         # data = np.ma.array(data, mask=np.broadcast_to(mask, data.shape))
 
-        data = cp.asarray(data)
+        if BACKEND_GPU:
+            data = xp.asarray(data)
 
         # use one bandpass to prevent jumps
-        if bandpass is None:
+        if modes_to_zero > 0:
             logging.debug("Creating bandpass")
             # I had np.ma.mean here before but
             # this isn't a masked array
-            bandpass = cp.mean(data, axis=0)
+            bandpass = xp.mean(data, axis=0)
 
-        data = fft_mad(data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False)
+        data, _, fft_percentage = fft_mad(
+            data, sigma=sigma, bad_chans=bad_chans, return_same_dtype=False
+        )
 
         if modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            data = zero_dm(data, bandpass, return_same_dtype=False)
+            data, dm_percentage = zero_dm(data, bandpass, return_same_dtype=False)
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
-            data = zero_dm_fft(
+            data, dm_percentage = zero_dm_fft(
                 data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
+        else:
+            dm_percentage = xp.asarray((0))
+
+        sum_flagged = fft_percentage + dm_percentage
+        total_flag += xp.asarray((fft_percentage, dm_percentage, sum_flagged))
+        n_iter += 1
+        logging.info(
+            "FFT Flag %.2f%%, Highpass %.2f%%, Total %.2f%%",
+            fft_percentage,
+            dm_percentage,
+            sum_flagged,
+        )
 
         data = to_dtype(data, dtype=yr_input.your_header.dtype)
-        sigproc_object.append_spectra(data.get(), out_file)
+        if BACKEND_GPU:
+            data = data.get()
+        sigproc_object.append_spectra(data, out_file)
+
+    total_flag /= n_iter
+    logging.info(
+        "Total: FFT Flag %.2f%%, Highpass %.2f%%, Total %.2f%%",
+        total_flag[0],
+        total_flag[1],
+        total_flag[2],
+    )
 
 
 def fft_cleaner(
@@ -228,7 +188,7 @@ def fft_cleaner(
 
         gulp: amount of data to process each loop
 
-        sigma: simga at which to clip narrowband Fourier Components
+        sigma: sigma at which to clip narrowband Fourier Components
 
         modes_to_zero: number of Fourier modes to zero for zero-dm'ing
 
@@ -250,59 +210,26 @@ def fft_cleaner(
         mask = np.zeros(yr_input.your_header.nchans, dtype=bool)
         logging.debug("No mask file given")
 
-    sigproc_object = make_sigproc_object(
-        rawdatafile=out_file,
-        source_name=yr_input.your_header.source_name,
-        nchans=yr_input.your_header.nchans,
-        foff=yr_input.your_header.foff,  # MHz
-        fch1=yr_input.your_header.fch1,  # MHz
-        tsamp=yr_input.your_header.tsamp,  # seconds
-        tstart=yr_input.your_header.tstart,  # MJD
-        # src_raj=yr_input.src_raj,  # HHMMSS.SS
-        # src_dej=yr_input.src_dej,  # DDMMSS.SS
-        # machine_id=yr_input.your_header.machine_id,
-        # nbeams=yr_input.your_header.nbeams,
-        # ibeam=yr_input.your_header.ibeam,
-        nbits=yr_input.your_header.nbits,
-        # nifs=yr_input.your_header.nifs,
-        # barycentric=yr_input.your_header.barycentric,
-        # pulsarcentric=yr_input.your_header.pulsarcentric,
-        # telescope_id=yr_input.your_header.telescope_id,
-        # data_type=yr_input.your_header.data_type,
-        # az_start=yr_input.your_header.az_start,
-        # za_start=yr_input.your_header.za_start,
-    )
+    wrt = Writer(yr_input, outname=out_file)
+    sigproc_object = sigproc_object_from_writer(wrt)
     sigproc_object.write_header(out_file)
 
-    if GPU_BACKEND:
-        gpu_backend(
-            yr_input=yr_input,
-            gulp=gulp,
-            sigproc_object=sigproc_object,
-            out_file=out_file,
-            sigma=sigma,
-            bad_chans=bad_chans,
-            modes_to_zero=modes_to_zero,
-        )
-    else:
-        cpu_backend(
-            yr_input=yr_input,
-            gulp=gulp,
-            sigproc_object=sigproc_object,
-            out_file=out_file,
-            sigma=sigma,
-            bad_chans=bad_chans,
-            modes_to_zero=modes_to_zero,
-        )
-
-    logging.info("Done!")
+    clean(
+        yr_input=yr_input,
+        gulp=gulp,
+        sigproc_object=sigproc_object,
+        out_file=out_file,
+        sigma=sigma,
+        bad_chans=bad_chans,
+        modes_to_zero=modes_to_zero,
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="zero_dm.py",
         description=textwrap.dedent(
-            """Runs a zero dm filter over .fits/.fil,
+            """Runs two Fourier filters over .fits/.fil,
             allowing the user to give a .bad_chans file"""
         ),
         epilog=__doc__,
@@ -366,9 +293,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    LOGGING_FORMAT = (
-        "%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s"
-    )
+    LOGGING_FORMAT = "%(funcName)s - %(name)s - %(levelname)s - %(message)s"
 
     if args.verbose:
         logging.basicConfig(

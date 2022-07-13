@@ -11,17 +11,16 @@ import os
 import textwrap
 
 import numpy as np
+from jess.channel_masks import channel_masker
 from rich.logging import RichHandler
 from scipy.signal import decimate
 from your import Your
 from your.utils.misc import YourArgparseFormatter
 
-from jess.channel_masks import channel_masker
-
 logger = logging.getLogger()
 
 
-def file_saver(mask: np.ndarray, out_file: str):
+def file_saver(mask: np.ndarray, out_file: str) -> None:
     """
     Saves the mask to a file,
     """
