@@ -113,8 +113,12 @@ def clean_cpu(
             yr_input.your_header.nchans, fill_value=flatten_to, dtype=np.float32
         )
         no_time_detrend = False
-    else:
+    elif modes_to_zero == 0:
+        # preserve zero DM time series
         no_time_detrend = True
+    else:
+        # This will be median subtraction
+        no_time_detrend = False
 
     total_flag = np.zeros(3)
     n_iter = 0
@@ -231,8 +235,12 @@ def clean_gpu(
             yr_input.your_header.nchans, fill_value=flatten_to, dtype=cp.float32
         )
         no_time_detrend = False
-    else:
+    elif modes_to_zero == 0:
+        # preserve zero DM time series
         no_time_detrend = True
+    else:
+        # This will be median subtraction
+        no_time_detrend = False
 
     total_flag = cp.zeros(3)
     n_iter = 0
@@ -655,7 +663,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-modes_to_zero",
         "--modes_to_zero",
-        help="Number of modes to zero",
+        help="Number of modes to zero, 0 to preserve zerodm, -1 to median subtract",
         type=int,
         default=1,
         required=False,

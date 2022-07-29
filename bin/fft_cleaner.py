@@ -24,6 +24,7 @@ from your.utils.misc import YourArgparseFormatter
 
 try:
     import cupy as xp
+
     from jess.calculators_cupy import to_dtype
     from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
 
