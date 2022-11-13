@@ -653,7 +653,7 @@ class TestBalanceChansPerSubband:
         """
         num_section, limits = calc.balance_chans_per_subband(2048, 512)
         assert num_section == 4
-        assert np.array_equal(np.array([0, 512, 1024, 1536, 2048]), limits)
+        np.testing.assert_array_equal(limits, np.array((0, 512, 1024, 1536, 2048)))
 
     @staticmethod
     def test_uneven():
@@ -663,7 +663,18 @@ class TestBalanceChansPerSubband:
         """
         num_section, limits = calc.balance_chans_per_subband(2048, 500)
         assert num_section == 4
-        assert np.array_equal(np.array([0, 512, 1024, 1536, 2048]), limits)
+        np.testing.assert_array_equal(limits, np.array((0, 512, 1024, 1536, 2048)))
+
+    @staticmethod
+    def test_subband_larger_chans():
+        """
+        Test when number of number of chans < chan_per_subband
+        put everything in the subband
+        """
+        num_chans = 500
+        num_section, limits = calc.balance_chans_per_subband(num_chans, 2048)
+        assert num_section == 1
+        np.testing.assert_array_equal(limits, np.array((0, num_chans)))
 
 
 class TestDivideRange:

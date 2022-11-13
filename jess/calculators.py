@@ -760,6 +760,9 @@ def balance_chans_per_subband(
         [number of sections, array with start and stops of each of the subband]
     """
     num_sections = num_chans // chans_per_subband
+    if num_sections == 0:
+        logging.debug("chans_per_subband > num_chans")
+        return 1, np.array((0, num_chans))
     return num_sections, divide_range(num_chans, num_sections)
 
 
