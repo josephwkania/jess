@@ -16,6 +16,7 @@ from your import Writer, Your
 from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
+from jess.calculators import get_flatten_to
 from jess.JESS_filters_generic import dagostino, jarque_bera, kurtosis_and_skew
 from jess.scipy_cupy.stats import iqr_med
 
@@ -318,9 +319,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "-flatten_to",
         "--flatten_to",
-        help="Flatten data to this number (Only used for mad_specta_flat)",
+        help="Flatten data to this number. If `None`, sets the data 1/4"
+        + " between zero and dtype max",
         type=int,
-        default=64,
+        default=None,
         required=False,
     )
     parser.add_argument(
@@ -397,6 +399,11 @@ if __name__ == "__main__":
     sigproc_obj = sigproc_object_from_writer(wrt)
     sigproc_obj.write_header(outfile)
 
+    if args.flatten_to is None:
+        FLATTEN_TO = get_flatten_to(yrinput.your_header.nbits)
+    else:
+        FLATTEN_TO = args.flatten_to
+
     if args.winsorize_args[0] == -1:
         WINSORIZE = None
     else:
@@ -430,7 +437,7 @@ if __name__ == "__main__":
             modes_to_zero=args.modes_to_zero,
             test=_test,
             winsorize_args=WINSORIZE,
-            flatten_to=args.flatten_to,
+            flatten_to=FLATTEN_TO,
             sigma=args.sigma,
             gulp=args.gulp,
             out_file=outfile,

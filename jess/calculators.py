@@ -810,3 +810,19 @@ def to_dtype(data: np.ndarray, dtype: np.dtype) -> np.ndarray:
     np.clip(data, iinfo.min, iinfo.max, out=data)
 
     return data.astype(dtype)
+
+
+def get_flatten_to(nbits: int) -> int:
+    """
+    Get the flatten to number of a given number of bits.
+    Sets the data 1/4 of the way to zero.
+
+    Args:
+        nbits - Number of bits.
+
+    Returns:
+        Number to flatten to.
+    """
+    if nbits < 4:
+        raise NotImplementedError("{nbints} not implmented!")
+    return 2 ** (nbits - 2)

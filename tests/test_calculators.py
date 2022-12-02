@@ -712,3 +712,24 @@ def test_to_dtype():
     random_8 = np.clip(random_8, 0, 255)
     random_8 = random_8.astype("uint8")
     assert np.array_equal(random_8, calc.to_dtype(random, np.uint8))
+
+
+class TestGetFlattenTo:
+    """
+    Test flatten to.
+    """
+
+    @staticmethod
+    def test_8():
+        """
+        Test eight bit.
+        """
+        assert 64 == calc.get_flatten_to(8)
+
+    @staticmethod
+    def test_raise():
+        """
+        Below 4 bits is not implemented.
+        """
+        with pytest.raises(NotImplementedError):
+            calc.get_flatten_to(2)

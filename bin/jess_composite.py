@@ -23,6 +23,7 @@ from your.formats.filwriter import sigproc_object_from_writer
 # from your.utils.math import primes
 from your.utils.misc import YourArgparseFormatter
 
+from jess.calculators import get_flatten_to
 from jess.JESS_filters_generic import mad_spectra_flat
 
 try:
@@ -531,7 +532,7 @@ def master_cleaner(
     dispersion_measure: float,
     sigma: float = 4,
     gulp: int = 16384,
-    flatten_to: int = 64,
+    flatten_to: Union[int, None] = None,
     channels_per_subband: int = 256,
     time_median_size: int = 32,
     modes_to_zero: int = 1,
@@ -555,6 +556,9 @@ def master_cleaner(
     # fitter = get_fitter(fitter)
     out_file = get_outfile(file, out_file)
     yr_input = Your(file)
+
+    if flatten_to is None:
+        flatten_to = get_flatten_to(yr_input.your_header.nbits)
 
     wrt = Writer(yr_input, outname=out_file)
     sigproc_object = sigproc_object_from_writer(wrt)
@@ -671,9 +675,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "-flatten_to",
         "--flatten_to",
-        help="Flatten data to this number",
+        help="Flatten data to this number. If `None`, sets the data 1/4"
+        + " between zero and dtype max",
         type=int,
-        default=64,
+        default=None,
         required=False,
     )
     parser.add_argument(
