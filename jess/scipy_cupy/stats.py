@@ -10,7 +10,15 @@ from typing import List, Tuple, Union
 import numpy as np
 
 try:
+    import os
+
     import cupy as xp
+
+    try:
+        if int(os.environ["CUDA_VISIBLE_DEVICES"]) < 0:
+            raise RuntimeError
+    except KeyError:
+        pass
     from cupyx.scipy import ndimage
 
     BACKEND_GPU = True

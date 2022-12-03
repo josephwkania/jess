@@ -6,8 +6,8 @@ Generic (cupy/numpy) filters.
 This is a test of writing generic backend filters.
 It relies on the user giving the correct ndarray.
 
-If this is successful, we should merge JESS_fiters and
-JESS_fiters_cupy into here.
+If this is successful, we should merge JESS_filters and
+JESS_filters_cupy into here.
 """
 
 import logging
@@ -16,13 +16,21 @@ from typing import NamedTuple, Tuple, Union
 import numpy as np
 
 try:
+    import os
+
     import cupy as xp
+
+    try:
+        if int(os.environ["CUDA_VISIBLE_DEVICES"]) < 0:
+            raise RuntimeError
+    except KeyError:
+        pass
     from cupyx.scipy import ndimage
 
     from .calculators_cupy import flattner_median, flattner_mix, to_dtype
     from .fitters_cupy import median_fitter
 
-except ModuleNotFoundError:
+except (ModuleNotFoundError, RuntimeError):
     xp = np
     from .fitters import median_fitter
     from scipy import ndimage

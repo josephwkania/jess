@@ -24,20 +24,12 @@ from your.formats.filwriter import sigproc_object_from_writer
 from your.utils.misc import YourArgparseFormatter
 
 from jess.calculators import get_flatten_to
-from jess.JESS_filters_generic import mad_spectra_flat
 
 try:
     import cupy as cp
 
-    from jess.calculators_cupy import to_dtype
-    from jess.dispersion_cupy import dedisperse, delay_lost
-    from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
-
     BACKEND_GPU = True
 except ModuleNotFoundError:
-    from jess.calculators import to_dtype
-    from jess.dispersion import dedisperse, delay_lost
-    from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
 
     BACKEND_GPU = False
 
@@ -689,6 +681,14 @@ if __name__ == "__main__":
         default=16384,
         required=False,
     )
+    parser.add_argument(
+        "-gpu",
+        "--gpu",
+        help="Which GPU to use. Default is gpu 0, -1 for cpu",
+        type=int,
+        default=0,
+        required=False,
+    )
     # parser.add_argument(
     #    "--remove_ends",
     #    help="keep ends of file that cannot be cleaned",
@@ -719,6 +719,20 @@ if __name__ == "__main__":
             format=LOGGING_FORMAT,
             handlers=[RichHandler(rich_tracebacks=True)],
         )
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
+    from jess.JESS_filters_generic import mad_spectra_flat
+
+    if args.gpu < 0 or not BACKEND_GPU:
+        from jess.calculators import to_dtype
+        from jess.dispersion import dedisperse, delay_lost
+        from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
+
+        BACKEND_GPU = False
+    else:
+        from jess.calculators_cupy import to_dtype
+        from jess.dispersion_cupy import dedisperse, delay_lost
+        from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
 
     master_cleaner(
         file=args.file,
