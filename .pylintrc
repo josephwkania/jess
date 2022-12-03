@@ -1,3 +1,2 @@
 [MASTER]
-disable = C0330, C0326
 max-line-length = 88

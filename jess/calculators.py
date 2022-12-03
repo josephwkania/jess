@@ -49,9 +49,9 @@ def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
     Auto correlation along an axis
 
     Args:
-        data: data to find the autocorrelaton
+        data: data to find the autocorrelation
 
-        axis: axis to find the autocorrlation, -1, 0, 1 available
+        axis: axis to find the autocorrelation, -1, 0, 1 available
 
     Returns:
         Auto correlation along an axis
@@ -179,7 +179,7 @@ def _contains_nan(a, nan_policy="propagate"):
 def median_abs_deviation_med(
     x: np.ndarray,
     axis: int = 0,
-    center: object = np.median,
+    center: Callable = np.median,
     scale: float = 1.0,
     nan_policy: str = "propagate",
 ):
@@ -231,7 +231,7 @@ def median_abs_deviation_med(
     scipy.stats.tstd, scipy.stats.tvar
     Notes
     -----
-    Modifed from scipy.stats.median_abs_devation
+    Modified from scipy.stats.median_abs_devation
 
     The `center` argument only affects the calculation of the central value
     around which the MAD is calculated. That is, passing in ``center=np.mean``
@@ -307,10 +307,12 @@ def median_abs_deviation_med(
 
     if contains_nan:
         if axis is None:
-            mad = stats.stats._mad_1d(x.ravel(), center, nan_policy)
+            mad = stats._stats_py._mad_1d(x.ravel(), center, nan_policy)
             centers = center(x.ravel())
         else:
-            mad = np.apply_along_axis(stats.stats._mad_1d, axis, x, center, nan_policy)
+            mad = np.apply_along_axis(
+                stats._stats_py._mad_1d, axis, x, center, nan_policy
+            )
             centers = center(x, axis=axis)
     else:
         if axis is None:
@@ -334,7 +336,7 @@ def decimate(
 ) -> np.ndarray:
     """
     Makes decimates along either/both time and frequency axes.
-    Flattens data along frequency before freqency decimation.
+    Flattens data along frequency before frequency decimation.
     Fattens again in frequency before returning.
 
     args:
@@ -342,13 +344,13 @@ def decimate(
 
         time_factor: factor to reduce time sampling by
 
-        freq_factor: factor to reduce freqency channels
+        freq_factor: factor to reduce frequency channels
 
         backend: backend to use to reduce the dimension, default is
                  signal.decimate, consider using jess.calculator.mean
 
     returns:
-        Flattened in frequency dynamic spectra, reduced in time and/or freqency
+        Flattened in frequency dynamic spectra, reduced in time and/or frequency
     """
     if time_factor is not None:
         if not isinstance(time_factor, int):
@@ -442,7 +444,7 @@ def flattner_mix(
     and then the medians of the of bandpass. Then add flatten_to to all the pixels
     so that the data can be keep as the same data type.
 
-    This uses medians subtraction on the time series. This is less agressive and
+    This uses medians subtraction on the time series. This is less aggressive and
     leaved the mean subtraction for the zero-dm.
 
     Mean subtraction across the spectrum allows for smoother transition between blocks.

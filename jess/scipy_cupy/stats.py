@@ -22,7 +22,7 @@ try:
     from cupyx.scipy import ndimage
 
     BACKEND_GPU = True
-except ModuleNotFoundError:
+except (ModuleNotFoundError, RuntimeError):
     xp = np
     from scipy import ndimage
 
