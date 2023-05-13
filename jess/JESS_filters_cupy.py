@@ -502,7 +502,11 @@ def iterative_mad(
         time_median_size=time_median_size,
         return_same_dtype=False,
     )
-    dynamic_spectra, _, fft_mask_percentage, = fft_mad(
+    (
+        dynamic_spectra,
+        _,
+        fft_mask_percentage,
+    ) = fft_mad(
         dynamic_spectra,
         sigma=sigma,
         time_median_size=time_median_size // 2,
@@ -682,9 +686,7 @@ def zero_dm_fft(
     # They FFT'd dynamic spectra will be 1/2 or 1/2+1 the size of
     # the dynamic spectra since FFT is complex
     mask = cp.zeros(dynamic_spectra_fftd.shape[1], dtype=bool)
-    mask[
-        :modes_to_zero,
-    ] = True
+    mask[:modes_to_zero,] = True
 
     # masking complex number, multiply by two
     # except for the first (DC) component

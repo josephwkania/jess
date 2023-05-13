@@ -30,7 +30,6 @@ try:
 
     BACKEND_GPU = True
 except ModuleNotFoundError:
-
     BACKEND_GPU = False
 
 
@@ -223,10 +222,15 @@ def clean_gpu(
     logging.debug("Using GPU backend")
 
     # need a bandpass if we do zero_dming, put outside the loop
+    decimal, modes_to_zero = cp.modf(modes_to_zero)
+    modes_to_zero = int(modes_to_zero)
+    if cp.abs(decimal) == 0.5:
+        chan_weights = robust_bandpass(yr_input)
+    else:
+        chan_weights = None
+
     if modes_to_zero >= 1:
-        bandpass = cp.full(
-            yr_input.your_header.nchans, fill_value=flatten_to, dtype=cp.float32
-        )
+        bandpass = cp.float32(flatten_to)
         no_time_detrend = False
     elif modes_to_zero == 0:
         # preserve zero DM time series
@@ -251,7 +255,7 @@ def clean_gpu(
         # cleaned = fft_mad(
         #     cp.asarray(data), sigma=sigma, chans_per_subband=channels_per_subband
         # )
-        cleaned, _, mad_percentage = mad_spectra_flat(
+        cleaned, mad_mask, mad_percentage = mad_spectra_flat(
             cp.asarray(data),
             chans_per_subband=channels_per_subband,
             sigma=sigma,
@@ -260,6 +264,7 @@ def clean_gpu(
             return_same_dtype=False,
             mask_chans=True,
             no_time_detrend=no_time_detrend,
+            chan_weights=chan_weights,
         )
         cleaned, _, fft_percentage = fft_mad(
             cleaned,
@@ -271,11 +276,21 @@ def clean_gpu(
 
         if modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            cleaned, dm_percentage = zero_dm(cleaned, bandpass, return_same_dtype=False)
+            cleaned[mad_mask] = cp.nan
+            cleaned, dm_percentage = zero_dm(
+                cleaned,
+                bandpass=bandpass,
+                chan_weights=chan_weights,
+                return_same_dtype=False,
+            )
+            cleaned[mad_mask] = flatten_to
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             cleaned, dm_percentage = zero_dm_fft(
-                cleaned, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
+                cleaned,
+                bandpass=bandpass,
+                modes_to_zero=modes_to_zero,
+                return_same_dtype=False,
             )
         else:
             dm_percentage = cp.asarray((0))
@@ -657,10 +672,10 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "-modes_to_zero",
+        "-mtz",
         "--modes_to_zero",
         help="Number of modes to zero, 0 to preserve zerodm, -1 to median subtract",
-        type=int,
+        type=float,
         default=1,
         required=False,
     )
@@ -721,18 +736,18 @@ if __name__ == "__main__":
         )
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
-    from jess.JESS_filters_generic import mad_spectra_flat
+    from jess.JESS_filters_generic import mad_spectra_flat, robust_bandpass, zero_dm
 
     if args.gpu < 0 or not BACKEND_GPU:
         from jess.calculators import to_dtype
         from jess.dispersion import dedisperse, delay_lost
-        from jess.JESS_filters import fft_mad, zero_dm, zero_dm_fft
+        from jess.JESS_filters import fft_mad, zero_dm_fft
 
         BACKEND_GPU = False
     else:
         from jess.calculators_cupy import to_dtype
         from jess.dispersion_cupy import dedisperse, delay_lost
-        from jess.JESS_filters_cupy import fft_mad, zero_dm, zero_dm_fft
+        from jess.JESS_filters_cupy import fft_mad, zero_dm_fft
 
     master_cleaner(
         file=args.file,

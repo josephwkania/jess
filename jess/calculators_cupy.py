@@ -120,6 +120,7 @@ def flattner_median(
     return_same_dtype: bool = False,
     return_time_series: bool = False,
     intermediate_dtype: type = cp.float32,
+    chan_weights: Union[None, cp.ndarray] = None,
 ) -> Union[cp.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
@@ -165,7 +166,10 @@ def flattner_median(
         ts_medians = cp.nanmedian(dynamic_spectra, axis=1).astype(intermediate_dtype)
 
     ts_medians -= flatten_to
-    result = dynamic_spectra - ts_medians[:, None]
+    if chan_weights is not None:
+        result = dynamic_spectra - ts_medians[:, None] * chan_weights
+    else:
+        result = dynamic_spectra - ts_medians[:, None]
 
     if return_same_dtype:
         result = to_dtype(result, original_dtype)

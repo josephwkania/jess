@@ -11,9 +11,10 @@ JESS_filters_cupy into here.
 """
 
 import logging
-from typing import NamedTuple, Tuple, Union
+from typing import Callable, NamedTuple, Tuple, Union
 
 import numpy as np
+from your import Your
 
 try:
     import os
@@ -38,6 +39,16 @@ except (ModuleNotFoundError, RuntimeError):
 
 from .calculators import balance_chans_per_subband
 from .scipy_cupy.stats import combined, iqr_med, median_abs_deviation_med
+
+
+class FilterResult(NamedTuple):
+    """
+    dynamic_spectra - Dynamic Spectra with RFI filtered
+    percent_masked - The percent masked
+    """
+
+    dynamic_spectra: xp.ndarray
+    percent_masked: xp.float64
 
 
 class FilterMaskResult(NamedTuple):
@@ -391,6 +402,7 @@ def mad_spectra_flat(
     mask_chans: bool = False,
     return_same_dtype: bool = True,
     no_time_detrend: bool = False,
+    chan_weights: Union[None, xp.ndarray] = None,
 ) -> xp.ndarray:
     """
     Calculates Median Absolute Deviations along the spectral axis
@@ -454,6 +466,7 @@ def mad_spectra_flat(
         flatten_to=flatten_to,
         kernel_size=7,
         return_time_series=True,
+        chan_weights=chan_weights,
     )
     mask = xp.zeros_like(flattened, dtype=bool)
 
@@ -542,3 +555,144 @@ def mad_spectra_flat(
         flattened = to_dtype(flattened, dtype=data_type)
 
     return FilterMaskResult(flattened, mask, percent_masked)
+
+
+def robust_bandpass(
+    yr_obj: Your,
+    num_samples: int = 256,
+    num_locations: int = 16,
+    smooth_length: int = 40,
+    normalized: bool = True,
+    metric: Callable = xp.median,
+) -> xp.ndarray:
+    """
+    Calculate the robust bandpass for a Your object.
+    Does this by extracting `num_samples` at equally spaced `num_locations`.
+    Each extracted sample is processed by `metric`. The median of location is then
+    smoothed by jess.fitters.median_fitter.
+
+    Args:
+        yr_obj - The your object to find the bandpass.
+
+        num_samples - The number of samples to consider at each location.
+
+        num_location - The number of locations to consider.
+
+        smooth_length - Length of the median filter to smooth, if less than one, do not
+                        apply.
+
+        normalized - Divide by the bandpass mean.
+
+        metric - The metric to use to calculate bandpass.
+
+    Returns:
+        bandpass array
+    """
+    if num_samples * num_locations > yr_obj.your_header.nspectra:
+        num_samples = yr_obj.your_header.nspectra // num_locations
+        logging.info(
+            "Too many num_samples for locations, using %i smaples", num_samples
+        )
+
+    start_locations = np.linspace(
+        0, yr_obj.your_header.nspectra - num_samples, num_locations
+    )
+    bandpass_values = xp.zeros((num_locations, yr_obj.your_header.nchans))
+    for j, location in enumerate(
+        start_locations,
+    ):
+        dynamic_spectra = xp.asarray(yr_obj.get_data(location, num_samples))
+        bandpass_values[j] = metric(dynamic_spectra, axis=0)
+
+    bandpass = metric(bandpass_values, axis=0)
+    if smooth_length > 1:
+        bandpass = median_fitter(bandpass, smooth_length)
+    if normalized:
+        bandpass /= bandpass.mean()
+
+    return bandpass
+
+
+def zero_dm(
+    dynamic_spectra: xp.ndarray,
+    bandpass: xp.ndarray = None,
+    chan_weights: Union[None, xp.ndarray] = None,
+    return_same_dtype: bool = True,
+    intermediate_dtype: type = xp.float32,
+) -> FilterResult:
+    """
+    Mask-safe zero-dm subtraction
+
+    args:
+        dynamic_spectra: The data you want to zero-dm, expects times samples
+                         on the vertical axis. Accepts numpy.ma.arrays.
+
+        bandpass - Use if a large file is broken up into pieces.
+                   Be careful about how you use this with masks.
+
+        chan_weights - Tuple of channel weights array and value to flatten too.
+                       If `None`, do not apply weights.
+
+        intermediate_dtype - The data type to do the calculations
+
+        return_same_dtype: return the same data type as given
+
+    returns:
+        dynamic spectra with a (more) uniform zero time series
+
+    note:
+        This should masked values. I am mainly conserned with bad data being spread out
+        ny the filter, and this ignores masked values when calculating time series
+        and bandpass
+
+        The CPU version of this uses np.ma, this isn't available form cupy, so I
+        don't use it here.
+
+    example:
+        yr = Your("some.fil")
+        dynamic_spectra = yr.get_data(744000, 2 ** 14)
+
+        mask = np.zeros(yr.your_header.nchans, dtype=bool)
+        mask[0:100] = True # mask the first hundred channels
+
+        dynamic_spectra = np.ma.array(dynamic_spectra,
+                                        mask=np.broadcast_to(dynamic_spectra.shape))
+        cleaned = zero_dm(dynamic_spectra)
+
+    from:
+        "An interference removal technique for radio pulsar searches" R.P Eatough 2009
+
+    see:
+        https://github.com/SixByNine/sigproc/blob/28ba4f4539d41a8722c6ed194fa66e87bf4610fc/src/zerodm.c#L195
+
+        https://sourceforge.net/p/heimdall-astro/code/ci/master/tree/Pipeline/clean_filterbank_rfi.cu
+
+        https://github.com/scottransom/presto/blob/de2cf58262190d35fb37dbebf8308a6e29d72adf/src/zerodm.c
+
+        https://arxiv.org/pdf/1504.02294.pdf
+
+        https://github.com/thepetabyteproject/your/blob/1f4b39326835e6bb87e0003318b433dc1455a137/your/writer.py#L232
+
+        https://sigpyproc3.readthedocs.io/en/latest/_modules/sigpyproc/Filterbank.html#Filterbank.removeZeroDM
+    """
+    data_type = dynamic_spectra.dtype
+
+    # np.nanmean is only slower than np.mean when nans are present (CuPy is indiffernt)
+    # Should not matter reforment wise to always use nanmean here
+    time_series = xp.nanmean(dynamic_spectra, axis=1).astype(intermediate_dtype)
+
+    if chan_weights is not None:
+        dynamic_spectra = (
+            dynamic_spectra + (bandpass - time_series[:, None]) * chan_weights
+        )
+    else:
+        dynamic_spectra = dynamic_spectra - time_series[:, None] + bandpass
+    num_chans = dynamic_spectra.shape[0]
+
+    # use cp.divide so it return a cupy object
+    percent_masked = xp.divide(100, num_chans)
+
+    if return_same_dtype:
+        dynamic_spectra = to_dtype(dynamic_spectra, dtype=data_type)
+
+    return FilterResult(dynamic_spectra, percent_masked)

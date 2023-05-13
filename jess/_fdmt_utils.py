@@ -339,7 +339,6 @@ def fdmt_iteration(
     else:
         correction = 0
     for i_f in range(f_jumps):
-
         f_start = (f_max - f_min) / float(f_jumps) * (i_f) + f_min
         f_end = (f_max - f_min) / float(f_jumps) * (i_f + 1) + f_min
         f_middle = (f_end - f_start) / 2.0 + f_start - correction
@@ -639,7 +638,6 @@ def hybrid_dedispersion(
         np.ones([n_p, len(raw_signal) // n_p]), f_min, f_max, n_p, np.int64
     )
     for outer_d in range(n_coherent):
-
         cur_coherent_d = outer_d * (dm_max / float(n_coherent))
         logging.debug(
             "coherent iteration %i, cur_coherent_d: %.2f", outer_d, cur_coherent_d

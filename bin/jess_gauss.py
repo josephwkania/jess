@@ -24,7 +24,6 @@ try:
     BACKEND_GPU = True
 
 except ModuleNotFoundError:
-
     BACKEND_GPU = False
 
 
@@ -97,10 +96,15 @@ def clean(
     """
     mask_chans: bool = True
 
+    decimal, modes_to_zero = xp.modf(modes_to_zero)
+    modes_to_zero = int(modes_to_zero)
+    if xp.abs(decimal) == 0.5:
+        chan_weights = robust_bandpass(yr_input)
+    else:
+        chan_weights = None
+
     if modes_to_zero >= 1:
-        bandpass = xp.full(
-            yr_input.your_header.nchans, fill_value=flatten_to, dtype=xp.float32
-        )
+        bandpass = xp.float32(flatten_to)
 
     n_iter = 0
     total_flag = xp.zeros(3)
@@ -131,7 +135,10 @@ def clean(
         data = data.astype(xp.float32)
         data[mask] = xp.nan
         data, time_series = flattner_median(
-            data, flatten_to=flatten_to, return_time_series=True
+            data,
+            flatten_to=flatten_to,
+            return_time_series=True,
+            chan_weights=chan_weights,
         )
 
         if mask_chans:
@@ -152,16 +159,19 @@ def clean(
         if modes_to_zero < 0:
             time_series -= xp.median(time_series)
             data += time_series[:, None]
+            dm_percentage = 0
         elif modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
-            data, dm_percentage = zero_dm(data, bandpass, return_same_dtype=False)
+            data[mask] = xp.nan
+            data, dm_percentage = zero_dm(
+                data, bandpass, return_same_dtype=False, chan_weights=chan_weights
+            )
+            data[mask] = flatten_to
         elif modes_to_zero > 1:
             logging.debug("High Pass filtering: removing %i modes", modes_to_zero)
             data, dm_percentage = zero_dm_fft(
                 data, bandpass, modes_to_zero=modes_to_zero, return_same_dtype=False
             )
-        else:
-            dm_percentage = 0
 
         total_flag += dm_percentage
         logging.info(
@@ -321,7 +331,7 @@ if __name__ == "__main__":
         "--modes_to_zero",
         help="""Number of Modes to zero; -1 perserve time seres; 0 subtracted mean;
         >1 number of Fourier Modes to remove""",
-        type=int,
+        type=float,
         default=0,
         required=False,
     )
@@ -399,19 +409,25 @@ if __name__ == "__main__":
     sigproc_obj.write_header(outfile)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{args.gpu}"
-    from jess.JESS_filters_generic import dagostino, jarque_bera, kurtosis_and_skew
+    from jess.JESS_filters_generic import (
+        dagostino,
+        jarque_bera,
+        kurtosis_and_skew,
+        robust_bandpass,
+        zero_dm,
+    )
     from jess.scipy_cupy.stats import iqr_med
 
     if args.gpu < 0 or not BACKEND_GPU:
         import numpy as xp
 
         from jess.calculators import flattner_median, to_dtype
-        from jess.JESS_filters import zero_dm, zero_dm_fft
+        from jess.JESS_filters import zero_dm_fft
 
         BACKEND_GPU = False
     else:
         from jess.calculators_cupy import flattner_median, to_dtype
-        from jess.JESS_filters_cupy import zero_dm, zero_dm_fft
+        from jess.JESS_filters_cupy import zero_dm_fft
 
     if args.flatten_to is None:
         FLATTEN_TO = get_flatten_to(yrinput.your_header.nbits)

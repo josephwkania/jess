@@ -374,6 +374,7 @@ def flattner_median(
     return_same_dtype: bool = False,
     return_time_series: bool = False,
     intermediate_dtype: type = np.float32,
+    chan_weights: Union[None, np.ndarray] = None,
 ) -> Union[np.ndarray, Tuple]:
     """
     This flattens the dynamic spectra by subtracting the medians of the time series
@@ -408,14 +409,26 @@ def flattner_median(
             ts_medians, size=kernel_size, mode="mirror", output=ts_medians
         )
         # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+        if chan_weights is not None:
+            dynamic_spectra = (
+                dynamic_spectra
+                + (chan_weights[1] - ts_medians[:, None]) * chan_weights[0]
+            )
+        else:
+            dynamic_spectra = dynamic_spectra - ts_medians[:, None]
         spectra_medians = ndimage.median_filter(
             np.nanmedian(dynamic_spectra, axis=0).astype(intermediate_dtype),
             size=kernel_size,
         )
     else:
         # break up into two subtractions so the final number comes out where we want it
-        dynamic_spectra = dynamic_spectra - ts_medians[:, None]
+        if chan_weights is not None:
+            dynamic_spectra = (
+                dynamic_spectra
+                + (chan_weights[1] - ts_medians[:, None]) * chan_weights[0]
+            )
+        else:
+            dynamic_spectra = dynamic_spectra - ts_medians[:, None]
         spectra_medians = np.nanmedian(dynamic_spectra, axis=0).astype(
             intermediate_dtype
         )
@@ -738,9 +751,7 @@ def shannon_entropy(data: np.ndarray, axis: int = 0) -> np.ndarray:
     # return counts for all
     for j in range(0, length):
         _, counts = np.unique(
-            data[
-                j,
-            ],
+            data[j,],
             return_counts=True,
         )
         entropies[j] = entropy(counts)
