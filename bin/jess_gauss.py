@@ -24,6 +24,8 @@ try:
     BACKEND_GPU = True
 
 except ModuleNotFoundError:
+    import numpy as xp
+
     BACKEND_GPU = False
 
 
@@ -156,10 +158,10 @@ def clean(
 
         data[mask] = flatten_to
 
+        dm_percentage = xp.float(0.0)
         if modes_to_zero < 0:
             time_series -= xp.median(time_series)
             data += time_series[:, None]
-            dm_percentage = 0
         elif modes_to_zero == 1:
             logging.debug("Zero DMing: Subtracting Mean")
             data[mask] = xp.nan
