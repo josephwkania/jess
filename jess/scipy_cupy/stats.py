@@ -541,7 +541,7 @@ def iqr_med(
 
     rng = sorted(rng)
     pct = percentile_func(
-        x, rng + [50], axis=axis, interpolation=interpolation, keepdims=keepdims
+        x, rng + [50], axis=axis, method=interpolation, keepdims=keepdims
     )
     out = xp.subtract(pct[1], pct[0])
 

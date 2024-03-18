@@ -149,7 +149,7 @@ def _calculate_kurtosis_z(kurtosis: xp.ndarray, spb: int) -> xp.ndarray:
         kurtosis z score
     """
     # calculate_skew_and_kurtosis returns fisher=True
-    # so we want the differnce
+    # so we want the difference
     fisher_corr = 3.0 * ((spb - 1) / (spb + 1) - 1)
     varb2 = (
         24.0
@@ -197,10 +197,10 @@ def dagostino(
     taking into account the number of samples in each block
     We calculate the D'Agostino along the time axis in blocks of `samples_per_block`.
     This is balanced if the number of samples is not evenly divisible.
-    The D'Agostino K^2 statstic is tailed.
+    The D'Agostino K^2 statistic is tailed.
     This makes our Gaussian outlier flagging remove more data than expected.
-    To combate this we take the squareroot of the K^2 Statistic, this makes the
-    distrabution more Gaussian and the flagging work better.
+    To combat this we take the square-root of the K^2 Statistic, this makes the
+    distribution more Gaussian and the flagging work better.
 
     Args:
         dynamic_spectra - Section spectra time on the vertical axis
@@ -275,10 +275,10 @@ def jarque_bera(
     Jarque-Bera Gaussianity test, this uses a combination of Kurtosis and Skew.
     We calculate Jarque-Bera along the time axis in blocks of `samples_per_block`.
     This is balanced if the number of samples is not evenly divisible.
-    The Jarque-Bera statstic is Chi-Squared distributed with two degrees of freedom.
+    The Jarque-Bera statistic is Chi-Squared distributed with two degrees of freedom.
     This makes our Gaussian outlier flagging remove more data than expected.
-    To combate this we take the squareroot of the Jarque Statistic, this makes the
-    distrabution more Gaussian and the flagging work better.
+    To combat this we take the square-root of the Jarque-Bera Statistic, this makes the
+    distribution more Gaussian and the flagging work better.
 
 
     Args:
@@ -411,7 +411,7 @@ def mad_spectra_flat(
     It then calculates the Median Absolute Deviation for every frame channels.
     Outliers are removed based on the assumption of Gaussian data. The dynamic
     spectra is then detrended again, masking the outliers. This process is then
-    repeated again. The data is returned centerned around flatten_to with removed
+    repeated again. The data is returned centered around flatten_to with removed
     points set as flatten_to.
 
     Args:
