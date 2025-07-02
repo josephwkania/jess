@@ -16,7 +16,9 @@ from your import Your
 random.seed(2021)
 
 
-def accumulate(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
+def accumulate(
+    data_array: np.ndarray, factor: int, axis: int, pad: Union[str, None] = None
+) -> np.ndarray:
     """
     Reduce the data along an axis by taking the mean of a 'factor' of rows along
     the axis
@@ -28,9 +30,20 @@ def accumulate(data_array: np.ndarray, factor: int, axis: int) -> np.ndarray:
 
         axis: axis to operate on
 
+        pad: method to pad if axis is not divisible. If None
+             will not pad
+
     returns:
         array with axis reduced by factor
     """
+    axis_length = data_array.shape[axis]
+    if axis_length % factor != 0 and pad is not None:
+        new_length = closest_larger_factor(axis_length, factor)
+        data_array = pad_along_axis(
+            data_array, new_length=new_length, axis=axis, mode=pad
+        )
+        axis_length = new_length
+
     if axis == 0:
         reshaped = data_array.reshape(
             data_array.shape[0] // factor, factor, data_array.shape[1]
