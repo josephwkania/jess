@@ -36,6 +36,10 @@ def accumulate(
     returns:
         array with axis reduced by factor
     """
+
+    if axis > 1 or axis < 0:
+        raise NotImplementedError(f"Asked for axis {axis} which is not available")
+
     axis_length = data_array.shape[axis]
     if axis_length % factor != 0 and pad is not None:
         new_length = closest_larger_factor(axis_length, factor)
@@ -49,12 +53,11 @@ def accumulate(
             data_array.shape[0] // factor, factor, data_array.shape[1]
         )
         return reshaped.sum(axis=1)
-    if axis == 1:
-        reshaped = data_array.reshape(
-            data_array.shape[0], data_array.shape[1] // factor, factor
-        )
-        return reshaped.sum(axis=2)
-    raise NotImplementedError(f"Asked for axis {axis} which is not available")
+    # axis == 1:
+    reshaped = data_array.reshape(
+        data_array.shape[0], data_array.shape[1] // factor, factor
+    )
+    return reshaped.sum(axis=2)
 
 
 def autocorrelate(data: np.ndarray, axis: int = -1) -> np.ndarray:
@@ -129,7 +132,7 @@ def mean(
     returns:
         array with axis reduced by factor
     """
-    if axis > 1:
+    if axis > 1 or axis < 0:
         raise NotImplementedError(f"Asked for axis {axis} which is not available")
 
     axis_length = data_array.shape[axis]
