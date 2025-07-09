@@ -70,7 +70,8 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
-    - name: Publishjess TestPyPI
+    - name: Publish jess TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
+        skip-existing: true
         repository-url: https://test.pypi.org/legacy/
