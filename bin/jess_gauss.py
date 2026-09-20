@@ -158,7 +158,7 @@ def clean(
 
         data[mask] = flatten_to
 
-        dm_percentage = xp.float(0.0)
+        dm_percentage = 0.0
         if modes_to_zero < 0:
             time_series -= xp.median(time_series)
             data += time_series[:, None]
