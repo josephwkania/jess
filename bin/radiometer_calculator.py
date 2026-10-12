@@ -39,10 +39,8 @@ def get_timeseries(input_file, block_size=2**14, nspectra=-1, max_boxcar_width=8
         end = 2**nspectra
     timeseries = cp.zeros(end, dtype=np.float64)
     if 2**max_boxcar_width > 2 * end:
-        raise ValueError(
-            f"""2*number samples to be processed:
-        {2*end} is shorter than the max boxcar width of {2**max_boxcar_width}"""
-        )
+        raise ValueError(f"""2*number samples to be processed:
+        {2*end} is shorter than the max boxcar width of {2**max_boxcar_width}""")
 
     for j in track(
         np.arange(0, end, block_size), description="Getting Timeseries", transient=True

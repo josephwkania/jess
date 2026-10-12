@@ -3,7 +3,6 @@
 Tests for calculator_cupy.py
 """
 
-
 import pytest
 
 cp = pytest.importorskip("cupy")

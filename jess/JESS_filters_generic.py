@@ -454,10 +454,8 @@ def mad_spectra_flat(
         info = xp.finfo(data_type)
 
     if not info.min < flatten_to < info.max:
-        raise ValueError(
-            f"""Can't flatten {data_type}, which has a range
-            [{info.min}, {info.max}, to {flatten_to}"""
-        )
+        raise ValueError(f"""Can't flatten {data_type}, which has a range
+            [{info.min}, {info.max}, to {flatten_to}""")
 
     # I medfilt to try and stabalized the subtraction process against large RFI spikes
     # I choose 7 empirically

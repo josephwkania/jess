@@ -280,10 +280,8 @@ def clean_fast(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="kurtosis_skew_filter.py",
-        description=textwrap.dedent(
-            """A Kurtosis and Skew filter
-         on a .fits/.fil"""
-        ),
+        description=textwrap.dedent("""A Kurtosis and Skew filter
+         on a .fits/.fil"""),
         epilog=__doc__,
         formatter_class=YourArgparseFormatter,
     )
