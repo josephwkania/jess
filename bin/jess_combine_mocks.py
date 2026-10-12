@@ -64,7 +64,7 @@ def calc_skipchan(lowband_obj, upband_obj):
         np.round((nextfromlower - lowerfreqofupper) / np.abs(chan_bandwidth))
     )
     chanskip = numchandiff if numchandiff > 0 else 0
-    (upchanskip, lowchanskip) = (
+    upchanskip, lowchanskip = (
         (chanskip // 2, chanskip // 2 + 1)
         if chanskip % 2
         else (chanskip // 2, chanskip // 2)
@@ -201,10 +201,8 @@ def read_and_combine_subint(
     lowsub_data += lowsub_offsets
     lowsub_data *= lowband_obj.get_weights(fsub)[: lowband_obj.nchan]
 
-    logger.debug(
-        """Applying scales, offset and weights to upper band data,
-        and rescaling scales and offsets."""
-    )
+    logger.debug("""Applying scales, offset and weights to upper band data,
+        and rescaling scales and offsets.""")
     upsub_data *= upsub_scales * scalefactor
     upsub_data += upsub_offsets * offsetfactor
     upsub_data *= upband_obj.get_weights(fsub)[: upband_obj.nchan]
@@ -436,7 +434,7 @@ def combine(
     """
     your1 = Your(file1)
     your2 = Your(file2)
-    (lowband_obj, upband_obj) = (
+    lowband_obj, upband_obj = (
         (your1, your2)
         if your1.chan_freqs.max() < your2.chan_freqs.max()
         else (your2, your1)
@@ -866,11 +864,9 @@ if __name__ == "__main__":
             outdir=values.outdir,
         )
     elif not (values.first_band and values.second_band):
-        print(
-            """The following arguments are required:
+        print("""The following arguments are required:
             -f1/--first_band, -f2/--second_band
-            OR -a/--all_files"""
-        )
+            OR -a/--all_files""")
     else:
         combine(
             glob.glob(values.first_band),

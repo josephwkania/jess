@@ -721,10 +721,8 @@ def mad_cleaner(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="mad_filter.py",
-        description=textwrap.dedent(
-            """Runs a Medain Absolute Deviation (MAD) filter
-         over subbands of .fits/.fil"""
-        ),
+        description=textwrap.dedent("""Runs a Medain Absolute Deviation (MAD) filter
+         over subbands of .fits/.fil"""),
         epilog=__doc__,
         formatter_class=YourArgparseFormatter,
     )

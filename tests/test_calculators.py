@@ -3,7 +3,6 @@
 Tests for calculator.py
 """
 
-
 import warnings
 
 import numpy as np

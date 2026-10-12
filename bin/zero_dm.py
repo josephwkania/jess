@@ -137,10 +137,8 @@ def zero_dm_cleaner(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="zero_dm.py",
-        description=textwrap.dedent(
-            """Runs a zero dm filter over .fits/.fil,
-            allowing the user to give a .bad_chans file"""
-        ),
+        description=textwrap.dedent("""Runs a zero dm filter over .fits/.fil,
+            allowing the user to give a .bad_chans file"""),
         epilog=__doc__,
         formatter_class=YourArgparseFormatter,
     )

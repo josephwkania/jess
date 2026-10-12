@@ -27,6 +27,7 @@ Key Binds:
 
     Right Arrow: Move the the next gulp
 """
+
 import argparse
 import logging
 import os

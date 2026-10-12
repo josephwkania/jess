@@ -3,6 +3,7 @@
 """
 Cupy versions of scipy functions.
 """
+
 # import logging
 import warnings
 from typing import List, Tuple, Union
