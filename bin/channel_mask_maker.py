@@ -152,10 +152,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-nspec",
         "--num_spectra",
-        help=textwrap.dedent(
-            """Number of samples to process, starting at first sample."
-                            (-1 for the whole file)"""
-        ),
+        help=textwrap.dedent("""Number of samples to process, starting at first sample."
+                            (-1 for the whole file)"""),
         type=int,
         default=65536,
         required=False,

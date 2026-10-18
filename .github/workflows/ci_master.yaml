@@ -25,7 +25,7 @@ jobs:
           pip install .[tests]
       - name: Install CI dependencies
         run: |
-          pip install flake8 black
+          pip install flake8 "black==26.10.1"
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names

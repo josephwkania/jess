@@ -2,6 +2,7 @@
 """
 Tests for JESS_filters.py
 """
+
 # pylint: disable=C0413,W0201
 
 import numpy as np

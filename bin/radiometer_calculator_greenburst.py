@@ -47,9 +47,7 @@ def get_stds(input_file, headless):
     # timeseries = cp.array(np.random.normal(0, 1, len(timeseries)))
     # can use the above to test
 
-    assert (
-        len(timeseries) < 2**7
-    ), f"""The file length of
+    assert len(timeseries) < 2**7, f"""The file length of
     {len(timeseries)} is shorter than the max boxcar width of {2**7}"""
 
     # powers_of_two = [2, 4, 7] # get boxcars for 2^0, 2^2, 2^4, 2^7

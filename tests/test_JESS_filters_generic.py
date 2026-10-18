@@ -2,6 +2,7 @@
 """
 Tests for JESS_filters_generic.py
 """
+
 # pylint: disable=C0413,W0201
 
 
@@ -23,7 +24,6 @@ from scipy import stats
 from your import Your
 
 import jess.JESS_filters_generic as Jf  # isort:skip # noqa: E402
-
 
 rs = xp.random.RandomState(1)
 
